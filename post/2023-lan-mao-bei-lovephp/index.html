@@ -1,0 +1,235 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[2023蓝帽杯] lovePHP | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[2023蓝帽杯] lovePHP | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="题目
+&lt;?php
+class Saferman{
+    public $check = True;
+    public function __destruct(){
+        if($this-&gt;check === T..." />
+    <meta name="keywords" content="PHP,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [2023蓝帽杯] lovePHP
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-08-27
+              </span>
+              <span>
+                2 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/8uAawjb9S/" class="post-tag">
+                  # PHP
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/2023-lan-mao-bei-lovephp.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="题目">题目</h1>
+<pre><code class="language-php">&lt;?php
+class Saferman{
+    public $check = True;
+    public function __destruct(){
+        if($this-&gt;check === True){
+            file($_GET['secret']);
+        }
+    }
+    public function __wakeup(){
+        $this-&gt;check=False;
+        echo $this-&gt;check;
+    }
+}
+
+if(isset($_GET['my_secret.flag'])){
+    unserialize($_GET['my_secret.flag']);
+}else{
+    highlight_file(__FILE__);
+}
+</code></pre>
+<h1 id="解题流程">解题流程</h1>
+<h2 id="php变量解析">PHP变量解析</h2>
+<p>由于PHP的机制，直接传入参数<code>my_secret.flag</code>，其中<code>.</code>这种特殊字符会被转化为<code>_</code>。经过测试输入<code>my[secret.flag</code>只有第一个<code>[</code>会被转化，而之后的<code>.</code>会保留。<br>
+<img src="https://skyblu3519.github.io/post-images/1693148001919.png" alt="" loading="lazy"></p>
+<h2 id="反序列化wakeup绕过">反序列化wakeup绕过</h2>
+<p>所用的方法是C代替O<code>C:8:&quot;Saferman&quot;:0:{}</code>，虽然这种方法无法添加属性的内容，不过<code>$check </code>初始就是True，所以也无所无所谓就是。</p>
+<h2 id="phpfilter-无回显读文件">php://filter 无回显读文件</h2>
+<p>太复杂了就看个大概。</p>
+<p>关键点：</p>
+<ul>
+<li>长字符串使PHP报错：<code>convert.iconv.L1.UCS-4LE</code>过滤器会将字符串长度扩大4倍，对一个非空字符串多次应用这个过滤器，它会快速达到 PHP 的内存限制，并引发一个 500 错误。</li>
+<li>dechunk 过滤器：<code>dechunk</code> 过滤器在处理没有新行的字符串时，会根据字符串的开始字符进行操作。如果字符串以 <code>A-Fa-f0-9</code> 中的任何字符开头，它会清空整个字符串；否则，它会保持字符串不变。</li>
+</ul>
+<p>开头不在此范围，正常输出<br>
+<img src="https://skyblu3519.github.io/post-images/1693148765201.png" alt="" loading="lazy"></p>
+<p>开头字符为a，输出空<br>
+<img src="https://skyblu3519.github.io/post-images/1693148788223.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1693148797666.png" alt="" loading="lazy"></p>
+<p>结合这两个特点可以根据服务器响应的状态码判断字符具体的值，整个工作有三步：</p>
+<ol>
+<li>使用<code>convert.base64-encode</code>转化flag，使字符串只有<code>a-zA-Z0-9</code></li>
+<li><code>convert.iconv.CSUNICODE.UCS-2BE</code>反转字符串每两个字符，<code>convert.iconv.UCS-4LE.10646-1:1993</code>反转字符串每四个字符。用这两个过滤器来将每一位反转到字符串的开头逐步猜解。</li>
+<li>然后就是判断每一位具体的值，使用<code>string.rot13</code>和各种过滤器组合，以<code>dechunk</code>的 <code>A-Fa-f0-9</code> 这个判断区间移动字符，根据状态码判断出具体的字符。</li>
+</ol>
+<p>脚本：<a href="https://github.com/DownUnderCTF/Challenges_2022_Public/blob/main/web/minimal-php/solve/solution.py">DownUnderCTF2022 minimal-php</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E9%A2%98%E7%9B%AE">题目</a></li>
+<li><a href="#%E8%A7%A3%E9%A2%98%E6%B5%81%E7%A8%8B">解题流程</a>
+<ul>
+<li><a href="#php%E5%8F%98%E9%87%8F%E8%A7%A3%E6%9E%90">PHP变量解析</a></li>
+<li><a href="#%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96wakeup%E7%BB%95%E8%BF%87">反序列化wakeup绕过</a></li>
+<li><a href="#phpfilter-%E6%97%A0%E5%9B%9E%E6%98%BE%E8%AF%BB%E6%96%87%E4%BB%B6">php://filter 无回显读文件</a></li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/yi-dao-ming-ling-zhi-xing-mang-zhu-ti-mu/">
+              <h3 class="post-title">
+                一道命令执行盲注题目
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

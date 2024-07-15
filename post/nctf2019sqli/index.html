@@ -1,0 +1,200 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[NCTF2019]SQLi | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[NCTF2019]SQLi | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="一个SQL小技巧
+题目描述
+上来就一个登录框，同时还给了查询的语句select * from users where username='' and passwd=''
+
+robots.txt -&gt; hint.txt，给了过滤规则和f..." />
+    <meta name="keywords" content="CTF,SQL注入" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [NCTF2019]SQLi
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-09-08
+              </span>
+              <span>
+                1 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/nWjlTAxCgi/" class="post-tag">
+                  # SQL注入
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/nctf2019sqli.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>一个SQL小技巧</p>
+<h1 id="题目描述">题目描述</h1>
+<p>上来就一个登录框，同时还给了查询的语句<code>select * from users where username='' and passwd=''</code><br>
+<img src="https://skyblu3519.github.io/post-images/1694163523539.png" alt="" loading="lazy"></p>
+<p>robots.txt -&gt; hint.txt，给了过滤规则和flag获取方式<br>
+<img src="https://skyblu3519.github.io/post-images/1694163908750.png" alt="" loading="lazy"></p>
+<p>看到这个条件反射性地以为是Quine，但这里连union select都过滤了。</p>
+<h1 id="解题流程">解题流程</h1>
+<p>看了WP，只能说还是见少了。</p>
+<p>在username处输入<code>\</code>，逃逸掉username第二个单引号，这样第一个单引号就会和passwd的第一个单引号闭合。查询就变成了select * from users where username='<code>\' and passwd='</code>'。</p>
+<p>对于passwd输入<code>||(passwd)REGEXP(&quot;^c&quot;)</code>，这个是用正则来匹配passwd查询结果。这样就可以进行盲注了<br>
+<img src="https://skyblu3519.github.io/post-images/1694164631094.png" alt="" loading="lazy"></p>
+<p>而passwd的第二个单引号还需要注释掉。这里又学到了，过滤了<code>#</code>和<code>-</code>的情况下可以用00来注释。<br>
+<img src="https://skyblu3519.github.io/post-images/1694164842459.png" alt="" loading="lazy"></p>
+<p>最后写出这个payload可以像这样：username=&amp;passwd=||(passwd)REGEXP(&quot;^y&quot;);️️0️⃣0️⃣</p>
+<p>最后通过盲注得到密码：<code>you_will_never_know7788990</code></p>
+<p>输入密码get flag<br>
+<img src="https://skyblu3519.github.io/post-images/1694165193380.png" alt="" loading="lazy"></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E9%A2%98%E7%9B%AE%E6%8F%8F%E8%BF%B0">题目描述</a></li>
+<li><a href="#%E8%A7%A3%E9%A2%98%E6%B5%81%E7%A8%8B">解题流程</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/2023-yang-cheng-bei-web-bu-fen-wp/">
+              <h3 class="post-title">
+                [2023羊城杯] WEB部分WP
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

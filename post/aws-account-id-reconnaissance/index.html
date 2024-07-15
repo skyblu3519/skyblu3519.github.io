@@ -1,0 +1,298 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AWS Account ID Reconnaissance | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="AWS Account ID Reconnaissance | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="当获得一个AWS Account ID之后我们可能会对这个ID去做一些信息收集，而该账户的 IAM User/Role 是会被考虑的一个信息。下面就记一下如何通过一个 Account ID 收集该账户的 IAM User/Role。
+使用角..." />
+    <meta name="keywords" content="IAM,信息收集,云安全,AWS" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              AWS Account ID Reconnaissance
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-07-03
+              </span>
+              <span>
+                6 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/gTjiT_oU6/" class="post-tag">
+                  # IAM
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/NecCjKbgFz/" class="post-tag">
+                  # 信息收集
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/8Ilrlif21/" class="post-tag">
+                  # 云安全
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/su2_uaPzNg/" class="post-tag">
+                  # AWS
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/aws-account-id-reconnaissance.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>当获得一个AWS Account ID之后我们可能会对这个ID去做一些信息收集，而该账户的 IAM User/Role 是会被考虑的一个信息。下面就记一下如何通过一个 Account ID 收集该账户的 IAM User/Role。</p>
+<h1 id="使用角色信任策略">使用角色信任策略</h1>
+<p>假设我们现在拿到了一个账户ID为<code>427648302155</code>，我现在想知道这个账户下有哪些User和Role。</p>
+<p>首先，我们在自己的AWS账户里随便新建一个角色，并将信任策略配置为</p>
+<pre><code class="language-shell">{
+	&quot;Version&quot;: &quot;2012-10-17&quot;,
+	&quot;Statement&quot;: [
+		{
+			&quot;Sid&quot;: &quot;Statement1&quot;,
+			&quot;Effect&quot;: &quot;Deny&quot;,
+			&quot;Principal&quot;: {
+			    &quot;AWS&quot;: &quot;*&quot;
+			},
+			&quot;Action&quot;: &quot;sts:AssumeRole&quot;
+		}
+	]
+}
+</code></pre>
+<p>创建好之后我们点击进入角色，编辑信任策略<br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1720015041788-f8c779ad-ba14-4682-b64f-ed71f0c1722c.png" alt="image.png" loading="lazy"></p>
+<p>修改 Principal -&gt; AWS 为<code>427648302155</code>下的一个 User/Role，比如<code>arn:aws:iam::427648302155:user/admin</code>。然后我们更新策略，出现报错<br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1720015370572-6256f360-a090-4b7f-9c09-0a608016345b.png" alt="image.png" loading="lazy"></p>
+<p>这个ID是 Pwnedlabs实验 <a href="https://pwnedlabs.io/labs/identify-the-aws-account-id-from-a-public-s3-bucket">Identify the AWS Account ID from a Public S3 Bucket</a> 中的ID，它存在一个用户是 <code>s3user</code>。现在我们修改<code>AWS</code>为<code>arn:aws:iam::427648302155:user/s3user</code>，发现策略成功更新。<br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1720015526370-8fd71f01-0804-4e97-ad32-889f21f67ad8.png" alt="image.png" loading="lazy"></p>
+<p>通过这种方式我们就能枚举一个账户下它的 IAM User/Role，如果目标的某个角色信任策略配置错误，比如</p>
+<pre><code class="language-shell">{
+	&quot;Version&quot;: &quot;2012-10-17&quot;,
+	&quot;Statement&quot;: [
+		{
+			&quot;Sid&quot;: &quot;Statement1&quot;,
+			&quot;Effect&quot;: &quot;Allow&quot;,
+			&quot;Principal&quot;: {
+			    &quot;AWS&quot;: &quot;*&quot;
+			},
+			&quot;Action&quot;: &quot;sts:AssumeRole&quot;
+		}
+	]
+}
+</code></pre>
+<p>那我们就可以扮演该角色，以获取目标的更多信息。云渗透工具pacu的<code>iam__enum_roles</code>模块就是用这种方式实现的。在使用时我们将<code>--role-name</code>配置为当前账户中一个可用角色，<code>--account-id</code>设置为要枚举的目标ID，工具便会用自己的字典对该目标进行枚举</p>
+<pre><code class="language-shell">run iam__enum_users --role-name IAMEnum --account-id 104506445608
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1720016049180-bf641fc4-95b1-4ca2-8182-ec87cfb5e6c8.png" alt="image.png" loading="lazy"></figure>
+<h1 id="使用s3lambda访问策略">使用S3/Lambda访问策略</h1>
+<p>这两种方法和上面的也是大同小异，都是根据将一个IAM主体付给S3/Lambda策略上时的报错信息进行判断的。这里就不再赘述，详见实验：<a href="https://pwnedlabs.io/labs/unauthenticated-aws-iam-principals-enumeration">https://pwnedlabs.io/labs/unauthenticated-aws-iam-principals-enumeration</a></p>
+<p>S3</p>
+<pre><code class="language-json">{
+  &quot;Version&quot;: &quot;2012-10-17&quot;,
+  &quot;Statement&quot;: [
+    {
+      &quot;Sid&quot;: &quot;IAM Enum&quot;,
+      &quot;Effect&quot;: &quot;Deny&quot;,
+      &quot;Principal&quot;: {
+        &quot;AWS&quot;: &quot;arn:aws:iam::104506445608:role/batch&quot;
+      },
+      &quot;Action&quot;: &quot;s3:GetObject&quot;,
+      &quot;Resource&quot;: &quot;arn:aws:s3:::iam-enum/*&quot;
+    }
+  ]
+}
+</code></pre>
+<p><img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1718630007343-fa9b91ff-2f6e-4bbe-a9fa-422465bf14f7.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1718630011701-f152e5e3-ece7-4fa5-9428-6f62304450af.png" alt="image.png" loading="lazy"></p>
+<p>Lambda</p>
+<pre><code class="language-json">aws lambda add-permission --function-name IAMEnum --action lambda:GetFunction --statement-id IAMEnum --principal &quot;arn:aws:iam::104506445608:role/admin&quot;
+aws lambda add-permission --function-name IAMEnum --action lambda:GetFunction --statement-id IAMEnum --principal &quot;arn:aws:iam::104506445608:role/batch&quot;
+</code></pre>
+<h1 id="获取公开s3的-aws-account-id">获取公开S3的 AWS Account ID</h1>
+<p>实验环境：<a href="https://pwnedlabs.io/labs/identify-the-aws-account-id-from-a-public-s3-bucket">Identify the AWS Account ID from a Public S3 Bucket</a></p>
+<p>主要说下这个原理。在题目给的网页中我们可以看到它使用的S3名称：<code>mega-big-tech</code><br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1717052598303-c7b3fdf7-1835-488e-b80e-126a712129b7.png" alt="image.png" loading="lazy"></p>
+<p>是一个公开的S3，可以直接访问查看<br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1717052644607-27717787-9a44-458e-ad18-4a69ac87851a.png" alt="image.png" loading="lazy"></p>
+<p>使用的方法参考：<a href="https://cloudar.be/awsblog/finding-the-account-id-of-any-public-s3-bucket/">Finding the Account ID of any public S3 bucket</a></p>
+<p>下面讲下这个原理，首先我们创建一个角色，权限使用AWS托管策略里面的<code>AmazonS3ReadOnlyAccess</code>。<br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1720017041271-aaf68d48-1a8f-48e7-963e-b2ee25da9b51.png" alt="image.png" loading="lazy"></p>
+<p>扮演这个角色我们是可以列出这个S3的内容的<br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1720017346073-b20dc36e-3b8b-4d4c-9dd1-fce829155f85.png" alt="image.png" loading="lazy"></p>
+<p>清空SessionToken<code>aws configure set aws_session_token &quot;&quot;</code>，切换到原来的用户。说一下这个穷举的原理。在执行<code>sts:Assumerole</code>的时候，可以指定<code>--policy</code>参数来指定一个附加的权限策略，这个策略将与你要扮演的角色的权限策略结合（取交集），最终确定你在该角色下的实际权限。</p>
+<p>根据这个利用脚本：<a href="https://github.com/WeAreCloudar/s3-account-search/blob/main/s3_account_search/cli.py"><strong>s3-account-search</strong></a>，它附加的策略<code>--policy</code>是</p>
+<pre><code class="language-json">{
+    &quot;Version&quot;: &quot;2012-10-17&quot;,
+    &quot;Statement&quot;: [
+        {
+            &quot;Sid&quot;: &quot;AllowResourceAccount&quot;,
+            &quot;Effect&quot;: &quot;Allow&quot;,
+            &quot;Action&quot;: &quot;s3:*&quot;,
+            &quot;Resource&quot;: &quot;*&quot;,
+            &quot;Condition&quot;: {
+                &quot;StringLike&quot;: {&quot;s3:ResourceAccount&quot;: [f&quot;{digits}*&quot;]},
+            },
+        },
+    ],
+}
+</code></pre>
+<p>其中<code>Condition</code>元素允许你指定策略生效的条件，而在 <code>Condition</code> 元素中可以使用条件运算符来将策略中的条件键和值与请求上下文中的值进行匹配。其中的<code>StringLike</code>可以做通配符匹配（参考：<a href="https://docs.aws.amazon.com/zh_cn/IAM/latest/UserGuide/reference_policies_elements_condition_operators.html">IAM JSON 策略元素：条件运算符</a>），依次来爆破出<code>s3:ResourceAccount</code>，也就是该<strong>S3</strong>资源的<strong>Account-ID</strong>。</p>
+<p>下面做个测试。<code>&quot;s3:ResourceAccount&quot;:&quot;0*&quot;</code>也就是<code>Account-ID</code>是0开头</p>
+<pre><code class="language-json">aws sts assume-role --role-arn arn:aws:iam::&lt;Account-ID&gt;:role/s3reader --role-session-name skky --policy '{&quot;Version&quot;:&quot;2012-10-17&quot;,&quot;Statement&quot;:[{&quot;Effect&quot;:&quot;Allow&quot;,&quot;Action&quot;:&quot;s3:*&quot;,&quot;Resource&quot;:&quot;*&quot;,&quot;Condition&quot;:{&quot;StringLike&quot;:{&quot;s3:ResourceAccount&quot;:&quot;0*&quot;}}}]}' 
+</code></pre>
+<p>这时无法列出S3内容，说明该S3的<code>Account-ID</code>不是0开头的<br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1720017715189-7ff834e6-7a79-4598-9b7a-8d29cec5fdf4.png" alt="image.png" loading="lazy"></p>
+<p>而修改为<code>&quot;s3:ResourceAccount&quot;:&quot;1*&quot;</code>可以访问<br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1720017934528-5e3c0b6e-86a9-4d88-b909-e732455c0eb2.png" alt="image.png" loading="lazy"></p>
+<p>利用这个方式我们就可以枚举出该S3的Account-ID，这里直接使用脚本进行枚举<a href="https://github.com/WeAreCloudar/s3-account-search/blob/main/s3_account_search/cli.py">https://github.com/WeAreCloudar/s3-account-search/blob/main/s3_account_search/cli.py</a><br>
+<img src="https://skyblu3519.github.io/post-images/AWSIAMRolesReconnaissance/1720018611726-464cc43d-4e8f-4e4c-9ab2-e941fca45463.png" alt="image.png" loading="lazy"></p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://rhinosecuritylabs.com/aws/assume-worst-aws-assume-role-enumeration/">Assume the Worst: Enumerating AWS Roles through ‘AssumeRole’</a><br>
+<a href="https://rhinosecuritylabs.com/aws/aws-iam-user-enumeration/">Using AWS Account ID’s for IAM User Enumeration</a><br>
+<a href="https://rhinosecuritylabs.com/aws/aws-role-enumeration-iam-p2/">Unauthenticated AWS Role Enumeration (IAM Revisited)</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E4%BD%BF%E7%94%A8%E8%A7%92%E8%89%B2%E4%BF%A1%E4%BB%BB%E7%AD%96%E7%95%A5">使用角色信任策略</a></li>
+<li><a href="#%E4%BD%BF%E7%94%A8s3lambda%E8%AE%BF%E9%97%AE%E7%AD%96%E7%95%A5">使用S3/Lambda访问策略</a></li>
+<li><a href="#%E8%8E%B7%E5%8F%96%E5%85%AC%E5%BC%80s3%E7%9A%84-aws-account-id">获取公开S3的 AWS Account ID</a></li>
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/pwnedlabscommand-injection-to-ec2-user-data-privilege-escalation/">
+              <h3 class="post-title">
+                [Pwnedlabs]Command Injection to EC2 User Data Privilege Escalation
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

@@ -1,0 +1,240 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[NCTF2019]True XML cookbook | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[NCTF2019]True XML cookbook | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="
+给我一个接口！
+
+JUST4FUN
+解题流程
+登录功能存在XXE，回显点为username。验证
+&lt;!DOCTYPE foo [
+    &lt;!ELEMENT foo ANY &gt;
+    &lt;!ENTITY xxe S..." />
+    <meta name="keywords" content="XXE,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [NCTF2019]True XML cookbook
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-07-04
+              </span>
+              <span>
+                5 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/e-swS2vOK/" class="post-tag">
+                  # XXE
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/nctf2019true-xml-cookbook.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <blockquote>
+<p>给我一个接口！</p>
+</blockquote>
+<p>JUST4FUN</p>
+<h1 id="解题流程">解题流程</h1>
+<p>登录功能存在XXE，回显点为username。验证</p>
+<pre><code class="language-xml">&lt;!DOCTYPE foo [
+    &lt;!ELEMENT foo ANY &gt;
+    &lt;!ENTITY xxe SYSTEM &quot;file:///etc/passwd&quot;&gt;
+]&gt;
+&lt;user&gt;&lt;username&gt;&amp;xxe;&lt;/username&gt;&lt;password&gt;admin&lt;/password&gt;&lt;/user&gt;
+</code></pre>
+<p>这里也可以用伪协议读<code>doLogin.php</code>，但没什么东西<br>
+<img src="https://skyblu3519.github.io/post-images/1688476779184.png" alt="" loading="lazy"></p>
+<p>瞄下WP，知道这道题需要用XXE探测内网主机，flag就在存活的主机上。</p>
+<p>问题来了，探测内网主机，需要知道本机的网络地址。现在可以用XXE读取文件，那么什么文件中存储着IP的信息呢？</p>
+<p><code>/etc/hosts</code>这里存储着主机名和IP的映射关系，如果有内网主机的映射的话是可能知道的，但这里并没有<br>
+<img src="https://skyblu3519.github.io/post-images/1688477139942.png" alt="" loading="lazy"></p>
+<p>直接读网卡配置文件呢？首先看下系统的版本，这里读取<code>/etc/issue</code>，知道了系统版本为<code>Debian GNU/Linux 10</code>。通过搜索，可以知道该版本的网卡配置文件为<code>/etc/network/interfaces</code><br>
+<img src="https://skyblu3519.github.io/post-images/1688477435554.png" alt="" loading="lazy"></p>
+<p>读取失败，可能是不存在该文件，也可能是权限不够。</p>
+<p>再看下WP，这里就有点不同了。很多WP中都是读<code>/proc/net/arp</code>这个文件，这里面记录了网卡的ARP信息，通过里面的IP地址得到主机网段的地址。不过，可能是现在这道题改了，这个文件读出的内容为</p>
+<pre><code>IP address       HW type     Flags       HW address            Mask     Device
+10.128.253.12    0x1         0x2         ee:ee:ee:ee:ee:ee     *        eth0
+169.254.1.1      0x1         0x2         ee:ee:ee:ee:ee:ee     *        eth0
+</code></pre>
+<p>首先是这两个IP的MAC都是无效的。虽然<code>10.128.253.12</code>是一个内网地址，但是<code>10.128.253.0/24</code>这个网段并没有内容。</p>
+<p>还有个值得一提的点，<code>169.254.1.1</code>这也是个内网地址（真·第一次知道）。</p>
+<blockquote>
+<p>169.254.0.0/16为私有地址，但是较为特殊，称为Local Link Address（LLA）。<br>
+主机的网卡配置为DHCP，但是在网络中找不到DHCP服务器或者被BAN，那么系统会为自己分配一个169.254.0.0/16地址。</p>
+</blockquote>
+<p><code>/proc/net</code>目录包含的文件可以提供网络堆栈的各种统计信息和配置详情，其中<code>/proc/net/fib_trie</code>提供了关于内核IP路由表的信息。<br>
+<img src="https://skyblu3519.github.io/post-images/1688478833093.jpg" alt="" loading="lazy"></p>
+<p>找到了内网网段<code>10.244.80.0/24</code>，后面就是正常操作了。</p>
+<p>爆破探测主机<br>
+<img src="https://skyblu3519.github.io/post-images/1688478908923.png" alt="" loading="lazy"></p>
+<p>get flag<br>
+<img src="https://skyblu3519.github.io/post-images/1688478935209.png" alt="" loading="lazy"></p>
+<h1 id="补充">补充</h1>
+<p>下面交给ChatGPT</p>
+<h2 id="procnetfib_trie是什么">/proc/net/fib_trie是什么？</h2>
+<p><code>/proc/net/fib_trie</code> 文件是 Linux 系统的一部分，它提供了有关系统的路由表的信息。具体来说，该文件表示的是内核中的前缀树（trie）路由表的状态。这是一种数据结构，用于存储和查找 IP 路由。</p>
+<p>在这个上下文中，FIB 表示 &quot;Forwarding Information Base&quot;。这是网络设备用于决定如何将数据包转发到目标地址的信息集。实际上，FIB 是路由器从其路由表（包含了从路由器到所有可能目标的所有已知路径）中派生出来的。当数据包到达路由器时，路由器会查看 FIB 来决定如何转发数据包。</p>
+<p><code>fib_trie</code>文件以一种特殊的、树状的格式展示这些信息，每一行代表树的一个节点。这个文件可能对于网络研究人员或者进行深度诊断的系统管理员有用，但它的格式对于常规的系统使用或者网络管理可能有些复杂。</p>
+<h2 id="它和procnetroute文件有什么区别">它和/proc/net/route文件有什么区别？</h2>
+<p><code>/proc/net/fib_trie</code> 和 <code>/proc/net/route</code> 都是 Linux 系统中的文件，都用于表示系统的路由信息，但它们的主要区别在于呈现这些信息的方式。</p>
+<p><code>/proc/net/route</code> 文件以表格形式呈现路由信息。每一行代表一个路由条目，包括目标网络、网关、标志、引用计数、使用情况、度量值（metric）等信息。这些信息都是以十六进制格式显示的，需要进行转换才能理解。</p>
+<p><code>/proc/net/fib_trie</code> 文件则提供了一种更详细的查看路由信息的方式。它显示了内核路由表的前缀树（trie）数据结构，这是一种专门用于高效存储和检索 IP 地址信息的数据结构。文件的每一行代表前缀树的一个节点。在树中，每个 IP 地址都是从根节点开始的一条路径，这样可以使 IP 地址的查找和匹配更快速、高效。</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E8%A7%A3%E9%A2%98%E6%B5%81%E7%A8%8B">解题流程</a></li>
+<li><a href="#%E8%A1%A5%E5%85%85">补充</a>
+<ul>
+<li><a href="#procnetfib_trie%E6%98%AF%E4%BB%80%E4%B9%88">/proc/net/fib_trie是什么？</a></li>
+<li><a href="#%E5%AE%83%E5%92%8Cprocnetroute%E6%96%87%E4%BB%B6%E6%9C%89%E4%BB%80%E4%B9%88%E5%8C%BA%E5%88%AB">它和/proc/net/route文件有什么区别？</a></li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/xxe-xue-xi/">
+              <h3 class="post-title">
+                XXE 学习笔记
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

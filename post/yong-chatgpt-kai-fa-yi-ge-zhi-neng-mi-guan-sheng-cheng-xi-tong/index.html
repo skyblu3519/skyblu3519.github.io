@@ -1,0 +1,719 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>用ChatGPT开发一个智能蜜罐 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="用ChatGPT开发一个智能蜜罐 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="来用ChatGPT做个蜜罐，have fun~😎
+提示词工程（Prompt Engineering）
+教程BV号：BV1No4y1t7Zn
+编写原则：
+
+编写明确和具体的指令
+给模型足够的时间思考
+
+一个Prompt的样例：
+import..." />
+    <meta name="keywords" content="ChatGPT,蜜罐,Prompt Engineering" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              用ChatGPT开发一个智能蜜罐
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-05-06
+              </span>
+              <span>
+                19 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/B8Ad4Cpsd/" class="post-tag">
+                  # ChatGPT
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/Wx6_y2u_LL/" class="post-tag">
+                  # 蜜罐
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/C5fsAn1wpc/" class="post-tag">
+                  # Prompt Engineering
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/yong-chatgpt-kai-fa-yi-ge-zhi-neng-mi-guan-sheng-cheng-xi-tong.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>来用ChatGPT做个蜜罐，have fun~😎</p>
+<h1 id="提示词工程prompt-engineering">提示词工程（Prompt Engineering）</h1>
+<p>教程BV号：BV1No4y1t7Zn</p>
+<p>编写原则：</p>
+<ul>
+<li>编写明确和具体的指令</li>
+<li>给模型足够的时间思考</li>
+</ul>
+<p>一个Prompt的样例：</p>
+<pre><code class="language-python">import openai
+
+openai.api_key = 'sk-'      # OpenAI API Key
+
+def get_completion(prompt, model=&quot;gpt-3.5-turbo&quot;):
+	messages = [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: prompt}]
+	response = openai.ChatCompletion.create(
+		model=model,
+		messages=messages,
+		temperature=0,
+		)
+	return response.choices[0].message[&quot;content&quot;]
+
+prompt = &quot;&quot;     # 提问
+response = get_completion(prompt)
+print(response)
+</code></pre>
+<h1 id="直接来吧">直接来吧！</h1>
+<p>先在网页测试整个流程。</p>
+<h2 id="先做个demo">先做个Demo</h2>
+<h3 id="第一轮提问">第一轮提问</h3>
+<p>先直接生成一些简单的的看看效果。<br>
+<img src="https://skyblu3519.github.io/post-images/1683379900218.jpg" alt="" loading="lazy"></p>
+<p>中文prompt：</p>
+<pre><code class="language-php">我需要用docker做一些蜜罐。你在做这件事可以从以下几个内容考虑：
+- 怎么样的网络设置可以让蜜罐被同一个网络中的主机访问。
+- 构建蜜罐的dockerfile需要按规律的保存。最好为每个蜜罐创建一个对应的文件夹，一个文件夹存放一个蜜罐的dockerfile。
+- 现在蜜罐上不会运行任何服务，它只用对类似ping这样的命令做应答即可。
+- 这样的蜜罐我需要一次生成多个，所以你需要考虑怎么设置IP来避免与网络上已经存在的真实主机冲突。
+- 蜜罐所在网段为10.211.55.0/255
+你可以写一个python脚本来完成上面的工作。
+</code></pre>
+<p>翻译：</p>
+<pre><code>I need to make some honeypots with docker. Here are a few things you can consider when doing this:
+- What kind of network settings allow the honeypot to be accessed by hosts in the same network.
+- The dockerfile for building the honeypot needs to be saved regularly. It is best to create a corresponding folder for each honeypot, and a folder stores the dockerfile of a honeypot.
+- Now there is no service running on the honeypot, it just responds to commands like ping.
+- I need to generate multiple such honeypots at a time, so you need to consider how to set the IP to avoid conflicts with real hosts that already exist on the network.
+- The network segment where the honeypot is located is 10.211.55.0/255
+You can write a python script to do the above.
+</code></pre>
+<p>ChatGPT：</p>
+<pre><code class="language-python">import os
+
+# Define the base IP address for the honeypots
+base_ip = &quot;10.211.55.&quot;
+
+# Define the number of honeypots to create
+num_honeypots = 5
+
+# Define the path to the directory where the Dockerfiles will be stored
+dockerfiles_dir = &quot;/path/to/dockerfiles&quot;
+
+# Loop through each honeypot and create a Dockerfile and container for it
+for i in range(num_honeypots):
+    # Define the IP address for the current honeypot
+    ip_address = base_ip + str(i+1)
+
+    # Create a directory for the current honeypot's Dockerfile
+    honeypot_dir = os.path.join(dockerfiles_dir, &quot;honeypot_&quot; + str(i+1))
+    os.makedirs(honeypot_dir, exist_ok=True)
+
+    # Write the Dockerfile for the current honeypot
+    with open(os.path.join(honeypot_dir, &quot;Dockerfile&quot;), &quot;w&quot;) as f:
+        f.write(f&quot;FROM alpine\n&quot;)
+        f.write(f&quot;RUN apk add --no-cache bash\n&quot;)
+        f.write(f&quot;CMD [\&quot;bash\&quot;]\n&quot;)
+
+    # Build the Docker image for the current honeypot
+    os.system(f&quot;docker build -t honeypot_{i+1} {honeypot_dir}&quot;)
+
+    # Run the Docker container for the current honeypot
+    os.system(f&quot;docker run --name honeypot_{i+1} --ip {ip_address} --network honeypot_net -d honeypot_{i+1}&quot;)
+
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1683379937826.jpg" alt="" loading="lazy"></figure>
+<p>分析：<br>
+两个问题</p>
+<ul>
+<li>IP设置没有考虑冲突</li>
+<li>运行docker中的network honeypot_net没有设置</li>
+</ul>
+<h3 id="迭代1">迭代1</h3>
+<p>一个一个解决，首先是network honeypot_net的设置。</p>
+<p>中文prompt：</p>
+<pre><code>上面你所用的network 'honeypot_net' 并没有设置，请在代码中添加一个函数完成这一功能。
+
+这个功能你可以从下面几点考虑：
+- 设置一个docker的macvlan网络
+- 设置的时候看当前的网络中是否已经有符合要求的网络设置
+- 运行docker的物理主机的网卡名称为'eth0'
+</code></pre>
+<p>翻译：</p>
+<pre><code>The network 'honeypot_net' you used above is not set, please add a function to the code to complete this function.
+
+You can consider the following points for this function:
+- Set up a docker macvlan network
+- When setting, check whether there is already a network setting that meets the requirements in the current network
+- The NIC name of the physical host running docker is 'eth0'
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/1683379983444.jpg" alt="" loading="lazy"></figure>
+<p>ChatGPT：</p>
+<pre><code class="language-python">import os
+
+# Define the base IP address for the honeypots
+base_ip = &quot;10.211.55.&quot;
+
+# Define the number of honeypots to create
+num_honeypots = 5
+
+# Define the path to the directory where the Dockerfiles will be stored
+dockerfiles_dir = &quot;/path/to/dockerfiles&quot;
+
+# Define the name and subnet of the Docker network
+network_name = &quot;honeypot_net&quot;
+network_subnet = &quot;10.211.55.0/24&quot;
+
+# Check if the network already exists
+network_exists = os.system(f&quot;docker network inspect {network_name} &gt;/dev/null 2&gt;&amp;1&quot;) == 0
+
+# Create the network if it doesn't exist
+if not network_exists:
+    os.system(f&quot;docker network create --driver macvlan --subnet {network_subnet} --gateway {base_ip}1 -o parent=eth0 {network_name}&quot;)
+
+# Loop through each honeypot and create a Dockerfile and container for it
+for i in range(num_honeypots):
+    # Define the IP address for the current honeypot
+    ip_address = base_ip + str(i+1)
+
+    # Create a directory for the current honeypot's Dockerfile
+    honeypot_dir = os.path.join(dockerfiles_dir, &quot;honeypot_&quot; + str(i+1))
+    os.makedirs(honeypot_dir, exist_ok=True)
+
+    # Write the Dockerfile for the current honeypot
+    with open(os.path.join(honeypot_dir, &quot;Dockerfile&quot;), &quot;w&quot;) as f:
+        f.write(f&quot;FROM alpine\n&quot;)
+        f.write(f&quot;RUN apk add --no-cache bash\n&quot;)
+        f.write(f&quot;CMD [\&quot;bash\&quot;]\n&quot;)
+
+    # Build the Docker image for the current honeypot
+    os.system(f&quot;docker build -t honeypot_{i+1} {honeypot_dir}&quot;)
+
+    # Run the Docker container for the current honeypot, connecting it to the network
+    os.system(f&quot;docker run --name honeypot_{i+1} --ip {ip_address} --network {network_name} -d honeypot_{i+1}&quot;)
+
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/1683380005168.jpg" alt="" loading="lazy"></figure>
+<p>修改dockerfile的保存路径<code>/home/hp/dockerfiles</code>和蜜罐IP<br>
+<img src="https://skyblu3519.github.io/post-images/1683380025229.jpg" alt="" loading="lazy"><br>
+运行，成功启动了5个蜜罐。<br>
+<img src="https://skyblu3519.github.io/post-images/1683380062027.jpg" alt="" loading="lazy"><br>
+然而这五个蜜罐无法ping通</p>
+<h3 id="迭代2">迭代2</h3>
+<p>直接询问无法ping通的原因<br>
+<img src="https://skyblu3519.github.io/post-images/1683380080744.jpg" alt="" loading="lazy"><br>
+并没有找到问题的核心</p>
+<p>提问：</p>
+<pre><code>我认为蜜罐无法ping通并不是cap-add=NET_ADMIN的原因，我用docker ps -a命令查看容器状态的时候显示的信息为‘Exited (0) 12 seconds ago’，我认为这个原因应该是dockerfile导致的。
+</code></pre>
+<p>翻译：</p>
+<pre><code>I don't think the honeypot can't be pinged because of cap-add=NET_ADMIN. When I use the docker ps -a command to check the container status, the information displayed is 'Exited (0) 12 seconds ago'. I think the reason should be the dockerfile caused by.
+</code></pre>
+<figure data-type="image" tabindex="4"><img src="https://skyblu3519.github.io/post-images/1683380132720.jpg" alt="" loading="lazy"></figure>
+<p>导致这个的原因是因为之前的docker运行一行命令就退出了，添加这一行在生成dockerfile的部分：<br>
+<img src="https://skyblu3519.github.io/post-images/1683380294241.jpg" alt="" loading="lazy"></p>
+<p>成功生成了想要的蜜罐：<br>
+<img src="https://skyblu3519.github.io/post-images/1683380326664.jpg" alt="" loading="lazy"></p>
+<p>ping测试：<br>
+<img src="https://skyblu3519.github.io/post-images/1683380351106.jpg" alt="" loading="lazy"></p>
+<p>dockerfiles目录结构<br>
+<img src="https://skyblu3519.github.io/post-images/1683380374987.jpg" alt="" loading="lazy"></p>
+<p>至于第一个IP冲突问题在这儿先不管了，感觉在这儿做也是重复造轮子。不如加一点智能！</p>
+<h2 id="来点智能">来点智能！</h2>
+<p>虽然写了点东西，但是总感觉差点“智能”。毕竟这些代码自己也可以写，何必要用GPT写的呢？最好的方法是让GPT参与到这个生成过程里，而不是扮演一个提供代码的角色。</p>
+<p>那么GPT可以做什么呢？既然是生成式AI，那么就让它来生成不同的蜜罐类型。</p>
+<p>于是尝试用gpt来智能生成dockerfile，编写以一个prompt模版来的生成不同的蜜罐类型。</p>
+<p>中文：</p>
+<pre><code class="language-python">按找需求编写一个dockerfile，这个dockerfile用于生成一个镜像。
+
+需求的格式为：
+- 部署的服务1: 服务描述1,  服务描述2
+
+对于没有服务描述的服务你可以自行判断，下面是我的需求：
+</code></pre>
+<p>英文：</p>
+<pre><code class="language-python">Write a dockerfile according to the requirements, and this dockerfile is used to generate a mirror image.
+
+The required format is:
+- Deployed Service 1: Service Description 1, Service Description 2
+
+For services without service descriptions, you can judge by yourself. The following are my requirements:
+</code></pre>
+<p>提出的服务需求随机组合，这里简单准备了两个服务Apache和Nginx，对每个服务有两个描述端口和页面信息：</p>
+<pre><code class="language-python">import random
+
+def random_combine_lists(product, port, detail, num=1):
+    result = []
+    for i in range(num):
+        combined_string = &quot;- {}: {}, {}&quot;.format(random.choice(product), random.choice(port), random.choice(detail))
+        result.append(combined_string)
+    return result
+
+
+product = ['Apache', 'nginx']
+port = ['This service runs on port 80', 'This service runs on port 8080']
+detail = ['Display a 404 page by default', 'Display a background login page by default',]
+
+result = random_combine_lists(product, port, detail)
+service = result[0]
+</code></pre>
+<p>在代码中实现：</p>
+<pre><code class="language-python">import openai
+
+openai.api_key = '' # 输入自己的api_key
+
+def get_completion(prompt, model=&quot;gpt-3.5-turbo&quot;):
+	messages = [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: prompt}]
+	response = openai.ChatCompletion.create(
+		model=model,
+		messages=messages,
+		temperature=0,
+		)
+	return response.choices[0].message[&quot;content&quot;]
+
+import random
+
+def random_combine_lists(product, port, detail, num=1):
+    result = []
+    for i in range(num):
+        combined_string = &quot;- {}: {}, {}&quot;.format(random.choice(product), random.choice(port), random.choice(detail))
+        result.append(combined_string)
+    return result
+
+
+product = ['Apache', 'nginx']
+port = ['This service runs on port 80', 'This service runs on port 8080']
+detail = ['Display a 404 page by default', 'Display a background login page by default']
+
+result = random_combine_lists(product, port, detail)
+
+service = result[0]
+
+prompt = f&quot;&quot;&quot;Write a dockerfile according to the requirements, and this dockerfile is used to generate a mirror image.
+
+The required format is:
+- Deployed Service 1: Service Description 1, Service Description 2
+
+For services without service descriptions, you can judge by yourself. The following are my requirements:
+{service}
+&quot;&quot;&quot;
+# print(prompt)
+response = get_completion(prompt)
+print(response)
+
+</code></pre>
+<p>乍一看效果还不错？（但其实有大问题<br>
+<img src="https://skyblu3519.github.io/post-images/1683380691345.jpg" alt="" loading="lazy"></p>
+<p>不过先不管，简单封装一下与之前的代码进行组合：honeypottest.py</p>
+<pre><code class="language-python">import os
+from gpt import honey_gpt
+base_ip = &quot;10.211.55.&quot;
+
+num_honeypots = 3
+
+dockerfiles_dir = &quot;/home/hp/dockerfiles&quot;
+
+network_name = &quot;honeypot_net&quot;
+network_subnet = &quot;10.211.55.0/24&quot;
+
+network_exists = os.system(&quot;docker network inspect {} &gt;/dev/null 2&gt;&amp;1&quot;.format(network_name)) == 0
+
+if not network_exists:
+    os.system(&quot;docker network create --driver macvlan --subnet {} --gateway {}1 -o parent=eth0 {}&quot;.format(network_subnet, base_ip, network_name))
+
+
+for i in range(num_honeypots):
+    ip_address = base_ip + str(i+128)
+    honeypot_dir = os.path.join(dockerfiles_dir, &quot;honeypot_&quot; + str(i+1))
+    os.makedirs(honeypot_dir, exist_ok=True)
+
+    with open(os.path.join(honeypot_dir, &quot;Dockerfile&quot;), &quot;w&quot;) as f:
+        f.write(honey_gpt())
+
+    os.system(&quot;docker build -t honeypot_{} {}&quot;.format(i+1, honeypot_dir))
+    os.system(&quot;docker run --name honeypot_{} --ip {} --network {} -d honeypot_{}&quot;.format(i+1, ip_address, network_name, i+1))
+
+
+</code></pre>
+<p>gpt.py</p>
+<pre><code class="language-python">import openai
+import random
+
+openai.api_key = 'sk-'
+
+def get_completion(prompt, model=&quot;gpt-3.5-turbo&quot;):
+	messages = [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: prompt}]
+	response = openai.ChatCompletion.create(
+		model=model,
+		messages=messages,
+		temperature=0,
+		)
+	return response.choices[0].message[&quot;content&quot;]
+
+def random_combine_lists(product, port, detail, num=1):
+    result = []
+    for i in range(num):
+        combined_string = &quot;- {}: {}, {}&quot;.format(random.choice(product), random.choice(port), random.choice(detail))
+        result.append(combined_string)
+    return result
+
+
+def honey_gpt():
+	product = ['Apache', 'nginx']
+	port = ['This service runs on port 80', 'This service runs on port 8080']
+	detail = ['Display a 404 page by default', 'Display a background login page by default']
+
+	result = random_combine_lists(product, port, detail)
+
+	service = result[0]
+
+	prompt = f&quot;&quot;&quot;Write a dockerfile according to the requirements, and this dockerfile is used to generate a mirror image.
+
+	The required format is:
+	- Deployed Service 1: Service Description 1, Service Description 2
+
+	For services without service descriptions, you can judge by yourself. The following are my requirements:
+	{service}
+	&quot;&quot;&quot;
+	print(service)
+	response = get_completion(prompt)
+	return response
+
+</code></pre>
+<p>问题来了<br>
+<img src="https://skyblu3519.github.io/post-images/1683380716362.jpg" alt="" loading="lazy"></p>
+<p>所有服务都不能访问，看下dockerfile<br>
+<img src="https://skyblu3519.github.io/post-images/1683380731817.jpg" alt="" loading="lazy"></p>
+<p>这里copy本机不存在的文件，既然都智能了这些东西就给gpt做了。修改下prompt</p>
+<pre><code>按找需求编写一个dockerfile，这个dockerfile用于生成一个镜像。
+
+需求的格式为：
+- 部署的服务1: 服务描述1, 服务描述2
+
+对于没有服务描述的服务你可以自行判断。
+
+这些需求只能在dockerfile中实现，物理机中没有用来可用的任何文件。需求如下：
+</code></pre>
+<p>英文：</p>
+<pre><code>Write a dockerfile according to the requirements, and this dockerfile is used to generate a mirror image.
+
+The required format is:
+- Deployed Service 1: Service Description 1, Service Description 2
+
+For services without service descriptions, you can judge by yourself. 
+
+These requirements can only be realized in the dockerfile, and there are no available files in the physical machine. The requirements are as follows:
+</code></pre>
+<p>生成的dockerfile依然在用COPY<br>
+<img src="https://skyblu3519.github.io/post-images/1683380828502.jpg" alt="" loading="lazy"></p>
+<p>明确不要使用COPY，追加prompt：<code>因此，你无法使用COPY来将物理机中文件复制到容器中。</code></p>
+<pre><code>Write a dockerfile according to the requirements, and this dockerfile is used to generate a mirror image.
+
+The required format is:
+- Service 1: Description 1, Description 2
+
+For services without descriptions, you can judge by yourself. 
+
+These requirements can only be realized in the dockerfile, and there are no available files in the physical machine. Therefore, you cannot use COPY to copy files from the physical machine to the container.
+
+The requirements are as follows:
+</code></pre>
+<p>感觉好些了<br>
+<img src="https://skyblu3519.github.io/post-images/1683380919396.jpg" alt="" loading="lazy"></p>
+<p>重新运行下。然而并不太行，即使说明不要使用<code>COPY</code>。它写的dockerfile还是有概率出现COPY。怀疑是中间那句<code>you can judge by yourself</code>有干扰，先删了。</p>
+<p>再加一句：<code>如果你需要复制一个文件到容器中，你可使用sed在已有文件中插入，或者使用echo直接将内容输出到文件中。</code>更新后的prompt：</p>
+<pre><code class="language-python">prompt = f&quot;&quot;&quot;Write a dockerfile according to the requirements, and this dockerfile is used to generate a mirror image.
+
+The required format is:
+- Service 1: Description 1, Description 2
+
+Because you don't know what files exist on the physical machine, it is imperative that you DO NOT use the COPY instruction when writing the Dockerfile!
+
+If you need to copy a file into the container, you can use sed to insert it into an existing file, or use echo to output the contents directly into a file.
+
+The requirements are as follows:
+{service}
+&quot;&quot;&quot;
+</code></pre>
+<p>这个prompt后，输出几次后似乎是没有用COPY了，但是在不同端口暴露服务似乎有问题，前面知道我这里用了三个列表来组合一个要求，在<code>product</code>和<code>port</code>相同的情况下，不同的<code>detail</code>居然会写出复杂度两种完全不同的dockerfile。显然第一个无法将服务暴露在8080上。</p>
+<pre><code class="language-python">product = ['Apache', 'nginx']
+port = ['This service runs on port 80', 'This service runs on port 8080']
+detail = ['Return 404 for all requests', 'Display a background login page']
+</code></pre>
+<p><img src="https://skyblu3519.github.io/post-images/1683380958561.jpg" alt="" loading="lazy"><br>
+现在来解决这个问题，怀疑是<code>Display a background login page</code>这种表述有点模糊。</p>
+<p>对detail中描述进行进一步的细化<code>Replace the default page with a login page.</code></p>
+<p>然而并不能解决问题。转向<code>port</code>的表述。</p>
+<h3 id="服务组合针对测试">服务组合针对测试</h3>
+<p>两个web服务都暴露在8080端口上，都用一个登录页面作为默认页面的代替。</p>
+<pre><code class="language-python">product = ['Apache', 'nginx']
+port = ['This service runs on port 8080']
+detail = ['Replace the default page with a login page']
+</code></pre>
+<p>生成的3个dockerfile虽然都是一个很蠢的页面，但用Apache组合的至少端口对了，nginx连端口都没对上。<br>
+<img src="https://skyblu3519.github.io/post-images/1683381094388.jpg" alt="" loading="lazy"></p>
+<p>修改一下port的描述：<code>This service needs to be exposed on port 8080</code><br>
+<img src="https://skyblu3519.github.io/post-images/1683381115008.jpg" alt="" loading="lazy"><br>
+更简陋了，这次连nginx都没有运行</p>
+<p><code>This service can be accessed through port 8080</code><br>
+<img src="https://skyblu3519.github.io/post-images/1683381139057.jpg" alt="" loading="lazy"></p>
+<p>搜了一下，发现英语在做这件事的时候，多用的表述为<code>listen</code>。修改prompt：<code>This service is listening on port 8080.</code><br>
+<img src="https://skyblu3519.github.io/post-images/1683381152491.jpg" alt="" loading="lazy"></p>
+<p>搞定～<br>
+<img src="https://skyblu3519.github.io/post-images/1683381175495.jpg" alt="" loading="lazy"></p>
+<p>两个的404页面也没有什么问题<br>
+<img src="https://skyblu3519.github.io/post-images/1683381192034.jpg" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1683381198852.jpg" alt="" loading="lazy"></p>
+<h1 id="总结">总结</h1>
+<p>算简单做了个prompt实验，这种还是只有不断试才能找到个比较理想的。</p>
+<p>目前这蜜罐个还是过于简陋了，虽然真实相比差的还挺大，不过感觉GPT做这个还是有点潜力的。</p>
+<p>最后记下最终版代码：<br>
+gpt.py</p>
+<pre><code class="language-python">import openai
+import random
+
+openai.api_key = 'sk-'
+
+def get_completion(prompt, model=&quot;gpt-3.5-turbo&quot;):
+	messages = [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: prompt}]
+	response = openai.ChatCompletion.create(
+		model=model,
+		messages=messages,
+		temperature=0,
+		)
+	return response.choices[0].message[&quot;content&quot;]
+
+def random_combine_lists(product, port, detail, num=1):
+    result = []
+    for i in range(num):
+        combined_string = &quot;- {}: {}, {}&quot;.format(random.choice(product), random.choice(port), random.choice(detail))
+        result.append(combined_string)
+    return result
+
+
+def honey_gpt():
+	product = ['Apache', 'Nginx']
+	port = ['This service listens on port 80','This service listens on port 8080']
+	detail = ['Return 404 for all requests', 'This service listens on port 8080']#, 'Replace the default page with a login page'
+
+	result = random_combine_lists(product, port, detail)
+
+	service = result[0]
+
+	prompt = f&quot;&quot;&quot;Write a dockerfile according to the requirements, and this dockerfile is used to generate a mirror image.
+
+	The required format is:
+	- Service 1: Description 1, Description 2
+
+	Because you don't know what files exist on the physical machine, it is imperative that you DO NOT use the COPY instruction when writing the Dockerfile!
+	
+	
+	If you need to copy a file into the container, you can use sed to insert it into an existing file, or use echo to output the contents directly into a file.
+
+	The requirements are as follows:
+	{service}
+	&quot;&quot;&quot;
+	# print(service)
+	response = get_completion(prompt)
+	print(response)
+	return response
+
+if __name__ == &quot;__main__&quot;:
+	honey_gpt()
+</code></pre>
+<p>honeygpt.py</p>
+<pre><code class="language-python">import os
+from gpt import honey_gpt
+base_ip = &quot;10.211.55.&quot;
+
+num_honeypots = 3
+
+dockerfiles_dir = &quot;/home/hp/dockerfiles&quot;
+
+network_name = &quot;honeypot_net&quot;
+network_subnet = &quot;10.211.55.0/24&quot;
+
+network_exists = os.system(&quot;docker network inspect {} &gt;/dev/null 2&gt;&amp;1&quot;.format(network_name)) == 0
+
+if not network_exists:
+    os.system(&quot;docker network create --driver macvlan --subnet {} --gateway {}1 -o parent=eth0 {}&quot;.format(network_subnet, base_ip, network_name))
+
+
+for i in range(num_honeypots):
+    ip_address = base_ip + str(i+128)
+    honeypot_dir = os.path.join(dockerfiles_dir, &quot;honeypot_&quot; + str(i+1))
+    os.makedirs(honeypot_dir, exist_ok=True)
+
+    with open(os.path.join(honeypot_dir, &quot;Dockerfile&quot;), &quot;w&quot;) as f:
+        f.write(honey_gpt())
+
+    os.system(&quot;docker build -t honeypot_{} {}&quot;.format(i+1, honeypot_dir))
+    os.system(&quot;docker run --name honeypot_{} --ip {} --network {} -d honeypot_{}&quot;.format(i+1, ip_address, network_name, i+1))
+</code></pre>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E6%8F%90%E7%A4%BA%E8%AF%8D%E5%B7%A5%E7%A8%8Bprompt-engineering">提示词工程（Prompt Engineering）</a></li>
+<li><a href="#%E7%9B%B4%E6%8E%A5%E6%9D%A5%E5%90%A7">直接来吧！</a>
+<ul>
+<li><a href="#%E5%85%88%E5%81%9A%E4%B8%AAdemo">先做个Demo</a>
+<ul>
+<li><a href="#%E7%AC%AC%E4%B8%80%E8%BD%AE%E6%8F%90%E9%97%AE">第一轮提问</a></li>
+<li><a href="#%E8%BF%AD%E4%BB%A31">迭代1</a></li>
+<li><a href="#%E8%BF%AD%E4%BB%A32">迭代2</a></li>
+</ul>
+</li>
+<li><a href="#%E6%9D%A5%E7%82%B9%E6%99%BA%E8%83%BD">来点智能！</a>
+<ul>
+<li><a href="#%E6%9C%8D%E5%8A%A1%E7%BB%84%E5%90%88%E9%92%88%E5%AF%B9%E6%B5%8B%E8%AF%95">服务组合针对测试</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#%E6%80%BB%E7%BB%93">总结</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/jia-qi-jie-shu-liao/">
+              <h3 class="post-title">
+                假期结束了......
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

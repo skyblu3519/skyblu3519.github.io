@@ -1,0 +1,226 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Auto-GPT浅析（无赖版） | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="Auto-GPT浅析（无赖版） | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="摆了一个月，题没练，博客也没写。不过呢，新的一个月，所有都过去了，好好应对接下来的挑战吧～
+这个Auto-GPT是最近报告课所选的分析项目，虽然也看代码时候记了笔记，也做了PPT。但是真的要认真梳理好好写一篇博客，说实话也挺麻烦的。所以呢，..." />
+    <meta name="keywords" content="ChatGPT" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              Auto-GPT浅析（无赖版）
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-06-05
+              </span>
+              <span>
+                3 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/B8Ad4Cpsd/" class="post-tag">
+                  # ChatGPT
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/auto-gpt-qian-xi-wu-lai-ban.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>摆了一个月，题没练，博客也没写。不过呢，新的一个月，所有都过去了，好好应对接下来的挑战吧～</p>
+<p>这个Auto-GPT是最近报告课所选的分析项目，虽然也看代码时候记了笔记，也做了PPT。但是真的要认真梳理好好写一篇博客，说实话也挺麻烦的。所以呢，从做好的PPT选点图贴上，简单记一下啦～～当是新的一个月的开始咯。</p>
+<h1 id="安装流程">安装流程</h1>
+<h2 id="安装依赖">安装依赖</h2>
+<p>解压压缩包：unzip Auto-GPT-0.3.0.zip</p>
+<p>进入目录：cd Auto-GPT-0.3.0</p>
+<p>安装Python依赖：pip install -r requirements.txt</p>
+<h2 id="配置openai-api-key">配置OpenAI API Key</h2>
+<p>准备OpenAI API Key</p>
+<ol>
+<li>登录OpenAI官网</li>
+<li>在https://platform.openai.com/account/api-keys页面创建新的 API Key</li>
+<li>将 API Key 复制下来，API Key 在创建结束后便无法再次查看。<br>
+<img src="https://skyblu3519.github.io/post-images/1685898921300.png" alt="" loading="lazy"></li>
+</ol>
+<p>在 .env 文件中添加 API Key：</p>
+<ol>
+<li>在Auto-GPT找到 .env.template 文件，这是 .env 的一个模板。</li>
+<li>使用命令 cp .env.template .env 复制创建 .env 文件。</li>
+<li>用文本编辑器打开 .env 文件。</li>
+<li>找到 OPENAI_API_KEY= 的行。</li>
+<li>在 = 后填写你的 OpenAI API Key</li>
+<li>保存退出文件<br>
+<img src="https://skyblu3519.github.io/post-images/1685899162958.png" alt="" loading="lazy"></li>
+</ol>
+<p>在 .env 中配置 GOOGLE_API_KEY 来使用 Google 搜索：</p>
+<ol>
+<li>进入https://console.cloud.google.com/，点击新建项目。</li>
+<li>在左侧选项栏中进入凭据页面。</li>
+<li>在创建凭据选择API密钥，复制这个密钥设置 .env 中的 GOOGLE_API_KEY 。</li>
+<li>进入https://cse.google.com/cse/all，在项目上启用自定义搜索 API。</li>
+<li>新建搜索引擎后，点击查看详情可以获得搜索引擎ID。用这个来设置 .env 中的 CUSTOM_SEARCH_ENGINE_ID 。<br>
+<img src="https://skyblu3519.github.io/post-images/1685899227402.png" alt="" loading="lazy"></li>
+</ol>
+<h1 id="代码主流程">代码主流程</h1>
+<p>Auto-GPT的主要流程可以分为下面三个部分。<br>
+<img src="https://skyblu3519.github.io/post-images/1685899415246.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1685899422254.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1685899428846.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1685899966042.png" alt="" loading="lazy"></p>
+<h1 id="剩下的">剩下的</h1>
+<p>其他就不提了，后面值得关注的主要是长短期记忆，还有各个部分使用的prompt。</p>
+<h1 id="总结">总结</h1>
+<p>读完 Auto-GPT 除了了解了如何构建一个基于ChatGPT的应用以外，最大的感受就是，不要害怕未知。其实Auto-GPT 远没有吹得那么神奇，但它带来的这种生成式的智能体确实是一件很有意思的事。所以，在有趣的时代去做有趣的事吧！</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E5%AE%89%E8%A3%85%E6%B5%81%E7%A8%8B">安装流程</a>
+<ul>
+<li><a href="#%E5%AE%89%E8%A3%85%E4%BE%9D%E8%B5%96">安装依赖</a></li>
+<li><a href="#%E9%85%8D%E7%BD%AEopenai-api-key">配置OpenAI API Key</a></li>
+</ul>
+</li>
+<li><a href="#%E4%BB%A3%E7%A0%81%E4%B8%BB%E6%B5%81%E7%A8%8B">代码主流程</a></li>
+<li><a href="#%E5%89%A9%E4%B8%8B%E7%9A%84">剩下的</a></li>
+<li><a href="#%E6%80%BB%E7%BB%93">总结</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/yong-chatgpt-kai-fa-yi-ge-zhi-neng-mi-guan-sheng-cheng-xi-tong/">
+              <h3 class="post-title">
+                用ChatGPT开发一个智能蜜罐
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

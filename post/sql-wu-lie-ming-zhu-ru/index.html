@@ -1,0 +1,279 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SQL无列名注入 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="SQL无列名注入 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="本人第一讨厌的SQL注入。
+information_schema失效
+在information_schema库被ban掉的情况下，可以使用mysql.innodb_table_stats和mysql.innodb_index_stats表，..." />
+    <meta name="keywords" content="CTF,SQL注入" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              SQL无列名注入
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-06-08
+              </span>
+              <span>
+                5 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/nWjlTAxCgi/" class="post-tag">
+                  # SQL注入
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/sql-wu-lie-ming-zhu-ru.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>本人第一讨厌的SQL注入。</p>
+<h1 id="information_schema失效">information_schema失效</h1>
+<p>在<code>information_schema</code>库被ban掉的情况下，可以使用<code>mysql.innodb_table_stats</code>和<code>mysql.innodb_index_stats</code>表，以及<code>sys库</code>中的一些视图，来获取数据库的表名。</p>
+<h2 id="innodb引擎">InnoDB引擎</h2>
+<p>InnoDB是MySQL的一个存储引擎。<code>mysql.innodb_table_stats</code>和<code>mysql.innodb_index_stats</code>这两个系统表在MySQL <strong>5.6</strong>版本及以上的InnoDB存储引擎中可用，这两表可以使用database_name查询到对应的table_name。<br>
+<img src="https://skyblu3519.github.io/post-images/1686170063866.jpg" alt="" loading="lazy"></p>
+<h2 id="sys库">sys库</h2>
+<p>sys库是MySQL中的一个特殊库，它包含了很多视图，函数和存储过程，用于帮助数据库管理员更好地监控，优化和诊断MySQL服务器。</p>
+<p><code>sys.schema_auto_increment_columns</code>和<code>sys.schema_table_statistics_with_buffer</code>这两个<strong>视图</strong>在MySQL <strong>5.7.7</strong>版本及以上的sys数据库中可用。</p>
+<p>这两个视图都可以使用table_schema查到对应的table_name，但在记录的内容上有所不同：</p>
+<ul>
+<li><strong>sys.schema_auto_increment_columns</strong>视图提供了数据库中所有具有<strong>自增长列</strong>的表的列表。</li>
+<li><strong>sys.schema_table_statistics_with_buffer</strong>视图的查询结果默认是对应<strong>当前使用</strong>的数据库。<br>
+<img src="https://skyblu3519.github.io/post-images/1686170516399.png" alt="" loading="lazy"></li>
+</ul>
+<h1 id="无列名注入">无列名注入</h1>
+<p>这上面四个表存在的问题是，它们都无法查询到列名。使用无列名注入，可以在无法使用<code>information_schema</code>获取列名的情况下，进行后面的注入。</p>
+<h2 id="join-using">JOIN &amp; USING</h2>
+<p><code>JOIN</code>用于从两个或更多的表中基于相关列之间的关系来获取数据。<code>USING</code>关键字通常与<code>JOIN</code>一起使用，当两个表中有<strong>相同名称</strong>的列时，可以使用<code>USING(column_name)</code>来指明关联的列。</p>
+<p>以下是<code>JOIN</code>和<code>USING</code>的基本用法：</p>
+<pre><code class="language-sql">SELECT column_name(s)
+FROM table1
+JOIN table2
+USING (column_name);
+</code></pre>
+<p>在有<strong>报错回显</strong>的情况下，使用<code>JOIN</code>和<code>USING</code>可以通过报错信息知道一个表的列名。下面来演示这个注入的流程：</p>
+<p>使用<code>JOIN</code>两个命名不同（a和b）的相同表（user）实例中选择所有列，结果是将一个表复制了两份拼接出一个新的表，使用别名的原因是<code>JOIN</code>不能连接两个相同的表名。</p>
+<pre><code class="language-sql">select * from user as a join user as b;
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1686188790141.png" alt="" loading="lazy"></figure>
+<p>将两个<code>user</code>表的<code>JOIN</code>结果作为一个新的临时表<code>a</code>来进行查询，由于结果集中的列名不再是唯一的，这就导致了报错，进而我们就知道了这个表的字段。</p>
+<pre><code class="language-sql">select * from (select * from user as a join user as b) as a;
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/1686189058080.png" alt="" loading="lazy"></figure>
+<p>使用<code>USING</code>将查询中相同的字段进行合并，逐步获得所有的字段名。</p>
+<pre><code class="language-sql">select * from (select * from user as a join user as b using (id)) as a;
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/1686189201081.png" alt="" loading="lazy"></figure>
+<h2 id="子查询">子查询</h2>
+<p>这个查询主要是结合<code>union select</code>联合查询构造列名再放到子查询中实现。</p>
+<p>基本的板子如下：</p>
+<pre><code class="language-sql">select 1,2,3 union select * from user;
+</code></pre>
+<figure data-type="image" tabindex="4"><img src="https://skyblu3519.github.io/post-images/1686191177319.png" alt="" loading="lazy"></figure>
+<p>可以看到查询结果的列名发生了改变。现在把这个查询的结果作为一个虚拟表，查询它第三列的内容：</p>
+<pre><code class="language-sql">select `3` from (select 1,2,3 union select * from user)x;
+</code></pre>
+<figure data-type="image" tabindex="5"><img src="https://skyblu3519.github.io/post-images/1686191432902.png" alt="" loading="lazy"></figure>
+<p>在反引号被ban掉的情况下，可以使用别名的方式修改虚拟表的列：</p>
+<pre><code class="language-sql">select a from (select 1,2,3 as a union select * from user)x;
+</code></pre>
+<figure data-type="image" tabindex="6"><img src="https://skyblu3519.github.io/post-images/1686191624396.png" alt="" loading="lazy"></figure>
+<p>这样似乎也可以......🤔<br>
+<img src="https://skyblu3519.github.io/post-images/1686191802071.jpg" alt="" loading="lazy"></p>
+<h1 id="swpu2019web1">[SWPU2019]Web1</h1>
+<p>注册一个账号测下功能。申请的广告页面有XSS，加上这个待管理确认的状态，一开始还以为是弹管理员的cookie😅</p>
+<p>申请一个广告，广告名为<code>'</code>。点击广告详情发生报错：<br>
+<img src="https://skyblu3519.github.io/post-images/1686192334192.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1686192359597.png" alt="" loading="lazy"></p>
+<p>注入点就是这个广告详情，推测这里的查询语句是：<code>select * from table where ad_name='name'</code>，这个name直接就取的是发布时候的广告名称。</p>
+<p>过滤了一些东西，其中产生主要影响的：</p>
+<ul>
+<li>or：这个ban了<code>information_schema</code>也就无法用了。</li>
+<li>空格：虽然不会被警告，但是发布后的标题会自动删除空格。</li>
+<li>注释（--+、#）：根据我们推测的查询语句，可以使用<code>'</code>进行闭合。</li>
+<li>updatexml等报错函数：要是有没有过滤到的，这里应该算是非预期？</li>
+</ul>
+<p>没有过滤<code>union select</code>使用联合查询进行注入。先是猜字段数量，无法使用<code>order by</code>，但可以使用<code>group by</code>。</p>
+<p><code>group by</code>可以将查询结果按一个或多个列进行分组，<code>group by</code>后面可以跟一个或多个数字，这些数字代表查询语句<code>select</code>部分中列的位置。所以指定了超过列的数字的时候，就会提示：<br>
+<img src="https://skyblu3519.github.io/post-images/1686193559906.png" alt="" loading="lazy"></p>
+<p>使用这个方法构造语句（单引号闭合的空字符没有影响），由此知道字段的数量为22：</p>
+<pre><code class="language-sql">'/**/group/**/by/**/23,'
+</code></pre>
+<figure data-type="image" tabindex="7"><img src="https://skyblu3519.github.io/post-images/1686193697370.png" alt="" loading="lazy"></figure>
+<p>使用<code>mysql.innodb_table_stats</code>获得表名：</p>
+<pre><code>title='union/**/select/**/1,(select/**/group_concat(table_name)/**/from/**/mysql.innodb_table_stats),(select/**/group_concat(database_name)/**/from/**/mysql.innodb_table_stats),4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,'22
+</code></pre>
+<figure data-type="image" tabindex="8"><img src="https://skyblu3519.github.io/post-images/1686193863880.png" alt="" loading="lazy"></figure>
+<p>无列名注入get flag：</p>
+<pre><code>title='union/**/select/**/1,(select/**/group_concat(`3`)/**/from/**/(select/**/1,2,3/**/union/**/select/**/*/**/from/**/users)a),2,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,'22
+</code></pre>
+<figure data-type="image" tabindex="9"><img src="https://skyblu3519.github.io/post-images/1686193955570.png" alt="" loading="lazy"></figure>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://zhuanlan.zhihu.com/p/98206699">CTF|mysql之无列名注入</a><br>
+<a href="https://johnfrod.top/%E5%AE%89%E5%85%A8/%E6%97%A0%E5%88%97%E5%90%8D%E6%B3%A8%E5%85%A5%E7%BB%95%E8%BF%87information_schema/">无列名注入绕过information_schema</a><br>
+<a href="https://blog.csdn.net/mochu7777777/article/details/127005944">BUUCTF: SWPU2019Web1</a><br>
+<a href="https://blog.csdn.net/m0_49835838/article/details/109159839">mysql注入绕过information_schema过滤</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#information_schema%E5%A4%B1%E6%95%88">information_schema失效</a>
+<ul>
+<li><a href="#innodb%E5%BC%95%E6%93%8E">InnoDB引擎</a></li>
+<li><a href="#sys%E5%BA%93">sys库</a></li>
+</ul>
+</li>
+<li><a href="#%E6%97%A0%E5%88%97%E5%90%8D%E6%B3%A8%E5%85%A5">无列名注入</a>
+<ul>
+<li><a href="#join-using">JOIN &amp; USING</a></li>
+<li><a href="#%E5%AD%90%E6%9F%A5%E8%AF%A2">子查询</a></li>
+</ul>
+</li>
+<li><a href="#swpu2019web1">[SWPU2019]Web1</a></li>
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/php-fan-xu-lie-hua-zi-fu-tao-yi/">
+              <h3 class="post-title">
+                PHP反序列化字符逃逸
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

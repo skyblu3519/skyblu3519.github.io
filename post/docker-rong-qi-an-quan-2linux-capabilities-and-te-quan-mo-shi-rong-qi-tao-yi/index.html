@@ -1,0 +1,571 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[Docker容器安全2]Linux Capabilities &amp; 特权模式容器逃逸 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[Docker容器安全2]Linux Capabilities &amp; 特权模式容器逃逸 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="笔记
+学习下Linux capabilities
+概念
+Linux capabilities 将 root 权限划分为较小的、独立的单元，使进程可以拥有部分权限，以对 root 权限进行更细粒度的控制。
+有哪些？
+
+
+
+capability..." />
+    <meta name="keywords" content="Linux,容器安全" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [Docker容器安全2]Linux Capabilities &amp; 特权模式容器逃逸
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-05-10
+              </span>
+              <span>
+                11 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/ivaUa6PhJ/" class="post-tag">
+                  # Linux
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/uVChpOuTBN/" class="post-tag">
+                  # 容器安全
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/docker-rong-qi-an-quan-2linux-capabilities-and-te-quan-mo-shi-rong-qi-tao-yi.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="笔记">笔记</h1>
+<p>学习下Linux capabilities</p>
+<h2 id="概念">概念</h2>
+<p>Linux capabilities 将 root 权限划分为较小的、独立的单元，使进程可以拥有部分权限，以对 root 权限进行更细粒度的控制。</p>
+<h2 id="有哪些">有哪些？</h2>
+<table>
+<thead>
+<tr>
+<th>capability 名称</th>
+<th>描述</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CAP_AUDIT_CONTROL</td>
+<td>启用和禁用内核审计；改变审计过滤规则；检索审计状态和过滤规则</td>
+</tr>
+<tr>
+<td>CAP_AUDIT_READ</td>
+<td>允许通过 multicast netlink 套接字读取审计日志</td>
+</tr>
+<tr>
+<td>CAP_AUDIT_WRITE</td>
+<td>将记录写入内核审计日志</td>
+</tr>
+<tr>
+<td>CAP_BLOCK_SUSPEND</td>
+<td>使用可以阻止系统挂起的特性</td>
+</tr>
+<tr>
+<td>CAP_CHOWN</td>
+<td>修改文件所有者的权限</td>
+</tr>
+<tr>
+<td>CAP_DAC_OVERRIDE</td>
+<td>忽略文件的 DAC 访问限制</td>
+</tr>
+<tr>
+<td>CAP_DAC_READ_SEARCH</td>
+<td>忽略文件读及目录搜索的 DAC 访问限制</td>
+</tr>
+<tr>
+<td>CAP_FOWNER</td>
+<td>忽略文件属主 ID 必须和进程用户 ID 相匹配的限制</td>
+</tr>
+<tr>
+<td>CAP_FSETID</td>
+<td>允许设置文件的 setuid 位</td>
+</tr>
+<tr>
+<td>CAP_IPC_LOCK</td>
+<td>允许锁定共享内存片段</td>
+</tr>
+<tr>
+<td>CAP_IPC_OWNER</td>
+<td>忽略 IPC 所有权检查</td>
+</tr>
+<tr>
+<td>CAP_KILL</td>
+<td>允许对不属于自己的进程发送信号</td>
+</tr>
+<tr>
+<td>CAP_LEASE</td>
+<td>允许修改文件锁的 FL_LEASE 标志</td>
+</tr>
+<tr>
+<td>CAP_LINUX_IMMUTABLE</td>
+<td>允许修改文件的 IMMUTABLE 和 APPEND 属性标志</td>
+</tr>
+<tr>
+<td>CAP_MAC_ADMIN</td>
+<td>允许 MAC 配置或状态更改</td>
+</tr>
+<tr>
+<td>CAP_MAC_OVERRIDE</td>
+<td>忽略文件的 DAC 访问限制</td>
+</tr>
+<tr>
+<td>CAP_MKNOD</td>
+<td>允许使用 mknod() 系统调用</td>
+</tr>
+<tr>
+<td>CAP_NET_ADMIN</td>
+<td>允许执行网络管理任务</td>
+</tr>
+<tr>
+<td>CAP_NET_BIND_SERVICE</td>
+<td>允许绑定到小于 1024 的端口</td>
+</tr>
+<tr>
+<td>CAP_NET_BROADCAST</td>
+<td>允许网络广播和多播访问</td>
+</tr>
+<tr>
+<td>CAP_NET_RAW</td>
+<td>允许使用原始套接字</td>
+</tr>
+<tr>
+<td>CAP_SETGID</td>
+<td>允许改变进程的 GID</td>
+</tr>
+<tr>
+<td>CAP_SETFCAP</td>
+<td>允许为文件设置任意的 capabilities</td>
+</tr>
+<tr>
+<td>CAP_SETPCAP</td>
+<td>参考 capabilities man page</td>
+</tr>
+<tr>
+<td>CAP_SETUID</td>
+<td>允许改变进程的 UID</td>
+</tr>
+<tr>
+<td>CAP_SYS_ADMIN</td>
+<td>允许执行系统管理任务，如加载或卸载文件系统、设置磁盘配额等</td>
+</tr>
+<tr>
+<td>CAP_SYS_BOOT</td>
+<td>允许重新启动系统</td>
+</tr>
+<tr>
+<td>CAP_SYS_CHROOT</td>
+<td>允许使用 chroot() 系统调用</td>
+</tr>
+<tr>
+<td>CAP_SYS_MODULE</td>
+<td>允许插入和删除内核模块</td>
+</tr>
+<tr>
+<td>CAP_SYS_NICE</td>
+<td>允许提升优先级及设置其他进程的优先级</td>
+</tr>
+<tr>
+<td>CAP_SYS_PACCT</td>
+<td>允许执行进程的 BSD 式审计</td>
+</tr>
+<tr>
+<td>CAP_SYS_PTRACE</td>
+<td>允许跟踪任何进程</td>
+</tr>
+<tr>
+<td>CAP_SYS_RAWIO</td>
+<td>允许直接访问 /devport、/dev/mem、/dev/kmem 及原始块设备</td>
+</tr>
+<tr>
+<td>CAP_SYS_RESOURCE</td>
+<td>忽略资源限制</td>
+</tr>
+<tr>
+<td>CAP_SYS_TIME</td>
+<td>允许改变系统时钟</td>
+</tr>
+<tr>
+<td>CAP_SYS_TTY_CONFIG</td>
+<td>允许配置 TTY 设备</td>
+</tr>
+<tr>
+<td>CAP_SYSLOG</td>
+<td>允许使用 syslog() 系统调用</td>
+</tr>
+<tr>
+<td>CAP_WAKE_ALARM</td>
+<td>允许触发一些能唤醒系统的东西(比如 CLOCK_BOOTTIME_ALARM 计时器)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="capabilities-集合">capabilities 集合</h2>
+<p>Linux capabilities 分为进程（Processes） capabilities 和文件（Binaries） capabilities。</p>
+<h3 id="进程processes-capabilities">进程（Processes） capabilities</h3>
+<p>每一个线程，具有 5 个 capabilities 集合，每一个集合使用 64 位掩码来表示，显示为 16 进制格式。这 5 个 capabilities 集合分别是：</p>
+<ul>
+<li><strong>Permitted</strong></li>
+<li><strong>Effective</strong></li>
+<li><strong>Inheritable</strong></li>
+<li><strong>Bounding</strong></li>
+<li><strong>Ambient</strong></li>
+</ul>
+<p>每个集合中都包含零个或多个 capabilities。这5个集合的具体含义如下：</p>
+<p><strong>Inherited (CapInh):</strong></p>
+<ul>
+<li>目的：确定从父进程传递下来的 <code>capabilities</code>。</li>
+<li>功能：当创建（<code>exec()</code>）一个新进程时，它会从父进程继承这个集合中的 <code>capabilities</code>。不会添加到新线程的 <code>Effective</code> 集合中，它只会影响新线程的 <code>Permitted</code> 集合。</li>
+</ul>
+<p><strong>Effective (CapEff):</strong></p>
+<ul>
+<li>目的：表示进程在任何时刻实际使用的 <code>capabilities</code>。</li>
+<li>功能：是内核检查各种操作权限时使用的<code>capabilities</code>集合。</li>
+</ul>
+<p><strong>Permitted (CapPrm)：</strong></p>
+<ul>
+<li>目的：定义进程可以拥有的最大<code>capabilities</code>集合。</li>
+<li>功能：线程可以从 <code>Effective</code> 或 <code>Inheritable</code> 集合中添加或删除 <code>capability</code>，前提是添加或删除的 <code>capability</code> 必须包含在 <code>Permitted</code> 集合中。</li>
+</ul>
+<p><strong>Bounding (CapBnd):</strong></p>
+<ul>
+<li>目的：限制进程在其生命周期内可获得的<code>capabilities</code>能力集合。</li>
+<li>功能：即使某个<code>capabilities</code>在进程的<code>Inheritable</code>或<code>Permitted</code>集合中，它也不能获得该<code>capabilities</code>，除非它也在<code>Bounding</code>集合中。</li>
+</ul>
+<p><strong>Ambient (CapAmb):</strong></p>
+<ul>
+<li>Linux 4.3 内核新增了一个 capabilities 集合叫 Ambient ，用来弥补 Inheritable 的不足。Ambient 具有如下特性：
+<ul>
+<li><code>Permitted</code> 和 <code>Inheritable</code> 未设置的 <code>capabilities</code>，<code>Ambient</code> 也不能设置。</li>
+<li>当 <code>Permitted</code> 和 <code>Inheritable</code> 关闭某权限（比如 <code>CAP_SYS_BOOT</code>）后，<code>Ambient</code> 也随之关闭对应权限。这样就确保了降低权限后子进程也会降低权限。</li>
+<li>非特权用户如果在 <code>Permitted</code> 集合中有一个 <code>capability</code>，那么可以添加到 <code>Ambient</code> 集合中，这样它的子进程便可以在 <code>Ambient</code>、<code>Permitted</code> 和 <code>Effective</code> 集合中获取这个 <code>capability</code></li>
+<li>有点抽象，在具体的使用场景感受</li>
+</ul>
+</li>
+</ul>
+<h3 id="文件binaries-capabilities">文件（Binaries） capabilities</h3>
+<p>文件的 capabilities 功能，需要文件系统的支持。如果文件系统使用了 nouuid 选项进行挂载，那么文件的 capabilities 将会被忽略。</p>
+<p>类似于线程的 capabilities，文件的 capabilities 包含了 3 个集合：</p>
+<ul>
+<li>Permitted</li>
+<li>Inheritable</li>
+<li>Effective</li>
+</ul>
+<p>和线程 capabilities 有较大差异的是<code>Effective</code>集合：</p>
+<p><strong>Effective</strong><br>
+这不是一个集合，仅仅是一个标志位。如果设置开启，那么在执行完 <code>execve()</code> 后，线程 <code>Permitted</code> 集合中的 <code>capabilities</code> 会自动添加到它的 Effective 集合中。对于一些旧的可执行文件，由于其不会调用 capabilities 相关函数设置自身的 <code>Effective</code> 集合，所以可以将可执行文件的 Effective bit 开启，从而可以将 <code>Permitted</code> 集合中的 capabilities 自动添加到 <code>Effective</code> 集合中。</p>
+<h2 id="公式运行-execve-后-capabilities-的变化">公式：运行 execve() 后 capabilities 的变化</h2>
+<p>我们用 <code>P</code> 代表<strong>执行 execve() 前线程的 capabilities</strong>，<code>P'</code> 代表<strong>执行 execve() 后线程的 capabilities</strong>，<code>F</code> 代表<strong>可执行文件的 capabilities</strong>。那么：</p>
+<pre><code>P’(ambient) = (file is privileged) ? 0 : P(ambient)
+
+P’(permitted) = (P(inheritable) &amp; F(inheritable)) |
+                (F(permitted) &amp; P(bounding))) | 
+                P’(ambient)
+
+P’(effective)   = F(effective) ? P’(permitted) : P’(ambient)
+
+P’(inheritable) = P(inheritable) [i.e., unchanged]
+
+P’(bounding) = P(bounding) [i.e., unchanged]
+</code></pre>
+<p>注：</p>
+<ul>
+<li>上面的公式是针对系统调用 <code>execve()</code> 的，如果是 <code>fork()</code>，那么子线程的 capabilities 信息完全复制父进程的 capabilities 信息。</li>
+</ul>
+<h2 id="capabilities-操作">capabilities 操作</h2>
+<h3 id="查看-capabilities">查看 capabilities</h3>
+<p>相关工具：<code>libcap-ng</code></p>
+<p>安装（Centos）：<code>yum install libcap-ng-utils</code></p>
+<p>使用<code>/proc/&lt;pid&gt;/status</code>查看进程capabilities</p>
+<pre><code class="language-shell">cat /proc/1234/status | grep Cap
+cat /proc/$$/status | grep Cap #This will print the capabilities of the current process
+</code></pre>
+<p>通常有5行</p>
+<pre><code>CapInh:	0000000000000000
+CapPrm:	0000001fffffffff
+CapEff:	0000001fffffffff
+CapBnd:	0000001fffffffff
+CapAmb:	0000000000000000
+</code></pre>
+<p>使用<code>capsh</code>解码让其可读</p>
+<pre><code># capsh --decode=0000003fffffffff
+0x0000003fffffffff=cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_net_raw,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,35,36,37
+</code></pre>
+<p>使用 getpcaps 工具</p>
+<pre><code># ping baidu.com &gt; /dev/null&amp;
+[1] 9227
+# getpcaps 9227
+Capabilities for `9227': = cap_net_admin,cap_net_raw+p
+# cat /proc/9227/status | grep Cap
+CapInh:	0000000000000000
+CapPrm:	0000000000003000
+CapEff:	0000000000000000
+CapBnd:	0000001fffffffff
+CapAmb:	0000000000000000
+# capsh --decode=0000000000003000
+0x0000000000003000=cap_net_admin,cap_net_raw
+</code></pre>
+<p>注意到这里启动的 ping 它的 CapEff 是 0，这点后面会提（应该）</p>
+<p>文件capabilities查看</p>
+<pre><code>getcap /usr/bin/ping
+/usr/bin/ping = cap_net_admin,cap_net_raw+p
+
+###
+capability[,capability…]+(e|i|p)，其中 e 表示 effective，i 表示 inheritable，p 表示 permitted。不同的分组之间通过空格隔开，例如：Current: = cap_sys_chroot+ep cap_net_bind_service+eip。再举一个例子，cap_net_bind_service+e cap_net_bind_service+ip 和 cap_net_bind_service+eip 等价。
+</code></pre>
+<p>遍历目录下所有可执行文件的capabilities（<code>2&gt;/dev/null</code> 则是将错误输出重定向到 <code>/dev/null</code>，即忽略错误消息）</p>
+<pre><code># getcap -r / 2&gt;/dev/null
+/usr/sbin/arping = cap_net_raw+p
+/usr/sbin/clockdiff = cap_net_raw+p
+/usr/sbin/suexec = cap_setgid,cap_setuid+ep
+/usr/bin/ping = cap_net_admin,cap_net_raw+p
+/usr/bin/newuidmap = cap_setuid+ep
+/usr/bin/newgidmap = cap_setgid+ep
+</code></pre>
+<h3 id="使用capsh设置的新shell">使用capsh设置的新shell</h3>
+<p>使用 capsh 工具在运行 ping 之前移除 CAP_NET_RAW capabilities，并输出当前权限设置。</p>
+<pre><code># capsh --drop=cap_net_raw --print -- -c &quot;ping baidu.com&quot;
+Current: = cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_net_raw,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,35,36+ep
+Bounding set =cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,35,36
+Securebits: 00/0x0/1'b0
+ secure-noroot: no (unlocked)
+ secure-no-suid-fixup: no (unlocked)
+ secure-keep-caps: no (unlocked)
+uid=0(root)
+gid=0(root)
+groups=0(root),994(docker)
+ping: socket: 不允许的操作
+</code></pre>
+<h3 id="使用setcap设置文件的capabilities">使用setcap设置文件的capabilities</h3>
+<p>设置新的限制</p>
+<pre><code>setcap cap_net_admin+p /usr/bin/ping
+</code></pre>
+<p>也可以清空capabilities</p>
+<pre><code>setcap -r &lt;/path/to/binary&gt;
+</code></pre>
+<h2 id="具有-capabilities-感知能力的文件">具有 capabilities 感知能力的文件</h2>
+<p>这部分的内容开始看的时候有点难理解，之后在HackTrick找了段英文的解释</p>
+<blockquote>
+<p>The capability-aware binaries won't use the new capabilities given by the environment, however the capability dumb binaries will use them as they won't reject them. This makes capability-dumb binaries vulnerable inside a special environment that grant capabilities to binaries.</p>
+</blockquote>
+<p><strong>Capability-aware Binaries（具有能力感知的二进制文件）：</strong></p>
+<ul>
+<li>这些二进制文件是设计和编写时考虑到 Linux capabilities 的。因此，它们会显式地检查和管理它们需要的 capabilities。</li>
+<li>当这些二进制文件在具有额外 capabilities 的环境中运行时，它们不会自动使用这些新授予的 capabilities。相反，它们会检查当前的 capabilities 设置，并决定是否使用这些权限。</li>
+</ul>
+<p><strong>Capability-dumb Binaries（不具备能力感知的二进制文件）：</strong></p>
+<ul>
+<li>这些二进制文件在编写时没有考虑 Linux capabilities，它们对这些权限的存在或不存在不敏感。</li>
+<li>当这些二进制文件在具有额外 capabilities 的环境中运行时，它们不会主动拒绝这些新授予的 capabilities。因此，它们会自动拥有并使用这些权限。</li>
+</ul>
+<p>结合文章<code>ping</code>命令的实验就好理解了：<a href="https://icloudnative.io/posts/linux-capabilities-in-practice-2/">https://icloudnative.io/posts/linux-capabilities-in-practice-2/</a></p>
+<h1 id="privileged-特权模式容器逃逸">Privileged 特权模式容器逃逸</h1>
+<p>当使用--privileged=true选项运行容器时，Docker会赋予容器几乎与主机相同的权限4。具体来说，这个选项做了以下两件事情：</p>
+<ul>
+<li>给容器添加了所有的capabilities</li>
+<li>允许容器访问主机的所有设备</li>
+</ul>
+<pre><code class="language-shell">docker run --privileged=true -it ubuntu
+</code></pre>
+<p>在容器内部执行下面的命令，从而判断容器是不是特权模式，如果是以特权模式启动的话，CapEff 对应的掩码值应该为0000003fffffffff 或者是 0000001fffffffff</p>
+<pre><code class="language-shell">cat /proc/$$/status | grep CapEff
+</code></pre>
+<p>查看挂载磁盘设备</p>
+<pre><code class="language-shell">fdisk -l
+Disk /dev/vda: 40 GiB, 42949672960 bytes, 83886080 sectors
+Units: sectors of 1 * 512 = 512 bytes
+Sector size (logical/physical): 512 bytes / 512 bytes
+I/O size (minimum/optimal): 512 bytes / 512 bytes
+Disklabel type: dos
+Disk identifier: 0x000beb6e
+
+Device     Boot Start      End  Sectors Size Id Type
+/dev/vda1  *     2048 83886046 83883999  40G 83 Linux
+</code></pre>
+<p>在容器内部执行以下命令，将宿主机文件挂载到 /test 目录下</p>
+<pre><code class="language-shell">mkdir /test &amp;&amp; mount /dev/vda1 /test
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1715348908477.png" alt="" loading="lazy"></figure>
+<p>方法一：写计划任务</p>
+<p>方法二：</p>
+<pre><code class="language-shell">chroot /mnt adduser john
+</code></pre>
+<h1 id="参考">参考</h1>
+<p><a href="https://icloudnative.io/posts/linux-capabilities-why-they-exist-and-how-they-work/">Linux Capabilities 入门教程：概念篇</a><br>
+<a href="https://icloudnative.io/posts/linux-capabilities-in-practice-1/">Linux Capabilities 入门教程：基础实战篇</a><br>
+<a href="https://icloudnative.io/posts/linux-capabilities-in-practice-2/">Linux Capabilities 入门教程：进阶实战篇</a><br>
+<a href="https://book.hacktricks.xyz/linux-hardening/privilege-escalation/linux-capabilities">HackTricks - Linux Capabilities</a><br>
+<a href="https://blog.csdn.net/Dontla/article/details/132996095">docker run：--privileged=true选项解析（特权模式：赋予容器几乎与主机相同的权限）-CSDN博客</a><br>
+<a href="https://wiki.teamssix.com/cloudnative/docker/docker-privileged-escape.html">Privileged 特权模式容器逃逸</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E7%AC%94%E8%AE%B0">笔记</a>
+<ul>
+<li><a href="#%E6%A6%82%E5%BF%B5">概念</a></li>
+<li><a href="#%E6%9C%89%E5%93%AA%E4%BA%9B">有哪些？</a></li>
+<li><a href="#capabilities-%E9%9B%86%E5%90%88">capabilities 集合</a>
+<ul>
+<li><a href="#%E8%BF%9B%E7%A8%8Bprocesses-capabilities">进程（Processes） capabilities</a></li>
+<li><a href="#%E6%96%87%E4%BB%B6binaries-capabilities">文件（Binaries） capabilities</a></li>
+</ul>
+</li>
+<li><a href="#%E5%85%AC%E5%BC%8F%E8%BF%90%E8%A1%8C-execve-%E5%90%8E-capabilities-%E7%9A%84%E5%8F%98%E5%8C%96">公式：运行 execve() 后 capabilities 的变化</a></li>
+<li><a href="#capabilities-%E6%93%8D%E4%BD%9C">capabilities 操作</a>
+<ul>
+<li><a href="#%E6%9F%A5%E7%9C%8B-capabilities">查看 capabilities</a></li>
+<li><a href="#%E4%BD%BF%E7%94%A8capsh%E8%AE%BE%E7%BD%AE%E7%9A%84%E6%96%B0shell">使用capsh设置的新shell</a></li>
+<li><a href="#%E4%BD%BF%E7%94%A8setcap%E8%AE%BE%E7%BD%AE%E6%96%87%E4%BB%B6%E7%9A%84capabilities">使用setcap设置文件的capabilities</a></li>
+</ul>
+</li>
+<li><a href="#%E5%85%B7%E6%9C%89-capabilities-%E6%84%9F%E7%9F%A5%E8%83%BD%E5%8A%9B%E7%9A%84%E6%96%87%E4%BB%B6">具有 capabilities 感知能力的文件</a></li>
+</ul>
+</li>
+<li><a href="#privileged-%E7%89%B9%E6%9D%83%E6%A8%A1%E5%BC%8F%E5%AE%B9%E5%99%A8%E9%80%83%E9%80%B8">Privileged 特权模式容器逃逸</a></li>
+<li><a href="#%E5%8F%82%E8%80%83">参考</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/spel-bu-chong/">
+              <h3 class="post-title">
+                SpEL补充
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

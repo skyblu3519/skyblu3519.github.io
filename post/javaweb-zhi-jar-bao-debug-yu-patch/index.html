@@ -1,0 +1,201 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>JavaWeb之jar包Debug与Patch | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="JavaWeb之jar包Debug与Patch | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="Debug
+新建一个项目将jar包复制进来。
+
+修改web.jar为web.zip解压缩为web目录
+
+选择 File -&gt; Project Structure... 将 web.jar，web目录下的BOOT-INF/classes..." />
+    <meta name="keywords" content="JAVA" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              JavaWeb之jar包Debug与Patch
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-01-03
+              </span>
+              <span>
+                1 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/RwDqGW2an/" class="post-tag">
+                  # JAVA
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/javaweb-zhi-jar-bao-debug-yu-patch.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="debug">Debug</h1>
+<p>新建一个项目将jar包复制进来。<br>
+<img src="https://skyblu3519.github.io/post-images/1704291836984.png" alt="" loading="lazy"></p>
+<p>修改web.jar为web.zip解压缩为web目录<br>
+<img src="https://skyblu3519.github.io/post-images/1704291842472.png" alt="" loading="lazy"></p>
+<p>选择 File -&gt; Project Structure... 将 web.jar，web目录下的BOOT-INF/classes、BOOT-INF/lib、org目录导入lib<br>
+<img src="https://skyblu3519.github.io/post-images/1704291847611.png" alt="" loading="lazy"></p>
+<p>新建一个web.jar的运行配置<br>
+<img src="https://skyblu3519.github.io/post-images/1704291875019.png" alt="" loading="lazy"></p>
+<p>右上角开启Debug，在jar包里面下断点就可以调试了<br>
+<img src="https://skyblu3519.github.io/post-images/1704291881006.png" alt="" loading="lazy"></p>
+<h1 id="patch">Patch</h1>
+<p>比如这里我要修复index.class里面的代码，首先新建一个与它一样的包结构<code>com.example.jackson</code><br>
+<img src="https://skyblu3519.github.io/post-images/1704291887342.png" alt="" loading="lazy"></p>
+<p>写好修复后的代码重新编译<br>
+<img src="https://skyblu3519.github.io/post-images/1704291918307.png" alt="" loading="lazy"></p>
+<p>在target目录下找到编译好的Index.class<br>
+<img src="https://skyblu3519.github.io/post-images/1704291923376.png" alt="" loading="lazy"></p>
+<p>打开winrar文件，用编译好后的class文件拖进去直接替换<br>
+<img src="https://skyblu3519.github.io/post-images/1704291928393.png" alt="" loading="lazy"></p>
+<p>将替换后的zip后缀改为jar，代码成功替换<br>
+<img src="https://skyblu3519.github.io/post-images/1704291953524.png" alt="" loading="lazy"></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#debug">Debug</a></li>
+<li><a href="#patch">Patch</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/2023-xiang-shan-bei-jue-sai-security_system/">
+              <h3 class="post-title">
+                [2023香山杯决赛]security_system
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

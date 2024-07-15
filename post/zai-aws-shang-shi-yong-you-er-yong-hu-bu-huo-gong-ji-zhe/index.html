@@ -1,0 +1,666 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>在AWS上使用诱饵用户捕获攻击者 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="在AWS上使用诱饵用户捕获攻击者 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="思路就是创建一个IAM用户，然后用CloudWatch监控该用户的行为，如果出现了该用户的操作则触发告警，并通过邮件通知。
+使用控制台和Terraform两种方法实现
+控制台创建
+创建诱饵用户
+在 IAM 控制台创建一个诱饵用户honeyU..." />
+    <meta name="keywords" content="欺骗防御,Terraform,AWS" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              在AWS上使用诱饵用户捕获攻击者
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-07-09
+              </span>
+              <span>
+                17 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/tsQCojXdQ/" class="post-tag">
+                  # 欺骗防御
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/IM02GT8L2N/" class="post-tag">
+                  # Terraform
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/su2_uaPzNg/" class="post-tag">
+                  # AWS
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/zai-aws-shang-shi-yong-you-er-yong-hu-bu-huo-gong-ji-zhe.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>思路就是创建一个IAM用户，然后用CloudWatch监控该用户的行为，如果出现了该用户的操作则触发告警，并通过邮件通知。</p>
+<p>使用控制台和Terraform两种方法实现</p>
+<h1 id="控制台创建">控制台创建</h1>
+<h2 id="创建诱饵用户">创建诱饵用户</h2>
+<p>在 IAM 控制台创建一个诱饵用户<strong>honeyUser</strong>，不附加任何权限<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720081492814-3e17265e-d254-41d0-a77f-54f84a647378.png" alt="image.png" loading="lazy"></p>
+<p>为<strong>honeyUser</strong>创建一个访问密钥，这对密钥之后便可以通过一些方法泄露出去，进而捕获可疑的攻击者。<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720081561008-5584f5f6-0d2b-4c9a-bd73-152c263e3b6f.png" alt="image.png" loading="lazy"></p>
+<h2 id="创建cloudtrail并将事件发送至cloudwatch">创建CloudTrail并将事件发送至CloudWatch</h2>
+<p>进入<strong>CloudTrail</strong>控制台创建一个<strong>trail</strong>（追踪），创建<strong>CloudTrail</strong>的时候需要选择一个S3来对日志进行存储，如果没有提前准备好则需要在这里新创建一个。<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720084252797-7f09bc55-a982-41a0-9746-ff4f8c8ec10d.png" alt="image.png" loading="lazy"></p>
+<p>这里不使用加密方便后面数据的检索<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720082522978-0a4e8c78-584b-4455-98fc-ec6c2003573a.png" alt="image.png" loading="lazy"></p>
+<p>配置向<strong>CloudWatch Logs</strong>发送事件，之后可以在<strong>CloudWatch</strong>配置规则来对诱饵用户的登录行为进行告警。<strong>CloudTrail</strong> 使用 <strong>CloudWatch</strong> 日志组作为日志事件的传输终端节点，需要创建一个日志组或者指定一个现有日志组。同时需要一个 <strong>IAM角色</strong> 将事件发送到 <strong>CloudWatch</strong>，这个角色需要有<code>logs:CreateLogStream</code>和<code>logs:PutLogEvents</code>两个权限。这里让它新建一个日志组和角色。<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720084273034-2b8cd697-2d68-495d-ba1c-a8bcd7dcb5af.png" alt="image.png" loading="lazy"></p>
+<p>在下一步追踪的事件中只选择<code>Management events</code>，主要追踪用户的登录行为<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720084370949-747883e2-fbf3-4d51-8c18-87918a5c3598.png" alt="image.png" loading="lazy"></p>
+<p>创建好后在 <strong>Trails页面</strong> 显示该<strong>Trail</strong> 已开始工作（Status: Logging）<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720084619035-22a6424b-f1f5-4b15-804a-61c3979a9af5.png" alt="image.png" loading="lazy"></p>
+<p>在配置CloudWatch之前，我们先看下和这个 <strong>Trail</strong> 以前创建的都有那些资源。进入 <strong>IAM页面</strong> 在 <strong>策略</strong> 中查看客户托管策略，我们可以看到一个新创建的用来推送 <strong>CloudWatch</strong> 的托管策略。它的描述是：<code>Policy for config CloudWathLogs for trail cloudtrail-logging-honey, created by CloudTrail console</code><br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720085238845-d879e93c-d500-4412-ba75-86bd168cb67f.png" alt="image.png" loading="lazy"></p>
+<p>点击查看它的策略内容。这里许可了两个操作。而他们指向的资源都是 <strong>CloudTrail</strong> 向 <strong>CloudWatch Logs</strong> 发送的这条日志流</p>
+<ul>
+<li><strong>logs:CreateLogStream</strong>: 允许被授权的实体创建日志流</li>
+<li><strong>logs:PutLogEvents</strong>: 允许被授权的实体向日志流中写入日志事件。</li>
+</ul>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720085429872-efdcb37a-c5ee-47a1-bf84-198a5d29223b.png" alt="image.png" loading="lazy"></figure>
+<p>进入 <strong>角色</strong> 可以看到 <strong>CloudTrail</strong> 创建的角色 <strong>CloudTrailRoleForCloudWatch-Honey</strong><br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720085905922-883fb904-4fb3-4133-a75e-6717bb9b532e.png" alt="image.png" loading="lazy"></p>
+<p>同时它的可信实体指向了指定了 AWS 的 <strong>CloudTrail</strong> 服务 (<code>cloudtrail.amazonaws.com</code>)<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720085957456-cda42843-1058-4c6f-ba5c-817bcfe1e64d.png" alt="image.png" loading="lazy"></p>
+<p>权限则使用的是刚刚看到的策略组<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720086049997-9f862dee-a967-469f-907a-144a23e66156.png" alt="image.png" loading="lazy"></p>
+<p>在 <strong>CloudWatch</strong> 中的日志组中，看到 <strong>CloudTrail</strong> 创建的日志组 <strong>aws-cloudtrail-logs-CloudWatch-Honey</strong><br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720086403608-a041b1a3-ebc2-45dd-8536-22dfea5688b6.png" alt="image.png" loading="lazy"></p>
+<p>现在我们在 AWS CLI 中登录之前创建的 honeyUser<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720086607466-7a19947d-5b95-4b59-8aae-7861465d0ec7.png" alt="image.png" loading="lazy"></p>
+<p>回到 <strong>CloudWatch</strong> 页面，进入 <strong>Live Tail</strong>，选择要筛选的日志组<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720086831606-9ac3c56c-3ed9-4d48-96b0-f3acd179c106.png" alt="image.png" loading="lazy"></p>
+<p>过了一会儿后看到我们的登录记录<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720087141533-20e9d7f3-de6e-45f6-9be0-ae6b61026900.png" alt="image.png" loading="lazy"></p>
+<h2 id="创建日志筛选并设置告警">创建日志筛选并设置告警</h2>
+<p>选择日志组，操作 -&gt; 创建指标筛选条件<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720094509300-2e7a594c-1a84-4b45-89c7-fe425c745d46.png" alt="image.png" loading="lazy"></p>
+<p>使用筛选模板筛选出 honeyUser 的所有日志</p>
+<pre><code>{ $.userIdentity.type = &quot;IAMUser&quot; &amp;&amp; $.userIdentity.userName = &quot;honeyUser&quot; }
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720095262029-8f4aae34-b4a7-40f4-b9f0-f006151ab3ee.png" alt="image.png" loading="lazy"></figure>
+<p>在分配指标页面输入筛选名称、命名空间、指标名称、指标值设置为1<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720095864584-4b6fc5d6-84d6-4b8c-8093-15d94b8c01e4.png" alt="image.png" loading="lazy"></p>
+<p>配置好之后为它创建告警<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720096232046-d4e44916-ecfd-46dd-9d1a-32bb64bd398e.png" alt="image.png" loading="lazy"></p>
+<p>周期配置为<code>1分钟</code>，阈值配置为<code>&gt;=1</code>。这意味着在任何给定的 1 分钟周期内，如果该用户至少登录一次，就会触发告警。<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720097123625-3a798543-86f4-4c00-b571-4d45b911bf7d.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720097131806-61322baa-f631-4eab-a170-3dfcac72b3ad.png" alt="image.png" loading="lazy"></p>
+<p>在下一步配置告警如何处理，这里我们创建一个主题，把告警发送到我们的邮箱。<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720097357712-bbdbaeca-df16-4537-a114-b385a1d1010b.png" alt="image.png" loading="lazy"></p>
+<p>在下一步配置下表述<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720097519442-b13ea343-032b-4562-b6c6-d25149aab6cd.png" alt="image.png" loading="lazy"></p>
+<p>这样告警就配置好了<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720097591519-0767394b-93c3-4c69-82e7-c1f6029c5f49.png" alt="image.png" loading="lazy"></p>
+<p>最后在到邮箱里确认下订阅<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720098089437-e0940d82-5efb-4b8c-8e2e-3bb57f17bb41.png" alt="image.png" loading="lazy"></p>
+<p>在 CLI 中尝试登录 honeyUser，Honey_Alarm 变为告警中<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720099278832-158f8623-26c2-4f18-9580-d19989da553c.png" alt="image.png" loading="lazy"></p>
+<p>同时邮箱收到告警<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720099318259-d036533c-2f5d-4e06-9824-159e034d54ac.png" alt="image.png" loading="lazy"></p>
+<p>实验完后记得清理刚刚创建的内容，以免产生额外的费用</p>
+<ul>
+<li>CloudWatch Log 告警</li>
+<li>CloudWatch Log 日志组</li>
+<li>Amazon SNS</li>
+<li>CloudTrail 追踪</li>
+<li>S3</li>
+<li>IAM角色</li>
+<li>IAM客户托管策略</li>
+<li>IAM用户 honeyUser</li>
+</ul>
+<h1 id="使用terraform代码创建">使用Terraform代码创建</h1>
+<p>Terraform是一个基础设施即代码（IaC）工具，简而言之它让我们可以用代码的方式对云上的各个资源进行创建、配置和更新。</p>
+<p>对于上面的创建流程大致可以分为几步：</p>
+<ul>
+<li>创建一个<strong>IAM用户</strong>，作为诱饵用户。</li>
+<li>创建一个<strong>CloudTrail追踪</strong>，并创建一个<strong>S3桶</strong>来存储日志。</li>
+<li>创建一个<strong>CloudWatch Log日志组</strong>来分析日志，同时还要一个拥有创建/推送日志流权限的<strong>IAM角色</strong>向日志组中推送日志。</li>
+<li>创建一个<strong>CloudWatch Log日志筛选</strong>，同时为它创建一个<strong>CloudWatch Log告警</strong>，再创建一个<strong>SNS主题</strong>用来接收告警，并为它配置好<strong>endpoint</strong>，也就是我们的邮箱地址。</li>
+</ul>
+<p>在使用Terraform代码实现这个流程之前，先准备好一个空目录，里面创建文件结构如下</p>
+<pre><code>./
+├── main.tf
+├── outputs.tf
+└── povider.tf
+</code></pre>
+<p>其中：</p>
+<ul>
+<li>provider.tf：用来配置 AWS povider</li>
+<li>main.tf：包含了主要的资源配置</li>
+<li>outputs.tf：用来定义输出变量</li>
+</ul>
+<p>本次实验的版本<code>Terraform v1.8.5</code>，同时提前缓存好了AWS povider。下面开始coding</p>
+<h2 id="创建aws用户">创建AWS用户</h2>
+<p>首先编写<code>povider.tf</code>，配置好<code>region</code>和<code>AK/SK</code></p>
+<pre><code class="language-yaml">provider &quot;aws&quot; {
+  region     = &quot;us-east-1&quot;
+  access_key = &quot;&lt;aws_access_key&gt;&quot;
+  secret_key = &quot;&lt;aws_secret_key&gt;&quot;
+}
+</code></pre>
+<p><code>main.tf</code>创建诱饵用户，同时开启凭证访问</p>
+<pre><code class="language-yaml"># 诱饵用户 backup_admin
+resource &quot;aws_iam_user&quot; &quot;backup_admin&quot; {
+  name = &quot;backup-admin&quot;
+}
+
+resource &quot;aws_iam_access_key&quot; &quot;backup_admin_key&quot; {
+  user = aws_iam_user.backup_admin.name
+}
+</code></pre>
+<p><code>outputs.tf</code>将AK/SK输出。因为密钥属于敏感信息，无法直接在控制台输出，所以要为变量设置<code>sensitive = true</code>。若要查看使用命令：<code>terraform output -json</code></p>
+<pre><code class="language-yaml">output &quot;access_key_id&quot; {
+  value     = aws_iam_access_key.backup_admin_key.id
+  sensitive = true
+}
+
+output &quot;secret_access_key&quot; {
+  value     = aws_iam_access_key.backup_admin_key.secret
+  sensitive = true
+}
+</code></pre>
+<p>编辑好之后依次输入命令</p>
+<pre><code class="language-yaml">terraform init
+terraform plan
+terraform apply
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720448356405-25ad5bf7-8edc-44e8-9b30-570329459b00.png" alt="image.png" loading="lazy"></figure>
+<p>这样Terraform就自动为我们创建了这个<code>backup-admin</code>用户<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720505884086-59865913-dd1a-4b9b-a46c-dde8bc052656.png" alt="image.png" loading="lazy"></p>
+<h2 id="创建配置cloudtrail">创建配置CloudTrail</h2>
+<p>首先定义好当前AWS用户的数据源，之后创建的时候会用到其中的信息</p>
+<pre><code class="language-yaml"># AWS 元数据
+data &quot;aws_caller_identity&quot; &quot;current&quot; {}
+
+data &quot;aws_partition&quot; &quot;current&quot; {}
+
+data &quot;aws_region&quot; &quot;current&quot; {}
+</code></pre>
+<p>然后是创建CloudTrail的代码</p>
+<pre><code class="language-yaml"># 创建 CloudTrail 
+resource &quot;aws_cloudtrail&quot; &quot;cloudtrail_honey&quot; {
+  name                          = &quot;cloudtrail_honey&quot;
+  s3_bucket_name                = aws_s3_bucket.cloudtrail_bucket.id
+  include_global_service_events = true
+  is_multi_region_trail         = true
+
+  depends_on = [aws_s3_bucket_policy.cloudtrail_bucket_policy]
+}
+
+# CloudTrail 所用的 S3 配置
+resource &quot;aws_s3_bucket&quot; &quot;cloudtrail_bucket&quot; {
+  bucket        = &quot;cloudtrail-bucket-honey&quot;
+  force_destroy = true
+}
+
+data &quot;aws_iam_policy_document&quot; &quot;cloudtrail_bucket_policy_document&quot; {
+  statement {
+    sid    = &quot;AWSCloudTrailAclCheck&quot;
+    effect = &quot;Allow&quot;
+
+    principals {
+      type        = &quot;Service&quot;
+      identifiers = [&quot;cloudtrail.amazonaws.com&quot;]
+    }
+
+    actions   = [&quot;s3:GetBucketAcl&quot;]
+    resources = [aws_s3_bucket.cloudtrail_bucket.arn]
+    condition {
+      test     = &quot;StringEquals&quot;
+      variable = &quot;aws:SourceArn&quot;
+      values   = [&quot;arn:${data.aws_partition.current.partition}:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/cloudtrail_honey&quot;]
+    }
+  }
+
+  statement {
+    sid    = &quot;AWSCloudTrailWrite&quot;
+    effect = &quot;Allow&quot;
+
+    principals {
+      type        = &quot;Service&quot;
+      identifiers = [&quot;cloudtrail.amazonaws.com&quot;]
+    }
+
+    actions   = [&quot;s3:PutObject&quot;]
+    resources = [&quot;${aws_s3_bucket.cloudtrail_bucket.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/*&quot;]
+
+    condition {
+      test     = &quot;StringEquals&quot;
+      variable = &quot;s3:x-amz-acl&quot;
+      values   = [&quot;bucket-owner-full-control&quot;]
+    }
+    condition {
+      test     = &quot;StringEquals&quot;
+      variable = &quot;aws:SourceArn&quot;
+      values   = [&quot;arn:${data.aws_partition.current.partition}:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/cloudtrail_honey&quot;]
+    }
+  }
+}
+
+resource &quot;aws_s3_bucket_policy&quot; &quot;cloudtrail_bucket_policy&quot; {
+  bucket = aws_s3_bucket.cloudtrail_bucket.id
+  policy = data.aws_iam_policy_document.cloudtrail_bucket_policy_document.json
+}
+</code></pre>
+<p>下面一步一步说明，首先是 <code>resource &quot;aws_cloudtrail&quot;</code> 块。这里我们定义了一个<strong>AWS CloudTrail追踪器</strong>其中：</p>
+<ul>
+<li><code>name</code>指定的是CloudTrail追踪器的名称为<code>cloudtrail_honey</code>。</li>
+<li><code>s3_bucket_name</code>指定存储 CloudTrail 日志的 Amazon S3 桶的名称。这里引用了另一个 Terraform 资源 aws_s3_bucket，该资源的 ID 被用作 S3 桶的名称。</li>
+<li><code>include_global_service_events = true</code>设置启用了全球服务事件的记录，如 AWS Identity and Access Management (IAM) 操作。这意味着不仅限于地理区域特定的服务，全球服务的事件也会被记录。</li>
+<li><code>is_multi_region_trail = true</code>启用多区域追踪，确保所有 AWS 区域中的事件都被记录。</li>
+<li><code>depends_on = [aws_s3_bucket_policy.cloudtrail_bucket_policy]</code>这是一个 Terraform 的隐式依赖关系声明，用来确保在创建 CloudTrail 追踪器之前，相关的 S3 桶策略已经被创建和应用。</li>
+</ul>
+<pre><code class="language-yaml">resource &quot;aws_cloudtrail&quot; &quot;cloudtrail_honey&quot; {
+  name                          = &quot;cloudtrail_honey&quot;
+  s3_bucket_name                = aws_s3_bucket.cloudtrail_bucket.id
+  include_global_service_events = true
+  is_multi_region_trail         = true
+  
+  depends_on = [aws_s3_bucket_policy.cloudtrail_bucket_policy]
+}
+</code></pre>
+<p>接下来定义了一个供<code>cloudtrail_honey</code>使用的S3以及该S3的策略。其中</p>
+<ul>
+<li><strong>force_destroy</strong>：当设置为 true 时，这个属性允许 Terraform 在执行 terraform destroy 命令时删除存储桶，即使存储桶中还包含文件。这是为了确保在测试或临时部署的情况下，资源可以被完全清理。</li>
+<li><strong>data &quot;aws_iam_policy_document&quot;</strong>：策略文档将要定义 AWS CloudTrail 写入日志文件的权限。</li>
+<li><strong>policy</strong>：将前面定义的 IAM 策略文档（序列化为 JSON 格式）应用到指定的存储桶。这样，存储桶的访问权限就根据这个策略进行了配置。</li>
+</ul>
+<pre><code class="language-yaml">resource &quot;aws_s3_bucket&quot; &quot;cloudtrail_bucket&quot; {
+  bucket        = &quot;cloudtrail-bucket-honey&quot;
+  force_destroy = true
+}
+
+data &quot;aws_iam_policy_document&quot; &quot;cloudtrail_bucket_policy_document&quot; {
+  ......
+}
+
+resource &quot;aws_s3_bucket_policy&quot; &quot;cloudtrail_bucket_policy&quot; {
+  bucket = aws_s3_bucket.cloudtrail_bucket.id
+  policy = data.aws_iam_policy_document.cloudtrail_bucket_policy_document.json
+}
+</code></pre>
+<p>S3的策略文档主要是让 CloudTrail 能够将日志存储到该 S3 中。这个策略包含两个主要的声明 (statement)：</p>
+<ul>
+<li>第一条声明: AWSCloudTrailAclCheck
+<ul>
+<li><strong>主体 (Principals)</strong>：指定服务主体为 cloudtrail.amazonaws.com，意味着这条规则专为 CloudTrail 服务设置。</li>
+<li><strong>动作 (Actions)</strong>：允许动作 s3:GetBucketAcl，使 CloudTrail 能检查存储桶的权限设置。</li>
+<li><strong>资源 (Resources)</strong>：限制权限到特定的 S3 存储桶（aws_s3_bucket.cloudtrail_bucket.arn）。</li>
+<li><strong>条件 (Condition)</strong>：确保只有当请求来自特定 CloudTrail 追踪器 (cloudtrail_honey) 时，才允许访问。通过匹配请求的来源 ARN 来强化安全措施。</li>
+</ul>
+</li>
+<li>第二条声明: AWSCloudTrailWrite
+<ul>
+<li><strong>主体 (Principals)</strong>：同样指定服务主体为 cloudtrail.amazonaws.com。</li>
+<li><strong>动作 (Actions)</strong>：允许动作 s3:PutObject，授权 CloudTrail 向指定路径写入日志文件。</li>
+<li><strong>资源 (Resources)</strong>：指定 CloudTrail 可以写入到的具体对象路径，包括 AWS 账户 ID 和存储桶 ARN 的组合，确保日志数据的组织和隔离。</li>
+<li><strong>条件 (Condition)</strong>：
+<ul>
+<li>s3:x-amz-acl 确保所有写入的对象设置为 bucket-owner-full-control，这为存储桶所有者提供了对日志文件的完全控制权。</li>
+<li>aws:SourceArn 条件同第一条声明，保证只有特定 CloudTrail 追踪器的请求才被允许。</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<pre><code class="language-yaml">data &quot;aws_iam_policy_document&quot; &quot;cloudtrail_bucket_policy_document&quot; {
+  statement {
+    sid    = &quot;AWSCloudTrailAclCheck&quot;
+    effect = &quot;Allow&quot;
+
+    principals {
+      type        = &quot;Service&quot;
+      identifiers = [&quot;cloudtrail.amazonaws.com&quot;]
+    }
+
+    actions   = [&quot;s3:GetBucketAcl&quot;]
+    resources = [aws_s3_bucket.cloudtrail_bucket.arn]
+    condition {
+      test     = &quot;StringEquals&quot;
+      variable = &quot;aws:SourceArn&quot;
+      values   = [&quot;arn:${data.aws_partition.current.partition}:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/cloudtrail_honey&quot;]
+    }
+  }
+
+  statement {
+    sid    = &quot;AWSCloudTrailWrite&quot;
+    effect = &quot;Allow&quot;
+
+    principals {
+      type        = &quot;Service&quot;
+      identifiers = [&quot;cloudtrail.amazonaws.com&quot;]
+    }
+
+    actions   = [&quot;s3:PutObject&quot;]
+    resources = [&quot;${aws_s3_bucket.cloudtrail_bucket.arn}/AWSLogs/${data.aws_caller_identity.current.account_id}/*&quot;]
+
+    condition {
+      test     = &quot;StringEquals&quot;
+      variable = &quot;s3:x-amz-acl&quot;
+      values   = [&quot;bucket-owner-full-control&quot;]
+    }
+    condition {
+      test     = &quot;StringEquals&quot;
+      variable = &quot;aws:SourceArn&quot;
+      values   = [&quot;arn:${data.aws_partition.current.partition}:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/cloudtrail_honey&quot;]
+    }
+  }
+}
+</code></pre>
+<p>还是用之前的命令部署，完成之后可以看到生成的 S3 和 CloudTrail追踪器<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720508544812-92692e4e-8d47-4783-968c-a0a86d891be4.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720508590128-fe79ebe2-5fe0-4433-82d1-e37fb2542849.png" alt="image.png" loading="lazy"></p>
+<h2 id="创建cloudwatch-log日志组">创建CloudWatch Log日志组</h2>
+<p>创建CloudWatch Log日志组之前，还要要准备一个IAM角色让CloudTrail可以将日志推送到日志组中。</p>
+<pre><code class="language-yaml"># 修改 cloudtrail，添加写入日志组的角色和日志组
+resource &quot;aws_cloudtrail&quot; &quot;cloudtrail_honey&quot; {
+  ......
+  
+  cloud_watch_logs_group_arn    = &quot;${aws_cloudwatch_log_group.cloudwatch_log_group_honey.arn}:*&quot;
+  cloud_watch_logs_role_arn     = aws_iam_role.cloudtrail_logging_role.arn
+    
+  ......
+}
+
+# 创建CloudWatch Log日志组
+resource &quot;aws_cloudwatch_log_group&quot; &quot;cloudwatch_log_group_honey&quot; {
+  name = &quot;cloudwatch-log-group-honey&quot;
+}
+
+# 创建 CloudTrail 推送日志组的角色
+resource &quot;aws_iam_role&quot; &quot;cloudtrail_logging_role&quot; {
+  name               = &quot;cloudtrail-logging-role&quot;
+
+  assume_role_policy = jsonencode({
+    Version = &quot;2012-10-17&quot;
+    Statement = [
+      {
+        Action = &quot;sts:AssumeRole&quot;
+        Principal = {
+          Service = &quot;cloudtrail.amazonaws.com&quot;
+        }
+        Effect = &quot;Allow&quot;
+        Sid    = &quot;&quot;
+      },
+    ]
+  })
+}
+
+resource &quot;aws_iam_role_policy&quot; &quot;cloudtrail_logging_role_policy&quot; {
+  name      = &quot;cloudtrail-logging-role-policy&quot;
+  role      = aws_iam_role.cloudtrail_logging_role.id
+
+  policy    = jsonencode({
+    Version = &quot;2012-10-17&quot;
+    Statement = [
+      {
+        Action = [
+          &quot;logs:CreateLogStream&quot;,
+          &quot;logs:PutLogEvents&quot;
+        ],
+        Effect   = &quot;Allow&quot;,
+        Resource = &quot;${aws_cloudwatch_log_group.cloudwatch_log_group_honey.arn}:log-stream:*&quot;
+      },
+    ]
+  })
+}
+</code></pre>
+<p>这里和前面控制台不一样的是，IAM角色添加的是一个内联策略而不是一个托管策略。其中对于<strong>logs:CreateLogStream</strong>和<strong>logs:PutLogEvents</strong>权限对应的<code>Resource</code>写法为<code>${aws_cloudwatch_log_group.example.arn}:log-stream:*</code>，这个表示该日志组下的所有日志流。</p>
+<p>重新部署，在CloudWatch的Live Tail中查看实时的日志<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720510175780-b7079c09-b6e2-468d-97d1-45f1fc2c199f.png" alt="image.png" loading="lazy"></p>
+<h2 id="创建告警">创建告警</h2>
+<p>首先创建一个 CloudWatch Logs 的指标过滤器用来过滤出诱饵账户的行为：</p>
+<ul>
+<li>Resource: aws_cloudwatch_log_metric_filter
+<ul>
+<li><code>log_group_name = aws_cloudwatch_log_group.cloudwatch_log_group_honey.name</code>指定应用该过滤器的日志组。</li>
+</ul>
+</li>
+<li>Metric Transformation
+<ul>
+<li><code>name = &quot;honeyToken&quot;</code>：这是创建的 CloudWatch 指标的名称，当日志匹配到上述模式时，此指标会被触发或更新。</li>
+<li><code>namespace = &quot;honeyAlarm&quot;</code>：指标的命名空间，命名空间用于隔离各个指标集合，防止命名冲突。</li>
+<li><code>value = &quot;1&quot;</code>：每当日志匹配到模式时，指标的值增加 1。这意味着你可以通过观察这个指标的变化来检测匹配到的日志事件的频率。</li>
+</ul>
+</li>
+</ul>
+<pre><code class="language-yaml">resource &quot;aws_cloudwatch_log_metric_filter&quot; &quot;honeyUser_filter&quot; {
+  name           = &quot;honeyUser_metric_filter&quot;
+  pattern        = &quot;{ $.userIdentity.type = \&quot;IAMUser\&quot; &amp;&amp; $.userIdentity.userName = \&quot;${aws_iam_user.backup_admin.name}\&quot; }&quot;
+  log_group_name = aws_cloudwatch_log_group.cloudwatch_log_group_honey.name
+
+  metric_transformation {
+    name      = &quot;honeyToken&quot;
+    namespace = &quot;honeyAlarm&quot;
+    value     = &quot;1&quot;
+  }
+}
+</code></pre>
+<p>创建告警同时配置接受告警的邮箱：</p>
+<ul>
+<li>Resource: aws_cloudwatch_metric_alarm
+<ul>
+<li><code>comparison_operator = &quot;GreaterThanOrEqualToThreshold&quot;</code>：这个比较操作符定义了触发告警的条件，表示当监控的指标值大于或等于设置的阈值时，告警将被触发。</li>
+<li><code>evaluation_periods = &quot;1&quot;</code>：表示评估期数，即 CloudWatch 会考虑最近的一个指定周期（在这里是60秒）的数据点来判断是否触发告警。</li>
+<li><code>metric_name/namespace</code>：告警将监控 honeyAlarm 命名空间下的 metric_name 指标，也就是刚刚配置的内容</li>
+<li><code>period = 60</code>：指定的周期（以秒为单位），意味着 CloudWatch 会每60秒收集一次指标数据，并用这些数据来评估是否触发告警。</li>
+<li><code>statistic** **= &quot;Sum&quot;</code>：统计方法，表示在每个评估周期内，CloudWatch 将对收集的数据点求和来进行比较判断。</li>
+<li><code>threshold = 1</code>：告警的触发阈值，结合上述的 comparison_operator，意味着如果在一个周期内（60秒）指标“honeyToken”的总和大于或等于1，则触发告警。</li>
+<li><code>alarm_actions = [aws_sns_topic.alarm_topic.arn]</code>：当告警状态变为 ALARM 时，将触发的动作列表。在这里，指定了一个 Amazon SNS 主题的 ARN，当告警触发时，将向这个 SNS 主题发送通知。</li>
+</ul>
+</li>
+</ul>
+<pre><code class="language-yaml"># 创建告警
+resource &quot;aws_cloudwatch_metric_alarm&quot; &quot;backup_admin_alarm&quot; {
+  alarm_name          = &quot;BackupAdminActivityAlarm&quot;
+  comparison_operator = &quot;GreaterThanOrEqualToThreshold&quot;
+  evaluation_periods  = &quot;1&quot;
+  metric_name         = &quot;honeyToken&quot;
+  namespace           = &quot;honeyAlarm&quot;
+  period              = 60
+  statistic           = &quot;Sum&quot;
+  threshold           = 1
+  alarm_description   = &quot;Alarm when backup-admin performs any activity.&quot;
+  alarm_actions       = [aws_sns_topic.alarm_topic.arn]
+}
+
+# 创建SNS并配置邮件
+resource &quot;aws_sns_topic&quot; &quot;alarm_topic&quot; {
+  name = &quot;backup-admin-activity-topic&quot;
+}
+
+resource &quot;aws_sns_topic_subscription&quot; &quot;alarm_subscription&quot; {
+  topic_arn = aws_sns_topic.alarm_topic.arn
+  protocol  = &quot;email&quot;
+  endpoint  = &quot;skky@blu3.com&quot;
+}
+</code></pre>
+<p>apply之后去邮箱里面确认订阅便可接受告警信息了。<code>terraform output -json</code>输出账户凭证，然后在CLI登录。<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720513588154-04e69601-a07c-4680-a076-70a790598a6f.png" alt="image.png" loading="lazy"></p>
+<p>邮箱收到告警<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720513799153-03a6e07b-7ddb-4181-9a53-32791b56b9e4.png" alt="image.png" loading="lazy"></p>
+<p>实验完之后执行<code>terraform destroy</code>清理掉刚刚创建的所有资源。非常方便😎<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720514314472-ec0e5420-83f0-4562-836d-732c9d3abcf9.png" alt="image.png" loading="lazy"></p>
+<h1 id="总结">总结</h1>
+<p>这个回顾这个流程，其中CloudTrail追踪、CloudWatch Log日志组、SNS主题等资源是相对来说不会变的。属于诱饵账户的部分就只有一个IAM用户和它的CloudWatch告警。所以我们的tf代码逻辑上应该分为两个部分：</p>
+<ul>
+<li>一部分是基础资源的创建，这里创建完之后要提供一个CloudWatch Log日志组名称和SNS主题。</li>
+<li>另一个部分是诱饵资源创建，也就是创建一个IAM用户和并它的告警。</li>
+</ul>
+<p>这样之后再创建、修改诱饵资源的时候就可以只专注于诱饵资源的代码了<br>
+<img src="https://skyblu3519.github.io/post-images/AWSHoneyToken/1720515078560-dc9ccd94-27f2-4825-9b42-0c19866abd77.png" alt="image.png" loading="lazy"></p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://pwnedlabs.io/labs/detect-malicious-activity-with-aws-honey-tokens">https://pwnedlabs.io/labs/detect-malicious-activity-with-aws-honey-tokens</a><br>
+<a href="https://wiki.teamssix.com/CloudNative/Terraform/terraform-introductory.html">https://wiki.teamssix.com/CloudNative/Terraform/terraform-introductory.html</a><br>
+<a href="https://lonegunmanb.github.io/introduction-terraform/3.4.%E8%BE%93%E5%87%BA%E5%80%BC.html">https://lonegunmanb.github.io/introduction-terraform/3.4.%E8%BE%93%E5%87%BA%E5%80%BC.html</a><br>
+<a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudtrail">https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudtrail</a><br>
+<a href="https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm">https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/cloudwatch_metric_alarm</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E6%8E%A7%E5%88%B6%E5%8F%B0%E5%88%9B%E5%BB%BA">控制台创建</a>
+<ul>
+<li><a href="#%E5%88%9B%E5%BB%BA%E8%AF%B1%E9%A5%B5%E7%94%A8%E6%88%B7">创建诱饵用户</a></li>
+<li><a href="#%E5%88%9B%E5%BB%BAcloudtrail%E5%B9%B6%E5%B0%86%E4%BA%8B%E4%BB%B6%E5%8F%91%E9%80%81%E8%87%B3cloudwatch">创建CloudTrail并将事件发送至CloudWatch</a></li>
+<li><a href="#%E5%88%9B%E5%BB%BA%E6%97%A5%E5%BF%97%E7%AD%9B%E9%80%89%E5%B9%B6%E8%AE%BE%E7%BD%AE%E5%91%8A%E8%AD%A6">创建日志筛选并设置告警</a></li>
+</ul>
+</li>
+<li><a href="#%E4%BD%BF%E7%94%A8terraform%E4%BB%A3%E7%A0%81%E5%88%9B%E5%BB%BA">使用Terraform代码创建</a>
+<ul>
+<li><a href="#%E5%88%9B%E5%BB%BAaws%E7%94%A8%E6%88%B7">创建AWS用户</a></li>
+<li><a href="#%E5%88%9B%E5%BB%BA%E9%85%8D%E7%BD%AEcloudtrail">创建配置CloudTrail</a></li>
+<li><a href="#%E5%88%9B%E5%BB%BAcloudwatch-log%E6%97%A5%E5%BF%97%E7%BB%84">创建CloudWatch Log日志组</a></li>
+<li><a href="#%E5%88%9B%E5%BB%BA%E5%91%8A%E8%AD%A6">创建告警</a></li>
+</ul>
+</li>
+<li><a href="#%E6%80%BB%E7%BB%93">总结</a></li>
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/aws-account-id-reconnaissance/">
+              <h3 class="post-title">
+                AWS Account ID Reconnaissance
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

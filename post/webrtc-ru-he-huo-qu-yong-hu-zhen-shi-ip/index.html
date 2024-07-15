@@ -1,0 +1,348 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WebRTC如何获取用户真实IP | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="WebRTC如何获取用户真实IP | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="没太深入细节，仅仅当作科普看看了。
+原理简述
+WebRTC参考：给好奇者的WebRTC，这个文档看前三节就可以理解为什么可以用WebRTC获取真实IP了。
+WebRTC要实现的是P2P的传输，如果通信的两端在一个网络还好说，但我们目的肯定是..." />
+    <meta name="keywords" content="WebRTC" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              WebRTC如何获取用户真实IP
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-03-29
+              </span>
+              <span>
+                8 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/HWzlq4cmN/" class="post-tag">
+                  # WebRTC
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/webrtc-ru-he-huo-qu-yong-hu-zhen-shi-ip.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>没太深入细节，仅仅当作科普看看了。</p>
+<h1 id="原理简述">原理简述</h1>
+<p>WebRTC参考：<a href="https://webrtcforthecurious.com/zh/docs/01-what-why-and-how/">给好奇者的WebRTC</a>，这个文档看前三节就可以理解为什么可以用WebRTC获取真实IP了。</p>
+<p>WebRTC要实现的是P2P的传输，如果通信的两端在一个网络还好说，但我们目的肯定是要让世界上任意两个终端通信。</p>
+<p>要让世界上不同内网的内网相互通信，用到的方法就是NAT。假如我要和远在伦敦的J先生通信的话，我就要拿到NAT为我这次通信提供的<strong>映射地址</strong>，这个<strong>映射地址</strong>是公网上的。然后在于J先生建立通信的时候，我把这个<strong>映射地址</strong>给他作为我的目标地址。</p>
+<p><strong>STUN协议</strong>就是配合NAT来实现这个过程的，它可以让用户拿到<strong>映射地址</strong>。这个过程如下：</p>
+<ul>
+<li>用户向<strong>STUN服务器</strong>发送一个 <code>STUN Binding Request</code></li>
+<li><strong>STUN服务器</strong>回应一个 <code>STUN Binding Response</code></li>
+<li>该<code>STUN Binding Response</code>将包含映射地址</li>
+</ul>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1711708746245.png" alt="" loading="lazy"></figure>
+<p>为什么说这个IP会比较“真实”，是因为STUN协议用的是UDP，而大部分代理工具只代理了TCP，这就导致了真实IP的泄露。作为一个安全狗，拿到这个IP地址之后WebRTC对我就可以说是结束了，至于什么ICE、TURN、信令了解下就可以。</p>
+<h1 id="代码实现">代码实现</h1>
+<p>方法实现参考：<a href="https://zhuanlan.zhihu.com/p/623495107?utm_id=0">WebRTC疑似可以获取你的真实IP地址</a>。</p>
+<p>获取IP的核心代码其实就下面一块：</p>
+<pre><code class="language-javascript">// 定义STUN服务器的配置，这里使用了Google的公共STUN服务器
+const iceServers = [
+    { urls: 'stun:stun.l.google.com:19302' }
+];
+
+// 函数用于获取用户的公网IP地址
+function getUserIPs(callback) {
+    // 创建一个新的RTCPeerConnection实例，传入STUN服务器配置
+    const myPeerConnection = new RTCPeerConnection({ iceServers });
+
+    // 创建一个数据通道，这在此例中主要是为了触发ICE过程
+    myPeerConnection.createDataChannel(&quot;&quot;);
+
+    // 创建一个SDP offer，启动WebRTC协商过程
+    myPeerConnection.createOffer().then(offer =&gt; 
+        // 将生成的offer设置为本地描述
+        myPeerConnection.setLocalDescription(offer)
+    );
+
+    // 当发现新的ICE候选时触发此事件处理函数
+    myPeerConnection.onicecandidate = function(event) {
+        // 检查是否存在候选信息
+        if (event.candidate) {
+            // 从ICE候选信息中提取IP地址
+            // ICE候选信息格式通常是 &quot;candidate:&lt;id&gt; &lt;generation&gt; &lt;transport&gt; &lt;priority&gt; &lt;ip&gt; &lt;port&gt; typ &lt;type&gt; ...&quot;
+            const parts = event.candidate.candidate.split(' ');
+            const ip = parts[4]; // IP地址通常位于分割后的第五个元素
+
+            // 使用回调函数返回找到的IP地址
+            callback(ip);
+        }
+    };
+}
+</code></pre>
+<p>完整代码<br>
+index.html</p>
+<pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+&lt;head&gt;
+    &lt;meta charset=&quot;UTF-8&quot;&gt;
+    &lt;meta name=&quot;viewport&quot; content=&quot;width=device-width, initial-scale=1.0&quot;&gt;
+    &lt;title&gt;Get IP Addresses&lt;/title&gt;
+    &lt;link rel=&quot;stylesheet&quot; href=&quot;https://unpkg.com/element-ui@2.15.6/lib/theme-chalk/index.css&quot;&gt;
+    &lt;script src=&quot;https://unpkg.com/vue@2.6.14&quot;&gt;&lt;/script&gt;
+    &lt;script src=&quot;https://unpkg.com/element-ui@2.15.6/lib/index.js&quot;&gt;&lt;/script&gt;
+&lt;/head&gt;
+&lt;body&gt;
+    &lt;div id=&quot;app&quot;&gt;
+        &lt;el-container&gt;
+            &lt;el-header&gt;
+                &lt;h1&gt;Your IP Addresses:&lt;/h1&gt;
+            &lt;/el-header&gt;
+            &lt;el-main&gt;
+                &lt;el-table :data=&quot;ipAddresses&quot; style=&quot;width: 100%&quot; border&gt;
+                    &lt;el-table-column prop=&quot;type&quot; label=&quot;Type&quot; width=&quot;180&quot;&gt;&lt;/el-table-column&gt;
+                    &lt;el-table-column prop=&quot;address&quot; label=&quot;IP Address&quot;&gt;&lt;/el-table-column&gt;
+                &lt;/el-table&gt;
+            &lt;/el-main&gt;
+        &lt;/el-container&gt;
+    &lt;/div&gt;
+
+    &lt;script&gt;
+        new Vue({
+            el: '#app',
+            data() {
+                return {
+                    ipAddresses: [
+                        { type: 'XFF or CDN IP Address', address: 'Loading...' },
+                        { type: 'WebRTC Local IP Address', address: 'Loading...' },
+                        { type: 'WebRTC IPv4 Address', address: 'Loading...' },
+                        { type: 'WebRTC IPv6 Address', address: 'Loading...' }
+                    ]
+                };
+            },
+            mounted() {
+                // Fetch XFF or CDN IP address
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', './get_real_ip.php', true);
+                xhr.onreadystatechange = () =&gt; {
+                    if (xhr.readyState === 4 &amp;&amp; xhr.status === 200) {
+                        const jsonResponse = JSON.parse(xhr.responseText);
+                        this.ipAddresses[0].address = jsonResponse.ip;
+                    }
+                };
+                xhr.send();
+
+                // WebRTC IPs
+                const iceServers = [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:stun3.l.google.com:19302' },
+                    { urls: 'stun:stun4.l.google.com:19302' },
+                ];
+                // getUserIPs function
+                function getUserIPs(callback) {
+                    const myPeerConnection = new RTCPeerConnection({ iceServers });
+                    myPeerConnection.createDataChannel(&quot;&quot;);
+                    myPeerConnection.createOffer().then(offer =&gt; myPeerConnection.setLocalDescription(offer));
+        
+                    myPeerConnection.onicecandidate = function(event) {
+                        if (event.candidate) {
+                            const parts = event.candidate.candidate.split(' ');
+                            const ip = parts[4];
+                            callback(ip);
+                        }
+                    };
+                }
+
+                getUserIPs((ip) =&gt; {
+                    const ipv4Regex = /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+                    const ipv6Regex = /^(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}(([0-9a-fA-F]{1,4}:){1,4}|((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))$/;
+                    if (ipv4Regex.test(ip)) {
+                        this.ipAddresses[2].address = ip;
+                    } else if (ipv6Regex.test(ip)) {
+                        this.ipAddresses[3].address = ip;
+                    } else {
+                        this.ipAddresses[1].address = ip;
+                    }
+                });
+            }
+        });
+    &lt;/script&gt;
+&lt;/body&gt;
+&lt;/html&gt;
+</code></pre>
+<p>get_real_ip.php</p>
+<pre><code class="language-php">&lt;?php
+function getUserIP() {
+    $ip = '';
+    if (!empty($_SERVER['HTTP_CLIENT_IP'])) {
+        $ip = $_SERVER['HTTP_CLIENT_IP'];
+    } elseif (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+        $ip = $_SERVER['HTTP_X_FORWARDED_FOR'];
+    } else {
+        $ip = $_SERVER['REMOTE_ADDR'];
+    }
+    return $ip;
+}
+
+header('Content-Type: application/json');
+header('Access-Control-Allow-Origin: *');
+
+$ip = getUserIP();
+echo json_encode(['ip' =&gt; $ip]);
+?&gt;
+</code></pre>
+<p>效果<br>
+<img src="https://skyblu3519.github.io/post-images/1711771096453.jpg" alt="" loading="lazy"></p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://zhuanlan.zhihu.com/p/623495107?utm_id=0">https://zhuanlan.zhihu.com/p/623495107?utm_id=0</a><br>
+<a href="https://webrtcforthecurious.com/zh/">https://webrtcforthecurious.com/zh/</a><br>
+<a href="https://scz.617.cn/web/202304131224.txt">https://scz.617.cn/web/202304131224.txt</a><br>
+<a href="https://michaelyou.github.io/2018/08/01/%E7%9C%9F%E5%AE%9E%E4%B8%96%E7%95%8C%E4%B8%AD%E7%9A%84WebRTC/">https://michaelyou.github.io/2018/08/01/%E7%9C%9F%E5%AE%9E%E4%B8%96%E7%95%8C%E4%B8%AD%E7%9A%84WebRTC/</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E5%8E%9F%E7%90%86%E7%AE%80%E8%BF%B0">原理简述</a></li>
+<li><a href="#%E4%BB%A3%E7%A0%81%E5%AE%9E%E7%8E%B0">代码实现</a></li>
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/docker-rong-qi-an-quan-1-cgroup-v1-chu-shi/">
+              <h3 class="post-title">
+                [Docker容器安全1] cgroup v1初识
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

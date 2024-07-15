@@ -1,0 +1,458 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[Docker容器安全1] cgroup v1初识 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[Docker容器安全1] cgroup v1初识 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="今天学习云原生安全中docker逃逸相关内容，首先是判断是否为容器环境
+cat /proc/1/cgroup | grep -qi docker &amp;&amp; echo &quot;Is Docker&quot; || echo &..." />
+    <meta name="keywords" content="云原生,容器安全,cgroup" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [Docker容器安全1] cgroup v1初识
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-03-26
+              </span>
+              <span>
+                16 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/uCbxLgxkz/" class="post-tag">
+                  # 云原生
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/uVChpOuTBN/" class="post-tag">
+                  # 容器安全
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/gWvmlkUU0v/" class="post-tag">
+                  # cgroup
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/docker-rong-qi-an-quan-1-cgroup-v1-chu-shi.jpeg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <p>今天学习云原生安全中docker逃逸相关内容，首先是判断是否为容器环境</p>
+<pre><code class="language-shell">cat /proc/1/cgroup | grep -qi docker &amp;&amp; echo &quot;Is Docker&quot; || echo &quot;Not Docker&quot;
+</code></pre>
+<p>wait, 这个cgroup是啥？</p>
+<h1 id="相关概念">相关概念</h1>
+<h2 id="task">Task</h2>
+<blockquote>
+<p>Task(任务)： 在 linux 系统中，内核本身的调度和管理并不对进程和线程进行区分，只是根据 clone() 时传入的参数的不同来从概念上区分进程和线程。这里使用 task 来表示系统的一个进程或线程。</p>
+</blockquote>
+<h2 id="cgroup">Cgroup</h2>
+<blockquote>
+<p>Cgroup(控制组)：cgroups 中的资源控制以 cgroup 为单位实现。Cgroup 表示按某种资源控制标准划分而成的任务组，包含一个或多个子系统。一个任务可以加入某个 cgroup，也可以从某个 cgroup 迁移到另一个 cgroup。</p>
+</blockquote>
+<p>划分组的目的就是方便管理，管理Linux中任务调度的资源用的就是cgroup。另外，cgroup在不同的上下文中代表不同的意思，可以指整个Linux的<strong>cgroup技术</strong>，也可以指一个<strong>具体进程组</strong>。</p>
+<h2 id="subsystem">Subsystem</h2>
+<blockquote>
+<p>Subsystem(子系统)：cgroups 中的子系统就是一个资源调度控制器(又叫 controllers)。比如 CPU 子系统可以控制 CPU 的时间分配，内存子系统可以限制内存的使用量。以笔者使用的 Ubuntu 16.04.3 为例，其内核版本为 4.10.0，支持的 subsystem 如下( cat /proc/cgroups)：</p>
+<ul>
+<li>blki：对块设备的 IO 进行限制。</li>
+<li>cpu：限制 CPU 时间片的分配，与 cpuacct 挂载在同一目录。</li>
+<li>cpuacct：生成 cgroup 中的任务占用 CPU 资源的报告，与 cpu 挂载在同一目录。</li>
+<li>cpuset：给 cgroup 中的任务分配独立的 CPU(多处理器系统) 和内存节点。</li>
+<li>devices：允许或禁止 cgroup 中的任务访问设备。</li>
+<li>freezer：暂停/恢复 cgroup 中的任务。</li>
+<li>hugetlb：限制使用的内存页数量。</li>
+<li>memory：对 cgroup 中的任务的可用内存进行限制，并自动生成资源占用报告。</li>
+<li>net_cls：使用等级识别符（classid）标记网络数据包，这让 Linux 流量控制器（tc 指令）可以识别来自特定 cgroup 任务的数据包，并进行网络限制。</li>
+<li>net_prio：允许基于 cgroup 设置网络流量(netowork traffic)的优先级。</li>
+<li>perf_event：允许使用 perf 工具来监控 cgroup。</li>
+<li>pids：限制任务的数量。</li>
+</ul>
+</blockquote>
+<p>简单理解Subsystem就是对Linux某一资源的管理，到目前为止，Linux支持12种subsystem。</p>
+<h2 id="hierarchy">Hierarchy</h2>
+<blockquote>
+<p>Hierarchy(层级)：一个hierarchy可以理解为一棵cgroup树，树的每个节点就是一个进程组，每棵树都会与零到多个subsystem关联。在一颗树里面，会包含Linux系统中的所有进程，但每个进程只能属于一个节点（进程组）。系统中可以有很多颗cgroup树，每棵树都和不同的subsystem关联，一个进程可以属于多颗树，即一个进程可以属于多个进程组，只是这些进程组和不同的subsystem关联。目前Linux支持12种subsystem，如果不考虑不与任何subsystem关联的情况（systemd就属于这种情况），Linux里面最多可以建12颗cgroup树，每棵树关联一个subsystem，当然也可以只建一棵树，然后让这棵树关联所有的subsystem。当一颗cgroup树不和任何subsystem关联的时候，意味着这棵树只是将进程进行分组，至于要在分组的基础上做些什么，将由应用程序自己决定，systemd就是一个这样的例子。</p>
+</blockquote>
+<p>这个 hierarchy 的定义实在是有点抽象，所以我决定用个例子帮助理解。</p>
+<h3 id="举个栗子">举个栗子</h3>
+<p>我们假设有一个应用，它由两部分组成：一个前端服务和一个后端服务。我们想要确保后端服务（处理数据和逻辑的核心部分）总是有足够的<strong>内存</strong>（memory）资源，而前端服务（处理用户界面的部分）则在资源紧张时可以被适当限制。</p>
+<h4 id="创建顶层结构">创建顶层结构</h4>
+<p>既然要限制内存，我们我们肯定要在<strong>memory</strong>这个子系统下创建我们应用的<strong>cgroup</strong>。于是我们创建了一个顶层cgroup（<strong>root_group</strong>）代表整个应用</p>
+<pre><code class="language-shell"># 创建顶层 cgroup
+mkdir /sys/fs/cgroup/memory/root_group
+</code></pre>
+<p>其实这里隐含了一层意思，我们在一颗树上的根结点上新建了一个子结点，而这棵树是与<strong>memory subsystem</strong>相关联的。</p>
+<h4 id="创建子cgroup">创建子cgroup</h4>
+<p>在 <strong>root_group</strong> 下，我们创建两个子 <strong>cgroup</strong>：<strong>backend_group</strong> 和 <strong>frontend_group</strong>，其中：</p>
+<ul>
+<li><strong>backend_group</strong>：用于后端服务，确保核心服务有足够的资源。</li>
+<li><strong>frontend_group</strong>：用于前端服务，其资源可以被适当限制以保证后端服务的资源需求。</li>
+</ul>
+<pre><code class="language-shell"># 创建子 cgroup
+mkdir /sys/fs/cgroup/memory/root_group/backend_group
+mkdir /sys/fs/cgroup/memory/root_group/frontend_group
+</code></pre>
+<h4 id="设置内存限制">设置内存限制</h4>
+<ul>
+<li><strong>backend_group</strong>：不设置硬性限制，或者设置一个较高的限制，确保后端服务有足够的资源可用。</li>
+<li><strong>frontend_group</strong>：设置较低的内存限制，比如 50MB，确保在资源紧张时，前端服务的资源使用被适当限制。</li>
+</ul>
+<pre><code class="language-shell"># 设置前端服务的内存限制为 50MB
+echo 52428800 &gt; /sys/fs/cgroup/memory/root_group/frontend_group/memory.limit_in_bytes
+</code></pre>
+<h4 id="将进程添加到相应的-cgroup-中">将进程添加到相应的 cgroup 中</h4>
+<ul>
+<li>将后端服务的进程 PID 添加到 backend_group。</li>
+<li>将前端服务的进程 PID 添加到 frontend_group。</li>
+</ul>
+<pre><code class="language-shell"># 添加进程到 cgroup
+echo 1234 &gt; /sys/fs/cgroup/memory/root_group/frontend_group/cgroup.procs
+# 假设后端服务的 PID 为 5678
+echo 5678 &gt; /sys/fs/cgroup/memory/root_group/backend_group/cgroup.procs
+</code></pre>
+<p>这两个进程就加入了与内存相关联的子系统的这棵树下的具体的节点（cgroup），当然他们也可以加入到其他不同的树中，受这些树所关联的子系统的控制。</p>
+<h1 id="cgroups的文件系统接口">cgroups的文件系统接口</h1>
+<p>cgroups 以文件的方式提供应用接口，我们可以通过 mount 命令来查看 cgroups 默认的挂载点：<code>mount | grep cgroup</code></p>
+<pre><code>[root@xdd ~]# mount | grep cgroup
+tmpfs on /sys/fs/cgroup type tmpfs (ro,nosuid,nodev,noexec,mode=755)
+cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,release_agent=/usr/lib/systemd/systemd-cgroups-agent,name=systemd)
+cgroup on /sys/fs/cgroup/net_cls,net_prio type cgroup (rw,nosuid,nodev,noexec,relatime,net_prio,net_cls)
+cgroup on /sys/fs/cgroup/pids type cgroup (rw,nosuid,nodev,noexec,relatime,pids)
+cgroup on /sys/fs/cgroup/perf_event type cgroup (rw,nosuid,nodev,noexec,relatime,perf_event)
+cgroup on /sys/fs/cgroup/devices type cgroup (rw,nosuid,nodev,noexec,relatime,devices)
+cgroup on /sys/fs/cgroup/blkio type cgroup (rw,nosuid,nodev,noexec,relatime,blkio)
+cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup (rw,nosuid,nodev,noexec,relatime,cpuacct,cpu)
+cgroup on /sys/fs/cgroup/hugetlb type cgroup (rw,nosuid,nodev,noexec,relatime,hugetlb)
+cgroup on /sys/fs/cgroup/freezer type cgroup (rw,nosuid,nodev,noexec,relatime,freezer)
+cgroup on /sys/fs/cgroup/memory type cgroup (rw,nosuid,nodev,noexec,relatime,memory)
+cgroup on /sys/fs/cgroup/cpuset type cgroup (rw,nosuid,nodev,noexec,relatime,cpuset)
+</code></pre>
+<p>执行这个命令后返回的内容解释如下：</p>
+<ul>
+<li>第一行：<code>tmpfs on /sys/fs/cgroup type tmpfs (ro,nosuid,nodev,noexec,mode=755)</code> 显示了一个<strong>tmpfs</strong>（临时文件系统）被挂载在 <code>/sys/fs/cgroup</code>。
+<ul>
+<li><strong>cgroup</strong>：文件系统的根目录</li>
+<li><strong>tmpfs</strong>： 意味着 cgroup 的元数据和控制文件存储<strong>在内存中</strong>，而不是磁盘上，这样可以提高访问速度。</li>
+<li><strong>ro,nosuid,nodev,noexec,mode=755</strong>：描述了挂载的选项，例如只读（<strong>ro</strong>）、不允许 set-user-identifier 或 set-group-identifier 权限（<strong>nosuid</strong>）、禁止执行设备文件（<strong>nodev</strong>）、禁止执行任何二进制文件（<strong>noexec</strong>），以及目录的访问权限（<strong>mode=755</strong>）。</li>
+</ul>
+</li>
+<li>第二行：<code>cgroup on /sys/fs/cgroup/systemd type cgroup (rw,nosuid,nodev,noexec,relatime,xattr,release_agent=/usr/lib/systemd/systemd-cgroups-agent,name=systemd)</code>这里涉及到 systemd 管理的 cgroup。在使用 systemd 系统的操作系统中，/sys/fs/cgroup 目录都是由 systemd 在系统启动的过程中挂载的，并且挂载为只读的类型。换句话说，系统是不建议我们在 /sys/fs/cgroup 目录下创建新的目录并挂载其它子系统的。这一点与之前的操作系统不太一样（🤔）。</li>
+<li>其余行：每个 cgroup 子系统的挂载点，对应了可以控制的资源类型。比如<code>cgroup on /sys/fs/cgroup/cpu,cpuacct type cgroup</code> 表示 CPU 时间和 CPU 使用统计的 cgroup 子系统共同挂载在 <code>/sys/fs/cgroup/cpu,cpuacct</code>。</li>
+</ul>
+<p>/sys/fs/cgroup及其子目录memory结构<br>
+<img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711442513857-73c79df1-5fbb-4ba7-af46-74141c00adda.png" alt="image.png" loading="lazy"></p>
+<p>/sys/fs/cgroup 目录下是各个子系统的根目录。memory 目录下的文件就是 cgroups 的 memory 子系统中的根级设置。比如 memory.limit_in_bytes 中的数字用来限制进程的最大可用内存，memory.swappiness 中保存着使用 swap 的权重等等。</p>
+<h1 id="进程所属的cgroup">进程所属的cgroup</h1>
+<p>可以通过 <code>/proc/[pid]/cgroup</code> 来查看指定进程属于哪些 cgroup：<br>
+<img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711442783301-a70bc3f1-6189-4ad3-8d3b-b252b8ca9b64.png" alt="image.png" loading="lazy"></p>
+<p>这个 cgroup 信息显示了进程 ID 为 794 的进程所属的 cgroup 配置。每一行都代表该进程在不同 cgroup 子系统下的归属情况。格式通常为 <code>层级编号:子系统名称:路径</code>：</p>
+<ul>
+<li><strong>层级编号</strong>：cgroup 树的 ID， 和 /proc/cgroups 文件中的 ID 一一对应。</li>
+<li><strong>子系统名称</strong>：表示 cgroup 控制的资源类型。例如 cpu、memory、blkio 等。有些行中出现的是组合子系统，如 cpuacct,cpu，意味着这些资源控制器被组合在一起管理。</li>
+<li><strong>路径</strong>：显示进程所属的 cgroup 在 cgroup 文件系统中的路径。例如，/system.slice/httpd.service 表示进程属于名为 httpd.service 的服务单元管理的 cgroup。路径 / 表示根 cgroup，也就是最顶层的 cgroup，它通常用于未被特别分配到其他特定 cgroup 的进程。</li>
+</ul>
+<p>PS.可以通过查看/proc/cgroups(since Linux 2.6.24)知道当前系统支持哪些subsystem，下面是一个例子</p>
+<pre><code class="language-shell">#subsys_name    hierarchy       num_cgroups     enabled
+cpuset          11              1               1
+cpu             3               64              1
+cpuacct         3               64              1
+blkio           8               64              1
+memory          9               104             1
+devices         5               64              1
+freezer         10              4               1
+net_cls         6               1               1
+perf_event      7               1               1
+net_prio        6               1               1
+hugetlb         4               1               1
+pids            2               68              1
+</code></pre>
+<p>从左到右，字段的含义分别是：</p>
+<ol>
+<li>subsystem的名字</li>
+<li>subsystem所关联到的cgroup树的ID，如果多个subsystem关联到同一颗cgroup树，那么他们的这个字段将一样，比如这里的cpu和cpuacct就一样，表示他们绑定到了同一颗树。如果出现下面的情况，这个字段将为0：
+<ul>
+<li>当前subsystem没有和任何cgroup树绑定</li>
+<li>当前subsystem已经和cgroup v2的树绑定</li>
+<li>当前subsystem没有被内核开启</li>
+</ul>
+</li>
+<li>subsystem所关联的cgroup树中进程组的个数，也即树上节点的个数</li>
+<li>1表示开启，0表示没有被开启(可以通过设置内核的启动参数“cgroup_disable”来控制subsystem的开启).</li>
+</ol>
+<p>关于<code>1:name=systemd:/system.slice/httpd.service</code>（🤔）：</p>
+<ul>
+<li><strong>name=systemd</strong>： 这部分说明这个特定的 cgroup 层级是由 systemd 使用的，而不是由单一的资源类型（如 cpu 或 memory）直接控制。name=systemd 表示这个层级是专门为 systemd 使用而设置的一个命名层级，用来管理和组织由 systemd 控制的服务。这是 cgroup v1 中支持为各种不同的目的创建命名层级的功能之一。</li>
+<li><strong>/system.slice/httpd.service</strong>: 这部分显示了 cgroup 在文件系统中的路径。这个路径指示进程属于 httpd.service 服务，这是一个 systemd 服务单元的名称。在 systemd 的体系中，system.slice 是一个<strong>用于组织系统服务的分片</strong>（slice），而 httpd.service 则是运行在这个分片中的特定服务。</li>
+<li>与其他行相比，这行信息的特殊之处在于它直接关联到 systemd，而不是标准的资源类型子系统。systemd 使用它自己的 cgroup 层级来组织和管理服务，这使得 systemd 能够利用 cgroup 提供的功能来执行诸如服务启动、停止、重启以及资源限制等操作。</li>
+</ul>
+<h1 id="cgroup测试">cgroup测试</h1>
+<h2 id="安装cgroups工具">安装cgroups工具</h2>
+<p>Centos下安装cgroup 工具：</p>
+<ul>
+<li>安装 libcgroup</li>
+</ul>
+<pre><code>yum install libcgroup
+</code></pre>
+<ul>
+<li>安装 libcgroup-tools</li>
+</ul>
+<pre><code>yum install libcgroup-tools
+</code></pre>
+<ul>
+<li>验证安装，使用 cgget 命令查看当前 cgroup 配置</li>
+</ul>
+<pre><code>cgget -g cpu:/
+</code></pre>
+<h2 id="测试限制进程可用的-cpu">测试：限制进程可用的 CPU</h2>
+<p>在<code>/sys/fs/cgroup/cpu</code> 目录下新建一个名称为 skky_cpu 的目录：</p>
+<pre><code class="language-shell">mkdir /sys/fs/cgroup/cpu/skky_cpu
+</code></pre>
+<p>cgroups 的文件系统会在创建文件目录的时候自动创建相关的配置文件<br>
+<img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711444614768-1f6d4ab8-14f8-4f4a-87c2-158a498fe71e.png" alt="image.png" loading="lazy"></p>
+<p>在设置skky_cpu前，先看下默认的相关配置：</p>
+<pre><code class="language-shell">[root@xdd ~]# cat /sys/fs/cgroup/cpu/cpu.cfs_period_us
+100000
+[root@xdd ~]# cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us
+-1
+</code></pre>
+<ul>
+<li>**cpu.cfs_period_us：**表示调度周期的长度，以微秒（us）为单位。在这个周期内，cgroup 可以被限制只能使用一定量的 CPU 时间，必须与cfs_quota_us配合使用。</li>
+<li><strong>cpu.cfs_quota_us ：<strong>设定周期内最多可使用的时间，这里的配置指 task 对单个 cpu 的使用上限。假如</strong>cpu.cfs_period_us</strong> 被设置为 100000（即 100 毫秒），而 **cpu.cfs_quota_us **被设置为 10000（即 10 毫秒）。这意味着，在每 100 毫秒的时间窗口中，属于该 cgroup 的进程总共能使用最多 10 毫秒的 CPU 时间。这相当于分配了 10% 的 CPU 时间给该 cgroup。而默认配置中这个值为-1，表示表示不对该 cgroup 的 CPU 时间使用量做限制。</li>
+</ul>
+<p>现在我们吧skky_cpu的 CPU 周期限制为总量的十分之一：</p>
+<pre><code class="language-shell">echo 10000 &gt; /sys/fs/cgroup/cpu/skky_cpu/cpu.cfs_quota_us
+</code></pre>
+<p>用一个CPU 密集型的程序测试：</p>
+<pre><code class="language-c">void main(){
+    unsigned int i, end;
+
+    end = 1024 * 1024 * 1024;
+    for(i = 0; i &lt; end; )
+    {
+        i ++;
+    }
+}
+</code></pre>
+<p>编译并执行：</p>
+<pre><code class="language-shell">gcc cputime.c -o cputime
+time ./cputime
+time cgexec -g cpu:skky_cpu ./cputime
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711452018680-80811a51-bf38-439d-8b1a-bc0d10d02fa1.png" alt="image.png" loading="lazy"></figure>
+<p>可以看到程序正常运行的时间为2.5s，而添加 cgroup 的运行时间为28s。</p>
+<h1 id="使用cgroup判断容器环境">使用Cgroup判断容器环境</h1>
+<p>在docker容器pid为1的进程，通常是容器的初始化进程</p>
+<pre><code class="language-shell">root@662559eb1259:/# cat /proc/1/cgroup
+11:cpuset:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+10:memory:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+9:freezer:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+8:hugetlb:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+7:cpuacct,cpu:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+6:blkio:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+5:devices:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+4:perf_event:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+3:pids:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+2:net_prio,net_cls:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+1:name=systemd:/docker/662559eb1259dd29170985293fdcc5465cca5ac1c655bba37aa364cb988670e9
+</code></pre>
+<p>从这个响应可以看到，在docker容器中所有cgroup子系统的路径都是<code>/docker/[容器ID]</code>，这就是使用<code>cat /proc/1/cgroup</code>可以判断当前是否为容器环境的原因。</p>
+<h2 id="cgroup-v2">cgroup v2</h2>
+<p>cgroup v2 是对最初的 cgroup（控制组）机制的重大改进和简化，在v2中不再为每种资源类型（如 CPU、内存等）创建独立的层级，而是引入单一的层级系统，所有类型的资源都在这个统一的层级下管理。<br>
+<img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711455747561-eb5add86-525c-4126-9834-237d874c6605.png" alt="image.png" loading="lazy"></p>
+<p>关于cgroup v2 具体的细节这里先不关心，简单说下对docker的影响。使用<code>cat /proc/1/cgroup</code>的输出为：</p>
+<pre><code class="language-shell">root@015731e32eb9:/# cat /proc/1/cgroup
+0::/
+</code></pre>
+<ul>
+<li><code>0</code>: 这个部分表示 cgroup 的层级编号。在 cgroup v2 中，由于只有一个统一的层级，所以这个编号是 <code>0</code>。这是一个标志性的变化，表明系统使用的是 cgroup v2。</li>
+<li><code>::</code> 这个部分原本在 cgroup v1 中用于分隔层级编号和子系统列表（例如 cpu, memory）。在 cgroup v2 中，由于不再需要指定子系统（所有资源控制都在一个层级中），因此这里不再显示具体的子系统名称，仅用冒号表示分隔。</li>
+<li><code>/</code> 这个部分表示 cgroup 的路径。在这个上下文中，<code>/</code> 指的是根 cgroup，也就是整个 cgroup 层级的最顶层。进程号为 1 的进程（系统的初始化进程，通常是 systemd 或 init）属于这个最顶层的 cgroup，表示它有权管理和控制系统中的所有其他进程和资源。</li>
+</ul>
+<p>宿主机上有关docker容器的cgroup信息在<code>/sys/fs/cgroup/system.slice/</code>目录下，格式为</p>
+<pre><code class="language-shell">/sys/fs/cgroup/system.slice/docker-&lt;longid&gt;.scope/
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711464780383-ca74ca26-6af1-4569-ab2c-6b132b3b13d3.png" alt="image.png" loading="lazy"></figure>
+<p>如果要在 cgroup v2 查出 docker 容器的ID号，可以查看<code>/proc/1/mountinfo</code>文件，里面是进程的挂载点信息<br>
+<img src="https://skyblu3519.github.io/post-images/dockerSec_1/1711464948514-7165a872-95ab-4967-ae0b-67b9b81abdcc.png" alt="image.png" loading="lazy"></p>
+<h1 id="参考文章">参考文章</h1>
+<p><a href="https://www.cnblogs.com/sparkdev/p/8296063.html">https://www.cnblogs.com/sparkdev/p/8296063.html</a><br>
+<a href="https://segmentfault.com/a/1190000006917884">https://segmentfault.com/a/1190000006917884</a><br>
+<a href="https://mikechengwei.github.io/2020/06/03/cgroup%E5%8E%9F%E7%90%86/">https://mikechengwei.github.io/2020/06/03/cgroup%E5%8E%9F%E7%90%86/</a><br>
+<a href="https://stackoverflow.com/questions/68816329/how-to-get-docker-container-id-from-within-the-container-with-cgroup-v2">https://stackoverflow.com/questions/68816329/how-to-get-docker-container-id-from-within-the-container-with-cgroup-v2</a><br>
+<a href="https://zone.huoxian.cn/d/990">https://zone.huoxian.cn/d/990</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E7%9B%B8%E5%85%B3%E6%A6%82%E5%BF%B5">相关概念</a>
+<ul>
+<li><a href="#task">Task</a></li>
+<li><a href="#cgroup">Cgroup</a></li>
+<li><a href="#subsystem">Subsystem</a></li>
+<li><a href="#hierarchy">Hierarchy</a>
+<ul>
+<li><a href="#%E4%B8%BE%E4%B8%AA%E6%A0%97%E5%AD%90">举个栗子</a>
+<ul>
+<li><a href="#%E5%88%9B%E5%BB%BA%E9%A1%B6%E5%B1%82%E7%BB%93%E6%9E%84">创建顶层结构</a></li>
+<li><a href="#%E5%88%9B%E5%BB%BA%E5%AD%90cgroup">创建子cgroup</a></li>
+<li><a href="#%E8%AE%BE%E7%BD%AE%E5%86%85%E5%AD%98%E9%99%90%E5%88%B6">设置内存限制</a></li>
+<li><a href="#%E5%B0%86%E8%BF%9B%E7%A8%8B%E6%B7%BB%E5%8A%A0%E5%88%B0%E7%9B%B8%E5%BA%94%E7%9A%84-cgroup-%E4%B8%AD">将进程添加到相应的 cgroup 中</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#cgroups%E7%9A%84%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E6%8E%A5%E5%8F%A3">cgroups的文件系统接口</a></li>
+<li><a href="#%E8%BF%9B%E7%A8%8B%E6%89%80%E5%B1%9E%E7%9A%84cgroup">进程所属的cgroup</a></li>
+<li><a href="#cgroup%E6%B5%8B%E8%AF%95">cgroup测试</a>
+<ul>
+<li><a href="#%E5%AE%89%E8%A3%85cgroups%E5%B7%A5%E5%85%B7">安装cgroups工具</a></li>
+<li><a href="#%E6%B5%8B%E8%AF%95%E9%99%90%E5%88%B6%E8%BF%9B%E7%A8%8B%E5%8F%AF%E7%94%A8%E7%9A%84-cpu">测试：限制进程可用的 CPU</a></li>
+</ul>
+</li>
+<li><a href="#%E4%BD%BF%E7%94%A8cgroup%E5%88%A4%E6%96%AD%E5%AE%B9%E5%99%A8%E7%8E%AF%E5%A2%83">使用Cgroup判断容器环境</a>
+<ul>
+<li><a href="#cgroup-v2">cgroup v2</a></li>
+</ul>
+</li>
+<li><a href="#%E5%8F%82%E8%80%83%E6%96%87%E7%AB%A0">参考文章</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/nkctf2024-wp-web/">
+              <h3 class="post-title">
+                NKCTF2024 WP WEB
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

